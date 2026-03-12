@@ -1,0 +1,27 @@
+{
+  "name": "agentic-indexer",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.ts serve",
+    "index": "bun run index.ts index",
+    "query": "bun run index.ts query",
+    "lint": "bun tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "drizzle-orm": "^1.0.0-beta.16-ea816b6",
+    "temporal-polyfill": "^0.3.2",
+    "tree-sitter-wasms": "^0.1.13",
+    "typebox": "^1.1.5",
+    "web-tree-sitter": "^0.26.6",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.10",
+    "drizzle-kit": "^1.0.0-beta.16-ea816b6",
+    "typescript": "^5.9.3"
+  }
+}

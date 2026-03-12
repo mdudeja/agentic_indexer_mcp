@@ -1,0 +1,88 @@
+import { join, relative } from 'path'
+import { readdirSync, statSync, readFileSync } from 'fs'
+import { TreeSitterIndexer } from './TreeSitterIndexer.ts'
+import type { IndexerDB } from '../database/IndexerDB.ts'
+import type { IndexedSymbol } from './types.ts'
+
+export interface IndexPipelineOptions {
+  cwd: string
+  store: IndexerDB
+  extensions: string[]
+  // For now ignore complex .gitignore logic, just basic ignore patterns
+  ignorePatterns: string[]
+}
+
+export class IndexPipeline {
+  private indexer: TreeSitterIndexer
+
+  constructor(private options: IndexPipelineOptions) {
+    this.indexer = new TreeSitterIndexer()
+  }
+
+  async run() {
+    console.error(`[indexer] Starting index pipeline in ${this.options.cwd}...`)
+    const files = this.findFiles(this.options.cwd)
+    let processed = 0
+
+    for (const absPath of files) {
+      const relPath = relative(this.options.cwd, absPath)
+
+      const content = readFileSync(absPath, 'utf8')
+      const ext = absPath.split('.').pop() || ''
+
+      const hasher = new Bun.CryptoHasher('sha256')
+      hasher.update(content)
+      const hash = hasher.digest('hex')
+
+      const currentHash = await this.options.store.getFileHash(relPath)
+
+      if (currentHash === hash) {
+        // Skip unmodified file
+        continue
+      }
+
+      console.error(`[indexer] Indexing: ${relPath}`)
+
+      // Parse and extract using TreeSitterIndexer
+      const symbols: IndexedSymbol['Select'][] = await this.indexer.parse(
+        content,
+        ext,
+        relPath,
+      )
+
+      // Save
+      await this.options.store.upsertFile(relPath, hash, ext)
+      await this.options.store.upsertSymbols(symbols)
+
+      processed++
+    }
+
+    console.error(
+      `[indexer] Indexed ${processed} files. Total found: ${files.length}`,
+    )
+  }
+
+  private findFiles(dir: string, fileList: string[] = []): string[] {
+    const files = readdirSync(dir)
+
+    for (const file of files) {
+      if (this.options.ignorePatterns.some((p) => file.includes(p))) {
+        continue
+      }
+
+      const absPath = join(dir, file)
+      const stat = statSync(absPath)
+
+      if (stat.isDirectory()) {
+        this.findFiles(absPath, fileList)
+      } else {
+        const ext = absPath.split('.').pop()
+        if (ext && this.options.extensions.includes(ext)) {
+          fileList.push(absPath)
+        }
+      }
+    }
+
+    return fileList
+  }
+}
