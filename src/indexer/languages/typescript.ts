@@ -1,6 +1,8 @@
 import type { Node } from 'web-tree-sitter'
-import type { IndexedSymbol, SymbolKind } from '../types'
+import { SymbolKind, type IndexedSymbol } from '../../config/types'
 import { randomUUID } from 'crypto'
+
+const symbols: IndexedSymbol['Select'][] = []
 
 function isExported(node: Node): boolean {
   let current: Node | null = node.parent
@@ -27,12 +29,19 @@ function getDocstring(node: Node): string | undefined {
   return undefined
 }
 
-function addSymbol(
-  node: Node,
-  nameNode: Node | null,
-  kind: SymbolKind,
-  parentId?: string,
-): string | null {
+function addSymbol({
+  node,
+  nameNode,
+  kind,
+  parent_id,
+  file_path,
+}: {
+  node: Node
+  nameNode: Node | null
+  kind: SymbolKind
+  parent_id?: string
+  file_path: string
+}): string | null {
   if (!nameNode) return null
 
   const id = randomUUID()
@@ -48,48 +57,68 @@ function addSymbol(
     id,
     name: nameNode.text,
     kind,
-    filePath,
+    file_path,
     line: node.startPosition.row,
     column: node.startPosition.column,
-    endLine: node.endPosition.row,
-    endColumn: node.endPosition.column,
-    signature,
-    docstring: getDocstring(node),
-    parentId,
+    end_line: node.endPosition.row,
+    end_column: node.endPosition.column,
+    signature: signature ?? null,
+    docstring: getDocstring(node) ?? null,
+    parent_id: parent_id ?? null,
     exported: isNodeExported,
   })
 
   return id
 }
 
-function traverse(node: Node, currentParentId?: string) {
+function traverse(node: Node, file_path: string, currentParentId?: string) {
   let nextParentId = currentParentId
 
   switch (node.type) {
     case 'class_declaration': {
       const nameNode = node.childForFieldName('name')
-      nextParentId = addSymbol(node, nameNode, 'class') || currentParentId
+      nextParentId =
+        addSymbol({
+          node,
+          nameNode,
+          kind: SymbolKind.class,
+          parent_id: currentParentId,
+          file_path,
+        }) || currentParentId
       break
     }
     case 'method_definition': {
       const nameNode = node.childForFieldName('name')
       // Methods belong to classes, so use currentParentId
-      addSymbol(node, nameNode, 'method', currentParentId)
+      addSymbol({
+        node,
+        nameNode,
+        kind: SymbolKind.method,
+        parent_id: currentParentId,
+        file_path,
+      })
       // We don't change nextParentId because nested functions inside methods don't become direct children in our simple model
       break
     }
     case 'function_declaration': {
       const nameNode = node.childForFieldName('name')
-      addSymbol(node, nameNode, 'function', currentParentId)
+      addSymbol({
+        node,
+        nameNode,
+        kind: SymbolKind.function,
+        parent_id: currentParentId,
+        file_path,
+      })
       break
     }
     case 'lexical_declaration':
     case 'variable_declaration': {
       // Find variable declarators
       const declarators = node.namedChildren.filter(
-        (c) => c.type === 'variable_declarator',
+        (c) => c?.type === 'variable_declarator',
       )
       for (const decl of declarators) {
+        if (!decl) continue
         const nameNode = decl.childForFieldName('name')
         const valueNode = decl.childForFieldName('value')
 
@@ -97,11 +126,23 @@ function traverse(node: Node, currentParentId?: string) {
           valueNode &&
           (valueNode.type === 'arrow_function' || valueNode.type === 'function')
         ) {
-          addSymbol(node, nameNode, 'function', currentParentId)
+          addSymbol({
+            node: decl,
+            nameNode,
+            kind: SymbolKind.function,
+            parent_id: currentParentId,
+            file_path,
+          })
         } else {
           // Only add top-level or exported variables
           if (isExported(node) || !currentParentId) {
-            addSymbol(node, nameNode, 'variable', currentParentId)
+            addSymbol({
+              node: decl,
+              nameNode,
+              kind: SymbolKind.var,
+              parent_id: currentParentId,
+              file_path,
+            })
           }
         }
       }
@@ -109,36 +150,56 @@ function traverse(node: Node, currentParentId?: string) {
     }
     case 'interface_declaration': {
       const nameNode = node.childForFieldName('name')
-      addSymbol(node, nameNode, 'interface', currentParentId)
+      addSymbol({
+        node,
+        nameNode,
+        kind: SymbolKind.interface,
+        parent_id: currentParentId,
+        file_path,
+      })
       break
     }
     case 'type_alias_declaration': {
       const nameNode = node.childForFieldName('name')
-      addSymbol(node, nameNode, 'type', currentParentId)
+      addSymbol({
+        node,
+        nameNode,
+        kind: SymbolKind.type,
+        parent_id: currentParentId,
+        file_path,
+      })
       break
     }
     case 'enum_declaration': {
       const nameNode = node.childForFieldName('name')
-      addSymbol(node, nameNode, 'enum', currentParentId)
+      addSymbol({
+        node,
+        nameNode,
+        kind: SymbolKind.enum,
+        parent_id: currentParentId,
+        file_path,
+      })
       break
     }
   }
 
   if (node?.namedChildren) {
     for (const child of node.namedChildren) {
-      traverse(child, nextParentId)
+      if (!child) continue
+      traverse(child, file_path, nextParentId)
     }
   }
 }
 
 export function extractTypeScriptSymbols(
   rootNode: Node,
-  filePath: string,
+  file_path: string,
 ): IndexedSymbol['Select'][] {
-  const symbols: IndexedSymbol['Select'][] = []
+  // Clear previous results
+  symbols.length = 0
 
   if (rootNode) {
-    traverse(rootNode)
+    traverse(rootNode, file_path)
   }
 
   return symbols

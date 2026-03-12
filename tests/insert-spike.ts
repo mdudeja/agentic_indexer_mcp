@@ -1,3 +1,4 @@
+import { logInfo } from 'src/utils/logger'
 import { IndexerDB } from '../src/database/IndexerDB'
 import * as schema from '../src/database/schemas'
 
@@ -8,19 +9,19 @@ async function main() {
 
   await db
     .insert(schema.files)
-    .values({ path: 'test.ts', hash: 'abc', indexedAt: 123, language: 'ts' })
+    .values({ path: 'test.ts', hash: 'abc', indexed_at: 123, language: 'ts' })
 
   await db.insert(schema.symbols).values({
     id: 'some-id',
     name: 'testFunc',
     kind: schema.SymbolKind.function,
-    filePath: 'test.ts',
+    file_path: 'test.ts',
     line: 1,
     column: 1,
     exported: true, // Drizzle boolean mode
   })
 
   const res = await db.select().from(schema.symbols)
-  console.log('Inserted:', res)
+  logInfo('Inserted:', res)
 }
 main().catch(console.error)

@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { IndexerDB } from '../database/IndexerDB'
+import type { IndexerDB } from '../../database/IndexerDB'
 import { registerSearchSymbolsTool } from './search_symbols'
 import { registerGetFileSummaryTool } from './get_file_summary'
 import { registerListFilesTool } from './list_files'

@@ -4,17 +4,17 @@ import { getNowMillis } from 'src/utils/datetime'
 export const files = sqliteTable(
   'files',
   {
-    path: text('path').primaryKey(),
-    hash: text('hash').notNull(),
-    indexedAt: integer('indexed_at')
+    path: text().primaryKey(),
+    hash: text().notNull(),
+    indexed_at: integer()
       .notNull()
       .$onUpdate(() => getNowMillis()),
-    language: text('language'),
+    language: text(),
   },
   (table) => [
     index('idx_files_path').on(table.path),
     index('idx_files_hash').on(table.hash),
-    index('idx_files_indexed_at').on(table.indexedAt),
+    index('idx_files_indexed_at').on(table.indexed_at),
   ],
 )
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
 import { IndexerDB } from '../src/database/IndexerDB'
-import { SymbolKind, type IndexedSymbol } from '../src/indexer/types'
+import { SymbolKind, type IndexedSymbol } from '../src/config/types'
 import { randomUUID } from 'crypto'
 
 describe('SymbolStore', () => {
@@ -42,11 +42,11 @@ describe('SymbolStore', () => {
         id: symbolId,
         name: 'testFunction',
         kind: SymbolKind.function,
-        filePath: 'src/test.ts',
+        file_path: 'src/test.ts',
         line: 1,
         column: 0,
-        endLine: 5,
-        endColumn: 1,
+        end_line: 5,
+        end_column: 1,
         signature: 'function testFunction()',
         exported: true,
       },

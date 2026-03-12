@@ -2,7 +2,7 @@ import { join, relative } from 'path'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { TreeSitterIndexer } from './TreeSitterIndexer.ts'
 import type { IndexerDB } from '../database/IndexerDB.ts'
-import type { IndexedSymbol } from './types.ts'
+import type { IndexedSymbol } from '../config/types.ts'
 
 export interface IndexPipelineOptions {
   cwd: string
@@ -51,7 +51,11 @@ export class IndexPipeline {
       )
 
       // Save
-      await this.options.store.upsertFile(relPath, hash, ext)
+      await this.options.store.upsertFile({
+        path: relPath,
+        hash,
+        language: ext,
+      })
       await this.options.store.upsertSymbols(symbols)
 
       processed++

@@ -1,6 +1,7 @@
+import { logInfo } from 'src/utils/logger'
 import { TreeSitterIndexer } from '../src/indexer/TreeSitterIndexer'
 import { extractTypeScriptSymbols } from '../src/indexer/languages/typescript'
-import type { IndexerConfig } from '../src/indexer/types'
+import type { IndexerConfig } from '../src/config/types'
 
 const config: IndexerConfig = {
   enabled: true,
@@ -27,7 +28,7 @@ class Person {
   
   /** Says hello */
   sayHello() {
-    console.log(greet(this.name))
+    logInfo(greet(this.name))
   }
 }
 
@@ -41,31 +42,31 @@ export const myConstant = 42
 `
 
 async function runSpike() {
-  console.log('Initializing indexer...')
+  logInfo('Initializing indexer...')
   const indexer = new TreeSitterIndexer()
   await indexer.init(config)
 
-  console.log('Parsing file...')
+  logInfo('Parsing file...')
   const tree = await indexer.parseFile(sourceCode, 'typescript')
   if (!tree) {
     console.error('Failed to parse source code')
     return
   }
 
-  console.log('Parse successful! Node count:', tree.rootNode.descendantCount)
+  logInfo('Parse successful! Node count:', tree.rootNode.descendantCount)
 
-  console.log('Extracting symbols...')
+  logInfo('Extracting symbols...')
   const symbols = extractTypeScriptSymbols(tree.rootNode, 'virtual-file.ts')
 
-  console.log('\\n--- Extracted Symbols ---')
+  logInfo('\\n--- Extracted Symbols ---')
   for (const sym of symbols) {
-    console.log(
+    logInfo(
       `[${sym.kind.toUpperCase()}] ${sym.name} (exported: ${sym.exported})`,
     )
-    console.log(`  Signature: ${sym.signature}`)
-    if (sym.docstring) console.log(`  Docstring: ${sym.docstring.trim()}`)
-    console.log(`  Lines: ${sym.line}-${sym.endLine}`)
-    console.log('---')
+    logInfo(`  Signature: ${sym.signature}`)
+    if (sym.docstring) logInfo(`  Docstring: ${sym.docstring.trim()}`)
+    logInfo(`  Lines: ${sym.line}-${sym.end_line}`)
+    logInfo('---')
   }
 }
 

@@ -1,7 +1,8 @@
 import { Parser, Language, Tree } from 'web-tree-sitter'
 import { existsSync } from 'fs'
-import type { IndexerConfig, IndexedSymbol } from './types'
-import { logWarning } from 'src/utils/logger.js'
+import type { IndexerConfig, IndexedSymbol } from '../config/types.js'
+import { logError } from 'src/utils/logger.js'
+import { default_indexer_config } from 'src/config/default_config.js'
 
 export class TreeSitterIndexer {
   private parser: Parser | null = null
@@ -17,6 +18,7 @@ export class TreeSitterIndexer {
       tsx: 'tsx',
       ts: 'typescript',
       js: 'javascript',
+      jsx: 'javascript',
     }
 
     await Parser.init()
@@ -58,7 +60,9 @@ export class TreeSitterIndexer {
         this.languages.set(langName, lang)
         return lang
       } catch (err) {
-        throw new Error(`Failed to load WASM grammar for ${langName}: ${err}`)
+        logError(`Failed to load WASM grammar for ${langName}`)
+        logError('', err)
+        throw new Error(`Failed to load WASM grammar for ${langName}`)
       }
     }
 
@@ -73,7 +77,7 @@ export class TreeSitterIndexer {
     filePath: string,
   ): Promise<IndexedSymbol['Select'][]> {
     if (!this.parser) {
-      await this.init({ enabled: true, languages: {} } as IndexerConfig)
+      await this.init(default_indexer_config)
     }
 
     try {
@@ -88,8 +92,9 @@ export class TreeSitterIndexer {
       const { extractTypeScriptSymbols } =
         await import('./languages/typescript.js')
       return extractTypeScriptSymbols(tree.rootNode, filePath)
-    } catch {
-      logWarning('Language not found')
+    } catch (err) {
+      logError(`Error parsing file ${filePath}`)
+      logError('', err)
       return []
     }
   }

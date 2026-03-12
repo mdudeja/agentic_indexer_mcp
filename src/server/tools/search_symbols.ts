@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { IndexerDB } from '../../database/IndexerDB'
-import type { SymbolKind } from '../../indexer/types'
+import type { SymbolKind } from '../../config/types'
 
 export function registerSearchSymbolsTool(server: McpServer, store: IndexerDB) {
   server.registerTool(
@@ -50,7 +50,7 @@ export function registerSearchSymbolsTool(server: McpServer, store: IndexerDB) {
 
         const formattedResults = results
           .map((r) => {
-            let str = `[${r.kind.toUpperCase()}] ${r.name} in ${r.filePath}:${r.line + 1}`
+            let str = `[${r.kind.toUpperCase()}] ${r.name} in ${r.file_path}:${r.line + 1}`
             if (r.signature) str += `\n  Signature: ${r.signature}`
             if (r.docstring) str += `\n  Doc: ${r.docstring.split('\n')[0]}...`
             return str

@@ -7,38 +7,40 @@ export enum SymbolKind {
   class = 'class',
   interface = 'interface',
   type = 'type',
-  variable = 'variable',
-  property = 'property',
+  var = 'var',
+  const = 'const',
+  let = 'let',
   method = 'method',
-  constructor = 'constructor',
+  property = 'property',
   enum = 'enum',
-  enumMember = 'enumMember',
   namespace = 'namespace',
   module = 'module',
+  arrowFunction = 'arrowFunction',
+  decorator = 'decorator',
 }
 
 export const symbols = sqliteTable(
   'symbols',
   {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
+    id: text().primaryKey(),
+    name: text().notNull(),
     kind: customEnum<SymbolKind>('kind').notNull(),
-    filePath: text('file_path')
+    file_path: text()
       .notNull()
       .references(() => files.path, { onDelete: 'cascade' }),
-    line: integer('line').notNull(),
-    column: integer('column').notNull(),
-    endLine: integer('end_line'),
-    endColumn: integer('end_column'),
-    signature: text('signature'),
-    docstring: text('docstring'),
-    parentId: text('parent_id'),
-    exported: integer('exported', { mode: 'boolean' }).default(false),
+    line: integer().notNull(),
+    column: integer().notNull(),
+    end_line: integer(),
+    end_column: integer(),
+    signature: text(),
+    docstring: text(),
+    parent_id: text(),
+    exported: integer({ mode: 'boolean' }).default(false),
   },
   (table) => [
     index('idx_symbols_name').on(table.name),
     index('idx_symbols_kind').on(table.kind),
-    index('idx_symbols_file').on(table.filePath),
+    index('idx_symbols_file').on(table.file_path),
   ],
 )
 

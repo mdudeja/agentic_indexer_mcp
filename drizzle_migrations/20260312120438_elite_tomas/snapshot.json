@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "def4acab-6e09-479e-8e89-0c153159edb6",
+  "id": "9c01f413-8355-4678-8fc2-e748cf0a0c8a",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -206,6 +206,48 @@
       "name": "symbols_pk",
       "table": "symbols",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "path",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_files_path",
+      "entityType": "indexes",
+      "table": "files"
+    },
+    {
+      "columns": [
+        {
+          "value": "hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_files_hash",
+      "entityType": "indexes",
+      "table": "files"
+    },
+    {
+      "columns": [
+        {
+          "value": "indexed_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_files_indexed_at",
+      "entityType": "indexes",
+      "table": "files"
     },
     {
       "columns": [

@@ -1,26 +1,31 @@
+import { logInfo } from 'src/utils/logger'
 import { IndexerDB } from '../src/database/IndexerDB'
-import type { IndexedSymbol } from '../src/indexer/types'
+import { SymbolKind, type IndexedSymbol } from '../src/config/types'
 
 async function main() {
-  const store = new IndexerDB(':memory:')
+  const store = IndexerDB.getInstance(':memory:')
   await store.init()
-  await store.upsertFile('test.ts', '123', 'ts')
-  const symbols: IndexedSymbol[] = [
+  await store.upsertFile({
+    path: 'test.ts',
+    hash: 'abc',
+    language: 'typescript',
+  })
+  const symbols: IndexedSymbol['Insert'][] = [
     {
       id: '1',
       name: 'myVar',
-      kind: 'variable',
-      filePath: 'test.ts',
+      kind: SymbolKind.variable,
+      file_path: 'test.ts',
       line: 1,
       column: 1,
-      endLine: 1,
-      endColumn: 2,
+      end_line: 1,
+      end_column: 2,
       signature: 'const myVar = 1',
       exported: true,
     },
   ]
   await store.upsertSymbols(symbols)
   const results = await store.searchSymbols('myVar')
-  console.log('Results:', results)
+  logInfo('Results:', results)
 }
 main().catch(console.error)

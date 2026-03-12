@@ -4,9 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "bun run index.ts serve",
-    "index": "bun run index.ts index",
-    "query": "bun run index.ts query",
+    "start": "bun run --env-file .env index.ts serve",
+    "index": "bun run --env-file .env index.ts index",
+    "query": "bun run --env-file .env index.ts query",
     "lint": "bun tsc --noEmit",
     "test": "bun test"
   },
@@ -16,7 +16,7 @@
     "temporal-polyfill": "^0.3.2",
     "tree-sitter-wasms": "^0.1.13",
     "typebox": "^1.1.5",
-    "web-tree-sitter": "^0.26.6",
+    "web-tree-sitter": "0.25.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {

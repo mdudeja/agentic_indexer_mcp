@@ -3,7 +3,8 @@ import { parseArgs } from 'util'
 import { startMcpServer } from './src/server'
 import { IndexPipeline } from './src/indexer/IndexPipeline'
 import { IndexerDB } from './src/database/IndexerDB'
-import type { SymbolKind } from './src/indexer/types'
+import type { SymbolKind } from './src/config/types'
+import { logWarning } from 'src/utils/logger'
 
 declare module 'bun' {
   interface Env {
@@ -42,7 +43,7 @@ const command = positionals[2] // e.g. bun run index.ts <command>
 const cwd = values.cwd || process.cwd()
 
 if (values.help || !command) {
-  console.log(`
+  logWarning(`
 Usage: agentic-indexer <command> [options]
 
 Commands:
@@ -65,7 +66,7 @@ async function main() {
       await startMcpServer(cwd)
       break
     case 'index': {
-      console.log(`Running index on ${cwd}`)
+      logWarning(`Running index on ${cwd}`)
       const dbPath = `${cwd}/.agentic/index/symbols.sqlite`
       const store = IndexerDB.getInstance(dbPath)
       await store.init()
@@ -90,7 +91,7 @@ async function main() {
       const store = IndexerDB.getInstance(dbPath)
       await store.init()
 
-      console.log(`Searching for "${values.query}" in ${cwd}...`)
+      logWarning(`Searching for "${values.query}" in ${cwd}...`)
       const results = await store.searchSymbols(
         values.query,
         values.kind as SymbolKind | 'all',
@@ -99,14 +100,13 @@ async function main() {
       )
 
       if (results.length === 0) {
-        console.log('No results found.')
+        logWarning('No results found.')
       } else {
-        console.log(`Found ${results.length} results:\n`)
+        logWarning(`Found ${results.length} results:\n`)
         for (const r of results) {
-          console.log(`[${r.kind.toUpperCase()}] ${r.name}`)
-          console.log(`  File: ${r.filePath}:${r.line + 1}`)
-          if (r.signature) console.log(`  Signature: ${r.signature}`)
-          console.log()
+          logWarning(`[${r.kind.toUpperCase()}] ${r.name}`)
+          logWarning(`  File: ${r.file_path}:${r.line + 1}`)
+          if (r.signature) logWarning(`  Signature: ${r.signature}`)
         }
       }
       break

@@ -5,7 +5,7 @@ import * as schema from './schemas'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { dirname } from 'path'
 import { existsSync, mkdirSync } from 'fs'
-import type { IndexedSymbol, IndexedFile, SymbolKind } from '../indexer/types'
+import type { IndexedSymbol, IndexedFile, SymbolKind } from '../config/types'
 import { resolvePath } from 'src/utils/paths'
 import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
@@ -89,7 +89,7 @@ export class IndexerDB {
         target: schema.files.path,
         set: {
           hash: file.hash,
-          indexedAt: getNowMillis(),
+          indexed_at: getNowMillis(),
           language: file.language,
         },
       })
@@ -119,7 +119,7 @@ export class IndexerDB {
       return
 
     return this.sqlite.transaction(() => {
-      const uniqueFiles = [...new Set(symbolsData.map((s) => s.filePath))]
+      const uniqueFiles = [...new Set(symbolsData.map((s) => s.file_path))]
       uniqueFiles.forEach((f) => this.preparedSymbolDelete?.run(f))
 
       const withExported = symbolsData.map((s) => ({
@@ -148,7 +148,7 @@ export class IndexerDB {
 
     if (filePattern) {
       const fileSqlPattern = filePattern.replace(/\*/g, '%')
-      conditions.push(like(schema.symbols.filePath, fileSqlPattern))
+      conditions.push(like(schema.symbols.file_path, fileSqlPattern))
     }
 
     return this.db
@@ -162,7 +162,7 @@ export class IndexerDB {
     return this.db
       .select()
       .from(schema.symbols)
-      .where(eq(schema.symbols.filePath, path))
+      .where(eq(schema.symbols.file_path, path))
       .orderBy(schema.symbols.line)
   }
 
@@ -181,7 +181,7 @@ export class IndexerDB {
       .select()
       .from(schema.symbols)
       .where(
-        and(eq(schema.symbols.name, name), eq(schema.symbols.filePath, path)),
+        and(eq(schema.symbols.name, name), eq(schema.symbols.file_path, path)),
       )
       .limit(1)
 

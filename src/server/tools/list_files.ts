@@ -56,7 +56,7 @@ export function registerListFilesTool(server: McpServer, store: IndexerDB) {
 
         const output = results
           .map((f) => {
-            const date = new Date(f.indexedAt).toISOString()
+            const date = new Date(f.indexed_at).toISOString()
             return `- ${f.path} [${f.language}] (indexed: ${date})`
           })
           .join('\n')
