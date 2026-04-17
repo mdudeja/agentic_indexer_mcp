@@ -5,7 +5,12 @@ import * as schema from './schemas'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { dirname } from 'path'
 import { existsSync, mkdirSync } from 'fs'
-import type { IndexedSymbol, IndexedFile, SymbolKind, IndexedImport, SymbolReference } from '../config/types'
+import type {
+  IndexedSymbol,
+  IndexedFile,
+  SymbolKind,
+  IndexedImport,
+} from '../config/types'
 import { resolvePath } from 'src/utils/paths'
 import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
@@ -23,17 +28,15 @@ export class IndexerDB {
   private preparedSymbolInsert: Statement | null = null
   private preparedImportDelete: Statement | null = null
   private preparedImportInsert: Statement | null = null
-  private preparedRefDelete: Statement | null = null
-  private preparedRefInsert: Statement | null = null
 
-  private constructor(dbPath: string = ':memory:') {
+  private constructor(dbPath?: string) {
     this.isMemory = dbPath === ':memory:'
     this.dbFilePath = this.isMemory
       ? dbPath
       : resolvePath(dbPath || (process.env.DB_FILE_URL as string))
 
     if (!this.isMemory) {
-      const dbDir = dirname(this.dbFilePath)
+      const dbDir = dirname(this.dbFilePath!)
       if (!existsSync(dbDir)) {
         logDebug(`Creating database directory at ${dbDir}`)
         mkdirSync(dbDir, { recursive: true })
@@ -52,7 +55,7 @@ export class IndexerDB {
     })
   }
 
-  public static getInstance(dbPath: string = ':memory:') {
+  public static getInstance(dbPath?: string) {
     if (!IndexerDB.instance || IndexerDB.instance.dbFilePath !== dbPath) {
       IndexerDB.instance = new IndexerDB(dbPath)
     }
@@ -81,13 +84,13 @@ export class IndexerDB {
       `INSERT INTO symbols (${columnNames.join(',')}) VALUES (${insertPlaceholders})`,
     )
 
-    this.preparedImportDelete = this.sqlite.prepare(`DELETE FROM imports WHERE file_path = ?`)
+    this.preparedImportDelete = this.sqlite.prepare(
+      `DELETE FROM imports WHERE file_path = ?`,
+    )
     const importCols = Object.keys(getColumns(schema.imports))
-    this.preparedImportInsert = this.sqlite.prepare(`INSERT INTO imports (${importCols.join(',')}) VALUES (${importCols.map(() => '?').join(',')})`)
-
-    this.preparedRefDelete = this.sqlite.prepare(`DELETE FROM symbol_references WHERE file_path = ?`)
-    const refCols = Object.keys(getColumns(schema.symbol_references))
-    this.preparedRefInsert = this.sqlite.prepare(`INSERT INTO symbol_references (${refCols.join(',')}) VALUES (${refCols.map(() => '?').join(',')})`)
+    this.preparedImportInsert = this.sqlite.prepare(
+      `INSERT INTO imports (${importCols.join(',')}) VALUES (${importCols.map(() => '?').join(',')})`,
+    )
 
     this.dbInited = true
     logDebug('Database migrations applied')
@@ -148,7 +151,12 @@ export class IndexerDB {
   }
 
   async upsertImports(importsData: IndexedImport['Insert'][]) {
-    if (importsData.length === 0 || !this.preparedImportDelete || !this.preparedImportInsert) return
+    if (
+      importsData.length === 0 ||
+      !this.preparedImportDelete ||
+      !this.preparedImportInsert
+    )
+      return
     return this.sqlite.transaction(() => {
       const uniqueFiles = [...new Set(importsData.map((m) => m.file_path))]
       uniqueFiles.forEach((f) => this.preparedImportDelete?.run(f))
@@ -156,19 +164,6 @@ export class IndexerDB {
       importsData.forEach((item) => {
         const args = importCols.map((col) => (item as any)[col] ?? null)
         this.preparedImportInsert?.run(...args)
-      })
-    })()
-  }
-
-  async upsertReferences(refsData: SymbolReference['Insert'][]) {
-    if (refsData.length === 0 || !this.preparedRefDelete || !this.preparedRefInsert) return
-    return this.sqlite.transaction(() => {
-      const uniqueFiles = [...new Set(refsData.map((r) => r.file_path))]
-      uniqueFiles.forEach((f) => this.preparedRefDelete?.run(f))
-      const refCols = Object.keys(getColumns(schema.symbol_references))
-      refsData.forEach((item) => {
-        const args = refCols.map((col) => (item as any)[col] ?? null)
-        this.preparedRefInsert?.run(...args)
       })
     })()
   }
@@ -232,17 +227,15 @@ export class IndexerDB {
 
   async getImporters(moduleNamePattern: string) {
     const pattern = moduleNamePattern.replace(/\*/g, '%')
-    return this.db.select().from(schema.imports).where(like(schema.imports.module_name, pattern))
-  }
-
-  async getCallers(calleeName: string) {
-    return this.db.select().from(schema.symbol_references).where(eq(schema.symbol_references.callee_name, calleeName))
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(like(schema.imports.module_name, pattern))
   }
 
   async clear() {
     await this.db.delete(schema.symbols)
     await this.db.delete(schema.imports)
-    await this.db.delete(schema.symbol_references)
     await this.db.delete(schema.files)
   }
 }

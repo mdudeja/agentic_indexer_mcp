@@ -3,12 +3,11 @@ import { Parser, Language } from 'web-tree-sitter'
 import type {
   IndexedSymbol,
   IndexedImport,
-  SymbolReference,
   IndexerConfig,
 } from '../config/types.js'
 import { logError } from 'src/utils/logger.js'
 import { AppStateManager } from 'src/state'
-
+import { extractSymbols } from './steps/symbol_extractor.js'
 
 export class TreeSitterIndexer {
   private parser: Parser | null = null
@@ -27,8 +26,6 @@ export class TreeSitterIndexer {
     await Parser.init()
     this.parser = new Parser()
   }
-
-
 
   async loadLanguage(langName: string): Promise<any> {
     if (this.languages.has(langName)) {
@@ -58,7 +55,6 @@ export class TreeSitterIndexer {
   ): Promise<{
     symbols: IndexedSymbol['Select'][]
     imports: IndexedImport['Select'][]
-    references: SymbolReference['Select'][]
   }> {
     if (!this.parser) {
       await this.init()
@@ -69,21 +65,19 @@ export class TreeSitterIndexer {
       const tree = await this.parseFile(sourceCode, langName)
 
       if (!tree) {
-        return { symbols: [], imports: [], references: [] }
+        return { symbols: [], imports: [] }
       }
 
-      // only typescript available for now
-      const { extractSymbols: extractTypeScriptSymbols } =
-        await import('./steps/symbol_extractor.js')
-      
-      const config = AppStateManager.getInstance().getItem('config') as IndexerConfig | null
-      const tsConfig = config?.languages?.typescript?.treesitter
+      const config = AppStateManager.getInstance().getItem(
+        'config',
+      ) as IndexerConfig | null
+      const tsConfig = config?.languages?.[langName]?.treesitter
 
-      return extractTypeScriptSymbols(tree.rootNode, filePath, tsConfig)
+      return extractSymbols(tree.rootNode, filePath, tsConfig)
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)
-      return { symbols: [], imports: [], references: [] }
+      return { symbols: [], imports: [] }
     }
   }
 

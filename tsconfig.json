@@ -12,6 +12,7 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
+    "baseUrl": ".",
     "outDir": "./dist",
     "strict": true,
     "incremental": true,
@@ -28,6 +29,7 @@
     "strictBindCallApply": false,
     "types": [
       "bun"
-    ]
+    ],
+    "ignoreDeprecations": "6.0"
   }
 }

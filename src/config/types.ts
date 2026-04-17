@@ -1,4 +1,8 @@
-export type { IndexedFile, IndexedSymbol, IndexedImport, SymbolReference } from '../database/schemas'
+export type {
+  IndexedFile,
+  IndexedSymbol,
+  IndexedImport,
+} from '../database/schemas'
 export { SymbolKind } from '../database/schemas'
 
 import { SymbolKind } from '../database/schemas'
@@ -9,22 +13,30 @@ export enum DocstringStrategy {
   comment_after = 'comment_after',
 }
 
-export type NodesInfo = {
+export type NodeInfo = {
   kind: SymbolKind[]
   name_field?: string
+  source_field?: string
   parameters_field?: string
   return_type_field?: string
   docstring?: DocstringStrategy
+  inherit_name_from_parent?: boolean
 }
 
 export type LanguageConfig = {
   extensions: string[]
   treesitter: {
     language_name: string
-    nodes_info: Record<string, NodesInfo>
-    container_nodes: string[]
-    typedef_nodes: string[]
-    decorator_nodes: string[]
+    block_init_marker: string
+    nodes_info: Record<string, NodeInfo>
+    lists: {
+      exported_nodes: string[]
+      container_nodes: string[]
+      typedef_nodes: string[]
+      decorator_nodes: string[]
+      callable_nodes: string[]
+      additional_nodes: string[]
+    }
   }
 }
 

@@ -1,18 +1,21 @@
 import type { Node } from 'web-tree-sitter'
-import { SymbolKind, type IndexedSymbol, type IndexedImport, type SymbolReference } from '../../config/types'
+import {
+  SymbolKind,
+  type IndexedSymbol,
+  type IndexedImport,
+  type LanguageConfig,
+} from '../../config/types'
 import { randomUUID } from 'crypto'
+
+type TreesitterConfig = LanguageConfig['treesitter']
 
 const symbols: IndexedSymbol['Select'][] = []
 const imports: IndexedImport['Select'][] = []
-const references: SymbolReference['Select'][] = []
 
-function isExported(node: Node): boolean {
+function isExported(node: Node, config: TreesitterConfig): boolean {
   let current: Node | null = node.parent
   while (current) {
-    if (
-      current.type === 'export_statement' ||
-      current.type === 'export_default_declaration'
-    ) {
+    if (config.lists.exported_nodes.includes(current.type)) {
       return true
     }
     current = current.parent
@@ -20,14 +23,34 @@ function isExported(node: Node): boolean {
   return false
 }
 
-function getDocstring(node: Node): string | undefined {
-  // Look at previous sibling. If it's a comment, extract it.
-  // In tree-sitter an export_statement wraps the declaration, so check the export statement's sibling if exported
+function getDocstring(
+  node: Node,
+  config: TreesitterConfig,
+): string | undefined {
   const targetNode = node.parent?.type.includes('export') ? node.parent : node
-  const prev = targetNode.previousNamedSibling
-  if (prev && prev.type === 'comment') {
-    return prev.text
+  const nodeInfo = config.nodes_info[targetNode.type]
+  if (!nodeInfo || !nodeInfo.docstring) return undefined
+
+  let docStringNode =
+    nodeInfo.docstring === 'comment_before'
+      ? targetNode.previousNamedSibling
+      : targetNode.nextNamedSibling
+  if (!docStringNode) return undefined
+
+  const comments: string[] = []
+
+  while (docStringNode && docStringNode.type.includes('comment')) {
+    comments.unshift(docStringNode.text.trim())
+    docStringNode =
+      nodeInfo.docstring === 'comment_before'
+        ? docStringNode.previousNamedSibling
+        : docStringNode.nextNamedSibling
   }
+
+  if (comments.length > 0) {
+    return comments.join('\n')
+  }
+
   return undefined
 }
 
@@ -37,20 +60,21 @@ function addSymbol({
   kind,
   parent_id,
   file_path,
+  config,
 }: {
   node: Node
   nameNode: Node | null
   kind: SymbolKind
   parent_id?: string
   file_path: string
+  config: TreesitterConfig
 }): string | null {
   if (!nameNode) return null
 
   const id = randomUUID()
-  const isNodeExported = isExported(node)
+  const isNodeExported = isExported(node, config)
 
-  // Default to full node text for signature, truncate if too long
-  let signature = node.text.split('{')[0]?.trim()
+  let signature = node.text.split(config.block_init_marker)[0]?.trim()
   if (signature && signature.length > 200) {
     signature = signature.substring(0, 197) + '...'
   }
@@ -65,7 +89,7 @@ function addSymbol({
     end_line: node.endPosition.row,
     end_column: node.endPosition.column,
     signature: signature ?? null,
-    docstring: getDocstring(node) ?? null,
+    docstring: getDocstring(node, config) ?? null,
     parent_id: parent_id ?? null,
     exported: isNodeExported,
   })
@@ -73,81 +97,64 @@ function addSymbol({
   return id
 }
 
-function traverse(node: Node, file_path: string, config?: any, currentParentId?: string) {
+function traverse(
+  node: Node,
+  file_path: string,
+  config?: TreesitterConfig,
+  currentParentId?: string,
+) {
   let nextParentId = currentParentId
 
-  if (node.type === 'import_statement') {
-    const sourceNode = node.childForFieldName('source')
-    if (sourceNode) {
-      let moduleName = sourceNode.text
-      if (moduleName.startsWith("'") || moduleName.startsWith('"')) {
-         moduleName = moduleName.substring(1, moduleName.length - 1)
-      }
-      imports.push({
-        id: randomUUID(),
-        file_path,
-        module_name: moduleName,
-        imported_name: null,
-      })
-    }
-  } else if (node.type === 'call_expression') {
-    const functionNode = node.childForFieldName('function')
-    if (functionNode) {
-      references.push({
-        id: randomUUID(),
-        file_path,
-        caller_symbol_id: currentParentId ?? null,
-        callee_name: functionNode.text,
-      })
-    }
-  } else if (node.type === 'lexical_declaration' || node.type === 'variable_declaration') {
-    const declarators = node.namedChildren.filter(
-      (c) => c?.type === 'variable_declarator',
-    )
-    for (const decl of declarators) {
-      if (!decl) continue
-      const nameNode = decl.childForFieldName('name')
-      const valueNode = decl.childForFieldName('value')
+  const nodeInfo = config?.nodes_info?.[node.type]
 
-      if (
-        valueNode &&
-        (valueNode.type === 'arrow_function' || valueNode.type === 'function')
-      ) {
-        addSymbol({
-          node: decl,
-          nameNode,
-          kind: SymbolKind.function,
-          parent_id: currentParentId,
+  if (nodeInfo) {
+    const kind = nodeInfo.kind[0]
+    if (kind === undefined) {
+      // Malformed config entry — skip but still recurse into children
+    } else if (kind === SymbolKind.import) {
+      // Imports go to the imports table via source_field
+      const sourceField = nodeInfo.source_field ?? 'source'
+      const sourceNode = node.childForFieldName(sourceField)
+      if (sourceNode) {
+        let moduleName = sourceNode.text
+        if (moduleName.startsWith("'") || moduleName.startsWith('"')) {
+          moduleName = moduleName.substring(1, moduleName.length - 1)
+        }
+        imports.push({
+          id: randomUUID(),
           file_path,
+          module_name: moduleName,
+          imported_name: null,
         })
-      } else {
-        if (isExported(node) || !currentParentId) {
-          addSymbol({
-            node: decl,
-            nameNode,
-            kind: SymbolKind.var,
-            parent_id: currentParentId,
-            file_path,
-          })
+      }
+    } else {
+      let nameNode = nodeInfo.name_field
+        ? node.childForFieldName(nodeInfo.name_field)
+        : null
+
+      // For nodes that don't carry their own name (e.g. arrow functions assigned
+      // to a variable), inherit the name from the parent variable_declarator.
+      if (!nameNode && nodeInfo.inherit_name_from_parent) {
+        const parent = node.parent
+        if (parent?.type === 'variable_declarator') {
+          nameNode = parent.childForFieldName('name')
         }
       }
-    }
-  } else if (config?.nodes_info?.[node.type]) {
-    const nodeConfig = config.nodes_info[node.type]
-    const nameNode = nodeConfig.name_field ? node.childForFieldName(nodeConfig.name_field) : null
-    
-    const kind = nodeConfig.kind[0]
 
-    const newSymbolId = addSymbol({
-      node,
-      nameNode,
-      kind,
-      parent_id: currentParentId,
-      file_path,
-    })
+      const newSymbolId = addSymbol({
+        node,
+        nameNode,
+        kind,
+        parent_id: currentParentId,
+        file_path,
+        config,
+      })
 
-    if (newSymbolId && config.container_nodes?.includes(node.type)) {
-      nextParentId = newSymbolId
+      // Container nodes (classes, modules, namespaces…) establish the parent
+      // scope for all of their descendants, building the full hierarchy
+      if (newSymbolId && config?.lists?.container_nodes?.includes(node.type)) {
+        nextParentId = newSymbolId
+      }
     }
   }
 
@@ -162,16 +169,20 @@ function traverse(node: Node, file_path: string, config?: any, currentParentId?:
 export function extractSymbols(
   rootNode: Node,
   file_path: string,
-  config?: any,
-): { symbols: IndexedSymbol['Select'][]; imports: IndexedImport['Select'][]; references: SymbolReference['Select'][] } {
-  // Clear previous results
+  config?: TreesitterConfig,
+): {
+  symbols: IndexedSymbol['Select'][]
+  imports: IndexedImport['Select'][]
+} {
   symbols.length = 0
   imports.length = 0
-  references.length = 0
 
   if (rootNode) {
     traverse(rootNode, file_path, config)
   }
 
-  return { symbols: [...symbols], imports: [...imports], references: [...references] }
+  return {
+    symbols: [...symbols],
+    imports: [...imports],
+  }
 }

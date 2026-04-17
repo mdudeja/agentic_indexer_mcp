@@ -1,13 +1,17 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "9c01f413-8355-4678-8fc2-e748cf0a0c8a",
+  "id": "5355d16f-2304-4fcd-b5df-64fc7be16915",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
       "name": "files",
+      "entityType": "tables"
+    },
+    {
+      "name": "imports",
       "entityType": "tables"
     },
     {
@@ -53,6 +57,46 @@
       "name": "language",
       "entityType": "columns",
       "table": "files"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "file_path",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "module_name",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imported_name",
+      "entityType": "columns",
+      "table": "imports"
     },
     {
       "type": "text",
@@ -185,6 +229,21 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
+      "name": "fk_imports_file_path_files_path_fk",
+      "entityType": "fks",
+      "table": "imports"
+    },
+    {
+      "columns": [
+        "file_path"
+      ],
+      "tableTo": "files",
+      "columnsTo": [
+        "path"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
       "name": "fk_symbols_file_path_files_path_fk",
       "entityType": "fks",
       "table": "symbols"
@@ -196,6 +255,15 @@
       "nameExplicit": false,
       "name": "files_pk",
       "table": "files",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "imports_pk",
+      "table": "imports",
       "entityType": "pks"
     },
     {
@@ -248,6 +316,34 @@
       "name": "idx_files_indexed_at",
       "entityType": "indexes",
       "table": "files"
+    },
+    {
+      "columns": [
+        {
+          "value": "file_path",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_imports_file",
+      "entityType": "indexes",
+      "table": "imports"
+    },
+    {
+      "columns": [
+        {
+          "value": "module_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_imports_module",
+      "entityType": "indexes",
+      "table": "imports"
     },
     {
       "columns": [

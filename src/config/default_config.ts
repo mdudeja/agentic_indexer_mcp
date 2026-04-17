@@ -8,7 +8,13 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         extensions: ['.ts', '.tsx', '.js', '.jsx'],
         treesitter: {
           language_name: 'typescript',
+          block_init_marker: '{',
           nodes_info: {
+            import_statement: {
+              kind: [SymbolKind.import],
+              name_field: 'name',
+              source_field: 'source',
+            },
             function_declaration: {
               kind: [SymbolKind.function],
               name_field: 'name',
@@ -74,20 +80,29 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               parameters_field: 'parameters',
               return_type_field: 'return_type',
               docstring: DocstringStrategy.comment_before,
+              inherit_name_from_parent: true,
             },
           },
-          container_nodes: [
-            'class_declaration',
-            'module',
-            'class',
-            'internal_module',
-          ],
-          typedef_nodes: [
-            'type_alias_declaration',
-            'interface_declaration',
-            'enum_declaration',
-          ],
-          decorator_nodes: ['decorator'],
+          lists: {
+            exported_nodes: ['export_statement', 'export_default_declaration'],
+            callable_nodes: [
+              'function_declaration',
+              'method_definition',
+              'arrow_function',
+            ],
+            container_nodes: ['class_declaration', 'module', 'internal_module'],
+            typedef_nodes: [
+              'type_alias_declaration',
+              'interface_declaration',
+              'enum_declaration',
+            ],
+            decorator_nodes: ['decorator'],
+            additional_nodes: [
+              'public_field_definition',
+              'variable_declaration',
+              'lexical_declaration',
+            ],
+          },
         },
       },
       //   python: { extensions: ['.py'] },

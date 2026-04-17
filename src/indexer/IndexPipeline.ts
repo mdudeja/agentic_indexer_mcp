@@ -58,7 +58,6 @@ export class IndexPipeline {
       })
       await this.options.store.upsertSymbols(parsed.symbols)
       await this.options.store.upsertImports(parsed.imports)
-      await this.options.store.upsertReferences(parsed.references)
 
       processed++
     }
@@ -90,7 +89,6 @@ export class IndexPipeline {
       await this.options.store.upsertFile({ path: relPath, hash, language: ext })
       await this.options.store.upsertSymbols(parsed.symbols)
       await this.options.store.upsertImports(parsed.imports)
-      await this.options.store.upsertReferences(parsed.references)
       console.error(`[watcher] Re-indexed: ${relPath}`)
     } catch(e) {
       console.error(`[watcher] Failed to index ${relPath}:`, e)
