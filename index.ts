@@ -5,9 +5,14 @@ import { IndexPipeline } from './src/indexer/IndexPipeline'
 import { IndexerDB } from './src/database/IndexerDB'
 import type { SymbolKind } from './src/config/types'
 import { logWarning } from 'src/utils/logger'
+import { resolvePath } from 'src/utils/paths'
+import { loadConfig } from 'src/config/loader'
+import { AppStateManager } from 'src/state'
 
 declare module 'bun' {
   interface Env {
+    AGENTIC_DIR?: string
+    CONFIG_FILENAME?: string
     NODE_ENV?: string
     LOG_LEVEL?: string
     DB_FILE_URL?: string
@@ -40,7 +45,7 @@ const { values, positionals } = parseArgs({
 
 const command = positionals[2] // e.g. bun run index.ts <command>
 
-const cwd = values.cwd || process.cwd()
+const cwd = resolvePath(values.cwd ?? process.cwd())
 
 if (values.help || !command) {
   logWarning(`
@@ -61,16 +66,19 @@ Options:
 }
 
 async function main() {
+  const config = await loadConfig(cwd)
+  AppStateManager.getInstance().setItem('config', config)
+  AppStateManager.getInstance().setItem('root', cwd)
+
+  const store = IndexerDB.getInstance()
+  await store.init()
+
   switch (command) {
     case 'serve':
-      await startMcpServer(cwd)
+      await startMcpServer()
       break
     case 'index': {
       logWarning(`Running index on ${cwd}`)
-      const dbPath = `${cwd}/.agentic/index/symbols.sqlite`
-      const store = IndexerDB.getInstance(dbPath)
-      await store.init()
-
       const pipeline = new IndexPipeline({
         cwd,
         store,
@@ -86,10 +94,6 @@ async function main() {
         console.error('Error: --query is required for the query command')
         process.exit(1)
       }
-
-      const dbPath = `${cwd}/.agentic/index/symbols.sqlite`
-      const store = IndexerDB.getInstance(dbPath)
-      await store.init()
 
       logWarning(`Searching for "${values.query}" in ${cwd}...`)
       const results = await store.searchSymbols(

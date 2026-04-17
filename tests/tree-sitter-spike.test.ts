@@ -1,19 +1,7 @@
 import { logInfo } from 'src/utils/logger'
 import { TreeSitterIndexer } from '../src/indexer/TreeSitterIndexer'
-import { extractTypeScriptSymbols } from '../src/indexer/languages/typescript'
-import type { IndexerConfig } from '../src/config/types'
+import { extractSymbols } from '../src/indexer/steps/symbol_extractor'
 
-const config: IndexerConfig = {
-  enabled: true,
-  languages: {
-    typescript: {
-      extensions: ['.ts', '.tsx'],
-      treesitter: {
-        parser: undefined, // forces WASM fallback
-      },
-    },
-  },
-}
 
 const sourceCode = `
 /**
@@ -44,7 +32,7 @@ export const myConstant = 42
 async function runSpike() {
   logInfo('Initializing indexer...')
   const indexer = new TreeSitterIndexer()
-  await indexer.init(config)
+  await indexer.init()
 
   logInfo('Parsing file...')
   const tree = await indexer.parseFile(sourceCode, 'typescript')
@@ -56,7 +44,7 @@ async function runSpike() {
   logInfo('Parse successful! Node count:', tree.rootNode.descendantCount)
 
   logInfo('Extracting symbols...')
-  const symbols = extractTypeScriptSymbols(tree.rootNode, 'virtual-file.ts')
+  const { symbols } = extractSymbols(tree.rootNode, 'virtual-file.ts')
 
   logInfo('\\n--- Extracted Symbols ---')
   for (const sym of symbols) {

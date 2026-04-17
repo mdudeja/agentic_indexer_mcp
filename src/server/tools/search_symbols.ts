@@ -1,9 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { IndexerDB } from '../../database/IndexerDB'
+import { IndexerDB } from '../../database/IndexerDB'
 import type { SymbolKind } from '../../config/types'
 
-export function registerSearchSymbolsTool(server: McpServer, store: IndexerDB) {
+export function registerSearchSymbolsTool(server: McpServer) {
   server.registerTool(
     'search_symbols',
     {
@@ -29,6 +29,7 @@ export function registerSearchSymbolsTool(server: McpServer, store: IndexerDB) {
       }),
     },
     async ({ query, kind, file_pattern, limit }) => {
+      const store = IndexerDB.getInstance()
       try {
         const results = await store.searchSymbols(
           query as string,

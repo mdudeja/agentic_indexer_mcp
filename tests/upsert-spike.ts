@@ -14,7 +14,7 @@ async function main() {
     {
       id: '1',
       name: 'myVar',
-      kind: SymbolKind.variable,
+      kind: SymbolKind.var,
       file_path: 'test.ts',
       line: 1,
       column: 1,

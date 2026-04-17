@@ -1,19 +1,22 @@
-import { Parser, Language, Tree } from 'web-tree-sitter'
-import { existsSync } from 'fs'
-import type { IndexerConfig, IndexedSymbol } from '../config/types.js'
+import { Parser, Language } from 'web-tree-sitter'
+
+import type {
+  IndexedSymbol,
+  IndexedImport,
+  SymbolReference,
+  IndexerConfig,
+} from '../config/types.js'
 import { logError } from 'src/utils/logger.js'
-import { default_indexer_config } from 'src/config/default_config.js'
+import { AppStateManager } from 'src/state'
+
 
 export class TreeSitterIndexer {
   private parser: Parser | null = null
-  private languages: Map<string, Language> = new Map()
-  private config: IndexerConfig | null = null
+  private languages: Map<string, any> = new Map()
 
   private extnToLangMap = {}
 
-  async init(config: IndexerConfig) {
-    this.config = config
-
+  async init() {
     this.extnToLangMap = {
       tsx: 'tsx',
       ts: 'typescript',
@@ -25,59 +28,40 @@ export class TreeSitterIndexer {
     this.parser = new Parser()
   }
 
-  getStrategy(langName: string): 'native' | 'wasm' {
-    const langConfig = this.config?.languages[langName]
-    if (
-      langConfig?.treesitter?.parser &&
-      existsSync(langConfig.treesitter.parser)
-    ) {
-      // NOTE: native .so loading via tree-sitter node bindings
-      // would happen here. For now, since web-tree-sitter doesn't
-      // support .so files, we'll try to use a CLI approach later
-      // or standard tree-sitter if installed.
-      // We will fallback to WASM if native is not strictly requested yet.
-      return 'native'
-    }
-    return 'wasm'
-  }
 
-  async loadLanguage(langName: string): Promise<Language> {
+
+  async loadLanguage(langName: string): Promise<any> {
     if (this.languages.has(langName)) {
       return this.languages.get(langName)!
     }
 
-    const strategy = this.getStrategy(langName)
-
-    if (strategy === 'wasm') {
-      // Forcing WASM for the initial spike
-      try {
-        // Find the .wasm file mapped by tree-sitter-wasms
-        // Needs dynamic resolution because package paths might differ
-        const wasmPath = require.resolve(
-          `tree-sitter-wasms/out/tree-sitter-${langName}.wasm`,
-        )
-        const lang = await Language.load(wasmPath)
-        this.languages.set(langName, lang)
-        return lang
-      } catch (err) {
-        logError(`Failed to load WASM grammar for ${langName}`)
-        logError('', err)
-        throw new Error(`Failed to load WASM grammar for ${langName}`)
-      }
+    try {
+      // Find the .wasm file mapped by tree-sitter-wasms
+      // Needs dynamic resolution because package paths might differ
+      const wasmPath = require.resolve(
+        `tree-sitter-wasms/out/tree-sitter-${langName}.wasm`,
+      )
+      const lang = await Language.load(wasmPath)
+      this.languages.set(langName, lang)
+      return lang
+    } catch (err) {
+      logError(`Failed to load WASM grammar for ${langName}`)
+      logError('', err)
+      throw new Error(`Failed to load WASM grammar for ${langName}`)
     }
-
-    throw new Error(
-      `Strategy ${strategy} not fully implemented for language loading yet`,
-    )
   }
 
   async parse(
     sourceCode: string,
     ext: string,
     filePath: string,
-  ): Promise<IndexedSymbol['Select'][]> {
+  ): Promise<{
+    symbols: IndexedSymbol['Select'][]
+    imports: IndexedImport['Select'][]
+    references: SymbolReference['Select'][]
+  }> {
     if (!this.parser) {
-      await this.init(default_indexer_config)
+      await this.init()
     }
 
     try {
@@ -85,26 +69,31 @@ export class TreeSitterIndexer {
       const tree = await this.parseFile(sourceCode, langName)
 
       if (!tree) {
-        return []
+        return { symbols: [], imports: [], references: [] }
       }
 
       // only typescript available for now
-      const { extractTypeScriptSymbols } =
-        await import('./languages/typescript.js')
-      return extractTypeScriptSymbols(tree.rootNode, filePath)
+      const { extractSymbols: extractTypeScriptSymbols } =
+        await import('./steps/symbol_extractor.js')
+      
+      const config = AppStateManager.getInstance().getItem('config') as IndexerConfig | null
+      const tsConfig = config?.languages?.typescript?.treesitter
+
+      return extractTypeScriptSymbols(tree.rootNode, filePath, tsConfig)
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)
-      return []
+      return { symbols: [], imports: [], references: [] }
     }
   }
 
-  async parseFile(sourceCode: string, langName: string): Promise<Tree | null> {
+  async parseFile(sourceCode: string, langName: string): Promise<any> {
+    const lang = await this.loadLanguage(langName)
+
     if (!this.parser) {
       throw new Error('TreeSitterIndexer not initialized')
     }
 
-    const lang = await this.loadLanguage(langName)
     this.parser.setLanguage(lang)
     return this.parser.parse(sourceCode)
   }

@@ -13,7 +13,6 @@
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./",
     "strict": true,
     "incremental": true,
     "skipLibCheck": true,
@@ -26,6 +25,9 @@
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
-    "strictBindCallApply": false
+    "strictBindCallApply": false,
+    "types": [
+      "bun"
+    ]
   }
 }

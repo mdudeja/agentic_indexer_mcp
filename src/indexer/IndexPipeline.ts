@@ -2,8 +2,6 @@ import { join, relative } from 'path'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { TreeSitterIndexer } from './TreeSitterIndexer.ts'
 import type { IndexerDB } from '../database/IndexerDB.ts'
-import type { IndexedSymbol } from '../config/types.ts'
-
 export interface IndexPipelineOptions {
   cwd: string
   store: IndexerDB
@@ -44,11 +42,13 @@ export class IndexPipeline {
       console.error(`[indexer] Indexing: ${relPath}`)
 
       // Parse and extract using TreeSitterIndexer
-      const symbols: IndexedSymbol['Select'][] = await this.indexer.parse(
+      const parsed = await this.indexer.parse(
         content,
         ext,
         relPath,
       )
+
+      if (!parsed) continue
 
       // Save
       await this.options.store.upsertFile({
@@ -56,7 +56,9 @@ export class IndexPipeline {
         hash,
         language: ext,
       })
-      await this.options.store.upsertSymbols(symbols)
+      await this.options.store.upsertSymbols(parsed.symbols)
+      await this.options.store.upsertImports(parsed.imports)
+      await this.options.store.upsertReferences(parsed.references)
 
       processed++
     }
@@ -64,6 +66,35 @@ export class IndexPipeline {
     console.error(
       `[indexer] Indexed ${processed} files. Total found: ${files.length}`,
     )
+  }
+
+  async runOnFile(absPath: string) {
+    const relPath = relative(this.options.cwd, absPath)
+    if (this.options.ignorePatterns.some((p) => relPath.includes(p))) return
+
+    const ext = absPath.split('.').pop() || ''
+    if (!this.options.extensions.includes(ext)) return
+
+    try {
+      const content = readFileSync(absPath, 'utf8')
+      const hasher = new Bun.CryptoHasher('sha256')
+      hasher.update(content)
+      const hash = hasher.digest('hex')
+
+      const currentHash = await this.options.store.getFileHash(relPath)
+      if (currentHash === hash) return
+
+      const parsed = await this.indexer.parse(content, ext, relPath)
+      if (!parsed) return
+
+      await this.options.store.upsertFile({ path: relPath, hash, language: ext })
+      await this.options.store.upsertSymbols(parsed.symbols)
+      await this.options.store.upsertImports(parsed.imports)
+      await this.options.store.upsertReferences(parsed.references)
+      console.error(`[watcher] Re-indexed: ${relPath}`)
+    } catch(e) {
+      console.error(`[watcher] Failed to index ${relPath}:`, e)
+    }
   }
 
   private findFiles(dir: string, fileList: string[] = []): string[] {

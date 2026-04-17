@@ -1,4 +1,4 @@
-import { getNow } from "./datetime";
+import { getNow } from './datetime'
 
 // Log levels
 enum LogLevel {
@@ -9,30 +9,30 @@ enum LogLevel {
   NONE = 4,
 }
 
-const CURRENT_LOG_LEVEL = parseLogLevel(process.env.LOG_LEVEL);
-const log_types = ["log", "error", "warn", "info"] as const;
-export type LogType = (typeof log_types)[number];
+const CURRENT_LOG_LEVEL = parseLogLevel(Bun.env.LOG_LEVEL)
+const log_types = ['log', 'error', 'warn', 'info'] as const
+export type LogType = (typeof log_types)[number]
 
 /**
  * Parse log level from environment variable
  */
 function parseLogLevel(level: string | undefined): LogLevel {
-  if (!level) return LogLevel.INFO; // default level
+  if (!level) return LogLevel.INFO // default level
 
   switch (level.toUpperCase()) {
-    case "DEBUG":
-      return LogLevel.DEBUG;
-    case "INFO":
-      return LogLevel.INFO;
-    case "WARNING":
-    case "WARN":
-      return LogLevel.WARNING;
-    case "ERROR":
-      return LogLevel.ERROR;
-    case "NONE":
-      return LogLevel.NONE;
+    case 'DEBUG':
+      return LogLevel.DEBUG
+    case 'INFO':
+      return LogLevel.INFO
+    case 'WARNING':
+    case 'WARN':
+      return LogLevel.WARNING
+    case 'ERROR':
+      return LogLevel.ERROR
+    case 'NONE':
+      return LogLevel.NONE
     default:
-      return LogLevel.INFO;
+      return LogLevel.INFO
   }
 }
 
@@ -44,35 +44,35 @@ function formatMessage(
   message: string,
   ...args: unknown[]
 ): string {
-  const now = getNow();
+  const now = getNow()
   const argString =
     args.length > 0
-      ? " " +
+      ? ' ' +
         args
           .map((arg) => {
-            if (typeof arg === "object") {
+            if (typeof arg === 'object') {
               if (arg instanceof Error) {
-                return `${arg.name}: ${arg.message}\n${arg.stack}`;
+                return `${arg.name}: ${arg.message}\n${arg.stack}`
               }
               try {
-                return JSON.stringify(arg, null, 2);
+                return JSON.stringify(arg, null, 2)
               } catch {
-                return String(arg);
+                return String(arg)
               }
             }
-            return String(arg);
+            return String(arg)
           })
-          .join(" ")
-      : "";
+          .join(' ')
+      : ''
 
-  return `[AgIdxr] [${now}] [${level}] ${message}${argString}`;
+  return `[AgIdxr] [${now}] [${level}] ${message}${argString}`
 }
 
 /**
  * Check if a message should be logged based on the current log level
  */
 function shouldLog(messageLevel: LogLevel): boolean {
-  return messageLevel >= CURRENT_LOG_LEVEL;
+  return messageLevel >= CURRENT_LOG_LEVEL
 }
 
 /**
@@ -81,8 +81,8 @@ function shouldLog(messageLevel: LogLevel): boolean {
  */
 export function log(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.INFO)) {
-    const formatted = formatMessage("INFO", message, ...args);
-    console.error(formatted);
+    const formatted = formatMessage('INFO', message, ...args)
+    console.error(formatted)
   }
 }
 
@@ -92,8 +92,8 @@ export function log(message: string, ...args: unknown[]): void {
  */
 export function logError(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.ERROR)) {
-    const formatted = formatMessage("ERROR", message, ...args);
-    console.error(formatted);
+    const formatted = formatMessage('ERROR', message, ...args)
+    console.error(formatted)
   }
 }
 
@@ -103,8 +103,8 @@ export function logError(message: string, ...args: unknown[]): void {
  */
 export function logWarning(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.WARNING)) {
-    const formatted = formatMessage("WARNING", message, ...args);
-    console.error(formatted);
+    const formatted = formatMessage('WARNING', message, ...args)
+    console.error(formatted)
   }
 }
 
@@ -114,8 +114,8 @@ export function logWarning(message: string, ...args: unknown[]): void {
  */
 export function logInfo(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.INFO)) {
-    const formatted = formatMessage("INFO", message, ...args);
-    console.error(formatted);
+    const formatted = formatMessage('INFO', message, ...args)
+    console.error(formatted)
   }
 }
 
@@ -125,7 +125,7 @@ export function logInfo(message: string, ...args: unknown[]): void {
  */
 export function logDebug(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.DEBUG)) {
-    const formatted = formatMessage("DEBUG", message, ...args);
-    console.error(formatted);
+    const formatted = formatMessage('DEBUG', message, ...args)
+    console.error(formatted)
   }
 }

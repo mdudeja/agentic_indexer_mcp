@@ -1,11 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { IndexerDB } from '../../database/IndexerDB'
+import { IndexerDB } from '../../database/IndexerDB'
 
-export function registerGetFileSummaryTool(
-  server: McpServer,
-  store: IndexerDB,
-) {
+export function registerGetFileSummaryTool(server: McpServer) {
   server.registerTool(
     'get_file_summary',
     {
@@ -19,6 +16,7 @@ export function registerGetFileSummaryTool(
       }),
     },
     async ({ file_path }) => {
+      const store = IndexerDB.getInstance()
       try {
         const results = await store.getFileSummary(file_path)
 

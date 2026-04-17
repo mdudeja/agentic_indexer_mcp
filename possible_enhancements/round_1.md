@@ -1,0 +1,10 @@
+- get_class_hierarchy: Traversing and returning object-oriented inheritance chains (e.g., extends / implements relationships).
+- get_call_hierarchy: Tracing callers and callees N levels deep across the codebase (our tracking is currently limited to direct 1-to-1 caller mapping).
+- find_dead_code: Automatically identifying symbols and files that are unreachable from any valid entry point in the project.
+- get_untested_symbols: Finding functions with no evidence of test-file reachability (intersecting the import-graph with test file patterns).
+- get_changed_symbols: Mapping a git diff to the exact precise symbols that were added, modified, or removed, rather than just file chunks.
+- get_symbol_importance: Ranking codebase nodes by structural centrality using the PageRank algorithm on the import mappings.
+- get_hotspots: Surfacing riskiest code by combining structural complexity metrics with historical git churn tracking.
+- get_dependency_cycles: Auditing the import graph and detecting circular dependencies between files.
+- get_coupling_metrics: Formally measuring module coupling and instability metrics for architectural health.
+- audit_agent_config: A tool that scans AI context rules (.cursorrules, CLAUDE.md, etc.) for dead paths, stale symbol references (e.g., a function that was renamed weeks ago), and token bloat.

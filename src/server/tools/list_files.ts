@@ -1,10 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { IndexerDB } from '../../database/IndexerDB'
+import { IndexerDB } from '../../database/IndexerDB'
 import { like, eq, and, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 
-export function registerListFilesTool(server: McpServer, store: IndexerDB) {
+export function registerListFilesTool(server: McpServer) {
   server.registerTool(
     'list_files',
     {
@@ -27,6 +27,7 @@ export function registerListFilesTool(server: McpServer, store: IndexerDB) {
       }),
     },
     async ({ pattern, language, limit }) => {
+      const store = IndexerDB.getInstance()
       try {
         const db = store.getDb()
         const conditions: SQL[] = []

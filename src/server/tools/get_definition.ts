@@ -1,14 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { IndexerDB } from '../../database/IndexerDB'
+import { IndexerDB } from '../../database/IndexerDB'
 import { join } from 'path'
 import { readFileSync } from 'fs'
+import { AppStateManager } from 'src/state'
 
-export function registerGetDefinitionTool(
-  server: McpServer,
-  store: IndexerDB,
-  cwd: string,
-) {
+export function registerGetDefinitionTool(server: McpServer) {
   server.registerTool(
     'get_definition',
     {
@@ -32,6 +29,7 @@ export function registerGetDefinitionTool(
       }),
     },
     async ({ symbol_id, name, file_path }) => {
+      const store = IndexerDB.getInstance()
       try {
         let symbol
 
@@ -54,7 +52,10 @@ export function registerGetDefinitionTool(
           }
         }
 
-        const absPath = join(cwd, symbol.filePath)
+        const absPath = join(
+          AppStateManager.getInstance().getItem('root') ?? '',
+          symbol.filePath,
+        )
         const fileContent = readFileSync(absPath, 'utf-8')
         const lines = fileContent.split('\n')
 

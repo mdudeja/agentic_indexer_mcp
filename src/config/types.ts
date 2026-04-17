@@ -1,4 +1,4 @@
-export type { IndexedFile, IndexedSymbol } from '../database/schemas'
+export type { IndexedFile, IndexedSymbol, IndexedImport, SymbolReference } from '../database/schemas'
 export { SymbolKind } from '../database/schemas'
 
 import { SymbolKind } from '../database/schemas'
@@ -20,7 +20,6 @@ export type NodesInfo = {
 export type LanguageConfig = {
   extensions: string[]
   treesitter: {
-    parser?: string // Path to .so parser
     language_name: string
     nodes_info: Record<string, NodesInfo>
     container_nodes: string[]
