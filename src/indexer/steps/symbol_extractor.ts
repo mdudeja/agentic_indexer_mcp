@@ -92,6 +92,7 @@ function addSymbol({
     docstring: getDocstring(node, config) ?? null,
     parent_id: parent_id ?? null,
     exported: isNodeExported,
+    decorator: null,
   })
 
   return id

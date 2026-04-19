@@ -36,12 +36,14 @@ export const symbols = sqliteTable(
     signature: text(),
     docstring: text(),
     parent_id: text(),
+    decorator: text(),
     exported: integer({ mode: 'boolean' }).default(false),
   },
   (table) => [
     index('idx_symbols_name').on(table.name),
     index('idx_symbols_kind').on(table.kind),
     index('idx_symbols_file').on(table.file_path),
+    index('idx_symbols_decorator').on(table.decorator),
   ],
 )
 
