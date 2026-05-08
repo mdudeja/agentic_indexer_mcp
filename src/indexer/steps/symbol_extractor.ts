@@ -3,6 +3,7 @@ import {
   SymbolKind,
   type IndexedSymbol,
   type IndexedImport,
+  type IndexedSymbolCall,
   type LanguageConfig,
 } from '../../config/types'
 import { randomUUID } from 'crypto'
@@ -11,16 +12,11 @@ type TreesitterConfig = LanguageConfig['treesitter']
 
 const symbols: IndexedSymbol['Select'][] = []
 const imports: IndexedImport['Select'][] = []
+const calls: IndexedSymbolCall['Insert'][] = []
 
 function isExported(node: Node, config: TreesitterConfig): boolean {
-  let current: Node | null = node.parent
-  while (current) {
-    if (config.lists.exported_nodes.includes(current.type)) {
-      return true
-    }
-    current = current.parent
-  }
-  return false
+  const parent = node.parent
+  return parent !== null && config.lists.exported_nodes.includes(parent.type)
 }
 
 function getDocstring(
@@ -35,6 +31,7 @@ function getDocstring(
     nodeInfo.docstring === 'comment_before'
       ? targetNode.previousNamedSibling
       : targetNode.nextNamedSibling
+
   if (!docStringNode) return undefined
 
   const comments: string[] = []
@@ -47,11 +44,45 @@ function getDocstring(
         : docStringNode.nextNamedSibling
   }
 
-  if (comments.length > 0) {
-    return comments.join('\n')
+  return comments.length > 0 ? comments.join('\n') : undefined
+}
+
+// Collect @decorator names for a node and return them as a comma-joined string.
+// Two placements exist in the TS grammar:
+//   - named children of the node itself (class_declaration keeps decorators inside)
+//   - preceding named siblings (method_definition / public_field_definition have their
+//     decorators as siblings in the containing class_body, not as children)
+function getDecorators(node: Node): string | null {
+  const names: string[] = []
+
+  for (const child of node.namedChildren) {
+    if (!child || child.type !== 'decorator') continue
+    const text = child.text.slice(1).replace(/\([\s\S]*\)$/, '').trim()
+    if (text) names.push(text)
   }
 
-  return undefined
+  const siblingDecorators: string[] = []
+  let prev = node.previousNamedSibling
+  while (prev?.type === 'decorator') {
+    const text = prev.text.slice(1).replace(/\([\s\S]*\)$/, '').trim()
+    if (text) siblingDecorators.unshift(text)
+    prev = prev.previousNamedSibling
+  }
+  names.push(...siblingDecorators)
+
+  return names.length > 0 ? names.join(', ') : null
+}
+
+// Build a signature string for a node.
+// For typedef nodes (type alias, interface, enum) the full text is the definition,
+// so we keep it instead of truncating at '{'.
+function buildSignature(node: Node, config: TreesitterConfig): string | null {
+  const isTypedef = config.lists.typedef_nodes.includes(node.type)
+  const raw = isTypedef
+    ? node.text.trim()
+    : node.text.split(config.block_init_marker)[0]?.trim() ?? ''
+  if (!raw) return null
+  return raw.length > 200 ? raw.substring(0, 197) + '...' : raw
 }
 
 function addSymbol({
@@ -72,12 +103,6 @@ function addSymbol({
   if (!nameNode) return null
 
   const id = randomUUID()
-  const isNodeExported = isExported(node, config)
-
-  let signature = node.text.split(config.block_init_marker)[0]?.trim()
-  if (signature && signature.length > 200) {
-    signature = signature.substring(0, 197) + '...'
-  }
 
   symbols.push({
     id,
@@ -88,14 +113,104 @@ function addSymbol({
     column: node.startPosition.column,
     end_line: node.endPosition.row,
     end_column: node.endPosition.column,
-    signature: signature ?? null,
+    signature: buildSignature(node, config),
     docstring: getDocstring(node, config) ?? null,
     parent_id: parent_id ?? null,
-    exported: isNodeExported,
-    decorator: null,
+    exported: isExported(node, config),
+    decorator: getDecorators(node),
   })
 
   return id
+}
+
+// Handle import_statement: extract one record per imported name so that
+// `import { useState, useEffect } from 'react'` produces two records.
+function handleImport(
+  node: Node,
+  file_path: string,
+  nodeInfo: { source_field?: string },
+) {
+  const sourceField = nodeInfo.source_field ?? 'source'
+  const sourceNode = node.childForFieldName(sourceField)
+  if (!sourceNode) return
+
+  let moduleName = sourceNode.text
+  if (moduleName.startsWith("'") || moduleName.startsWith('"')) {
+    moduleName = moduleName.slice(1, -1)
+  }
+
+  const importClause = node.namedChildren.find(c => c?.type === 'import_clause')
+  if (!importClause) {
+    // bare side-effect import: import 'module'
+    imports.push({ id: randomUUID(), file_path, module_name: moduleName, imported_name: null })
+    return
+  }
+
+  const importedNames: string[] = []
+
+  for (const child of importClause.namedChildren) {
+    if (!child) continue
+    if (child.type === 'identifier') {
+      // default import: import Foo from 'module'
+      importedNames.push(child.text)
+    } else if (child.type === 'named_imports') {
+      // named imports: import { Foo, Bar as B } from 'module'
+      for (const specifier of child.namedChildren) {
+        if (!specifier || specifier.type !== 'import_specifier') continue
+        const nameNode = specifier.childForFieldName('name')
+        if (nameNode) importedNames.push(nameNode.text)
+      }
+    } else if (child.type === 'namespace_import') {
+      // namespace import: import * as Foo from 'module'
+      const nameNode = child.namedChildren.find(c => c?.type === 'identifier')
+      if (nameNode) importedNames.push('* as ' + nameNode.text)
+    }
+  }
+
+  if (importedNames.length === 0) {
+    imports.push({ id: randomUUID(), file_path, module_name: moduleName, imported_name: null })
+  } else {
+    for (const name of importedNames) {
+      imports.push({ id: randomUUID(), file_path, module_name: moduleName, imported_name: name })
+    }
+  }
+}
+
+// Handle lexical_declaration (const/let) and variable_declaration (var).
+// These wrap one or more variable_declarator children and the keyword ('const',
+// 'let', 'var') must be read from the first child token, not from the config kind array.
+function handleVariableDeclaration(
+  node: Node,
+  file_path: string,
+  config: TreesitterConfig,
+  currentParentId?: string,
+) {
+  const keyword = node.children[0]?.type // 'const' | 'let' | 'var'
+  const kind =
+    keyword === 'const' ? SymbolKind.const
+    : keyword === 'let' ? SymbolKind.let
+    : SymbolKind.var
+
+  for (const child of node.namedChildren) {
+    if (!child || child.type !== 'variable_declarator') continue
+    const nameNode = child.childForFieldName('name')
+    addSymbol({ node, nameNode, kind, parent_id: currentParentId, file_path, config })
+  }
+}
+
+function recordCall(node: Node, currentCallableId: string) {
+  const funcNode = node.childForFieldName('function')
+  if (!funcNode) return
+  let calleeName: string | null = null
+  if (funcNode.type === 'identifier') {
+    calleeName = funcNode.text
+  } else if (funcNode.type === 'member_expression') {
+    const prop = funcNode.childForFieldName('property')
+    calleeName = prop?.text ?? null
+  }
+  if (calleeName) {
+    calls.push({ id: randomUUID(), caller_id: currentCallableId, callee_name: calleeName })
+  }
 }
 
 function traverse(
@@ -103,8 +218,14 @@ function traverse(
   file_path: string,
   config?: TreesitterConfig,
   currentParentId?: string,
+  currentCallableId?: string,
 ) {
   let nextParentId = currentParentId
+  let nextCallableId = currentCallableId
+
+  if (node.type === 'call_expression' && currentCallableId) {
+    recordCall(node, currentCallableId)
+  }
 
   const nodeInfo = config?.nodes_info?.[node.type]
 
@@ -113,21 +234,15 @@ function traverse(
     if (kind === undefined) {
       // Malformed config entry — skip but still recurse into children
     } else if (kind === SymbolKind.import) {
-      // Imports go to the imports table via source_field
-      const sourceField = nodeInfo.source_field ?? 'source'
-      const sourceNode = node.childForFieldName(sourceField)
-      if (sourceNode) {
-        let moduleName = sourceNode.text
-        if (moduleName.startsWith("'") || moduleName.startsWith('"')) {
-          moduleName = moduleName.substring(1, moduleName.length - 1)
-        }
-        imports.push({
-          id: randomUUID(),
-          file_path,
-          module_name: moduleName,
-          imported_name: null,
-        })
-      }
+      handleImport(node, file_path, nodeInfo)
+    } else if (kind === SymbolKind.decorator) {
+      // Decorators are attached to their parent symbol via getDecorators(); skip standalone indexing
+    } else if (
+      kind === SymbolKind.const ||
+      kind === SymbolKind.let ||
+      kind === SymbolKind.var
+    ) {
+      handleVariableDeclaration(node, file_path, config!, currentParentId)
     } else {
       let nameNode = nodeInfo.name_field
         ? node.childForFieldName(nodeInfo.name_field)
@@ -148,13 +263,16 @@ function traverse(
         kind,
         parent_id: currentParentId,
         file_path,
-        config,
+        config: config!,
       })
 
-      // Container nodes (classes, modules, namespaces…) establish the parent
-      // scope for all of their descendants, building the full hierarchy
-      if (newSymbolId && config?.lists?.container_nodes?.includes(node.type)) {
-        nextParentId = newSymbolId
+      if (newSymbolId) {
+        if (config?.lists?.container_nodes?.includes(node.type)) {
+          nextParentId = newSymbolId
+        }
+        if (config?.lists?.callable_nodes?.includes(node.type)) {
+          nextCallableId = newSymbolId
+        }
       }
     }
   }
@@ -162,7 +280,7 @@ function traverse(
   if (node?.namedChildren) {
     for (const child of node.namedChildren) {
       if (!child) continue
-      traverse(child, file_path, config, nextParentId)
+      traverse(child, file_path, config, nextParentId, nextCallableId)
     }
   }
 }
@@ -174,9 +292,11 @@ export function extractSymbols(
 ): {
   symbols: IndexedSymbol['Select'][]
   imports: IndexedImport['Select'][]
+  calls: IndexedSymbolCall['Insert'][]
 } {
   symbols.length = 0
   imports.length = 0
+  calls.length = 0
 
   if (rootNode) {
     traverse(rootNode, file_path, config)
@@ -185,5 +305,6 @@ export function extractSymbols(
   return {
     symbols: [...symbols],
     imports: [...imports],
+    calls: [...calls],
   }
 }

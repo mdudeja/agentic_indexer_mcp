@@ -2,6 +2,7 @@ export type {
   IndexedFile,
   IndexedSymbol,
   IndexedImport,
+  IndexedSymbolCall,
 } from '../database/schemas'
 export { SymbolKind } from '../database/schemas'
 

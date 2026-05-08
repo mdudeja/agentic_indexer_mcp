@@ -3,6 +3,7 @@ import { Parser, Language } from 'web-tree-sitter'
 import type {
   IndexedSymbol,
   IndexedImport,
+  IndexedSymbolCall,
   IndexerConfig,
 } from '../config/types.js'
 import { logError } from 'src/utils/logger.js'
@@ -55,6 +56,7 @@ export class TreeSitterIndexer {
   ): Promise<{
     symbols: IndexedSymbol['Select'][]
     imports: IndexedImport['Select'][]
+    calls: IndexedSymbolCall['Insert'][]
   }> {
     if (!this.parser) {
       await this.init()
@@ -65,7 +67,7 @@ export class TreeSitterIndexer {
       const tree = await this.parseFile(sourceCode, langName)
 
       if (!tree) {
-        return { symbols: [], imports: [] }
+        return { symbols: [], imports: [], calls: [] }
       }
 
       const config = AppStateManager.getInstance().getItem(
@@ -77,7 +79,7 @@ export class TreeSitterIndexer {
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)
-      return { symbols: [], imports: [] }
+      return { symbols: [], imports: [], calls: [] }
     }
   }
 

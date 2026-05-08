@@ -25,6 +25,7 @@ CREATE TABLE `symbols` (
 	`signature` text,
 	`docstring` text,
 	`parent_id` text,
+	`decorator` text,
 	`exported` integer DEFAULT false,
 	CONSTRAINT `fk_symbols_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
 );
@@ -36,4 +37,5 @@ CREATE INDEX `idx_imports_file` ON `imports` (`file_path`);--> statement-breakpo
 CREATE INDEX `idx_imports_module` ON `imports` (`module_name`);--> statement-breakpoint
 CREATE INDEX `idx_symbols_name` ON `symbols` (`name`);--> statement-breakpoint
 CREATE INDEX `idx_symbols_kind` ON `symbols` (`kind`);--> statement-breakpoint
-CREATE INDEX `idx_symbols_file` ON `symbols` (`file_path`);
+CREATE INDEX `idx_symbols_file` ON `symbols` (`file_path`);--> statement-breakpoint
+CREATE INDEX `idx_symbols_decorator` ON `symbols` (`decorator`);

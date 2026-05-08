@@ -1,19 +1,24 @@
 import { Database, Statement } from 'bun:sqlite'
 import { drizzle, type SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
-import { eq, like, SQL, and, getColumns } from 'drizzle-orm'
+import { eq, like, SQL, and, getColumns, inArray } from 'drizzle-orm'
 import * as schema from './schemas'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { dirname } from 'path'
 import { existsSync, mkdirSync } from 'fs'
+import { SymbolKind } from '../config/types'
 import type {
   IndexedSymbol,
   IndexedFile,
-  SymbolKind,
   IndexedImport,
+  IndexedSymbolCall,
 } from '../config/types'
 import { resolvePath } from 'src/utils/paths'
 import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
+
+// Kinds that map to callable symbols — used to prefer e.g. arrowFunction over const
+// when both share the same name (e.g. `const foo = () => {}`).
+const CALLABLE_KINDS: SymbolKind[] = [SymbolKind.function, SymbolKind.method, SymbolKind.arrowFunction]
 
 export class IndexerDB {
   private db: SQLiteBunDatabase<typeof schema>
@@ -28,6 +33,7 @@ export class IndexerDB {
   private preparedSymbolInsert: Statement | null = null
   private preparedImportDelete: Statement | null = null
   private preparedImportInsert: Statement | null = null
+  private preparedCallInsert: Statement | null = null
 
   private constructor(dbPath?: string) {
     this.isMemory = dbPath === ':memory:'
@@ -56,7 +62,10 @@ export class IndexerDB {
   }
 
   public static getInstance(dbPath?: string) {
-    if (!IndexerDB.instance || IndexerDB.instance.dbFilePath !== dbPath) {
+    if (
+      !IndexerDB.instance ||
+      (dbPath !== undefined && IndexerDB.instance.dbFilePath !== dbPath)
+    ) {
       IndexerDB.instance = new IndexerDB(dbPath)
     }
     return IndexerDB.instance
@@ -90,6 +99,10 @@ export class IndexerDB {
     const importCols = Object.keys(getColumns(schema.imports))
     this.preparedImportInsert = this.sqlite.prepare(
       `INSERT INTO imports (${importCols.join(',')}) VALUES (${importCols.map(() => '?').join(',')})`,
+    )
+
+    this.preparedCallInsert = this.sqlite.prepare(
+      `INSERT INTO symbol_calls (id, caller_id, callee_name, callee_id) VALUES (?, ?, ?, ?)`,
     )
 
     this.dbInited = true
@@ -148,6 +161,55 @@ export class IndexerDB {
         this.preparedSymbolInsert?.run(...args)
       })
     })()
+  }
+
+  async upsertCalls(callsData: IndexedSymbolCall['Insert'][]) {
+    if (callsData.length === 0 || !this.preparedCallInsert) return
+
+    // Resolve callee names to callable symbol IDs before inserting.
+    // Querying only callable kinds ensures that when a name has both a 'const'
+    // and an 'arrowFunction' entry, we link to the callable one.
+    const calleeNames = [...new Set(callsData.map((c) => c.callee_name))]
+    const nameToId = new Map<string, string>()
+    if (calleeNames.length > 0) {
+      const calleeSymbols = await this.db
+        .select({ id: schema.symbols.id, name: schema.symbols.name })
+        .from(schema.symbols)
+        .where(
+          and(
+            inArray(schema.symbols.name, calleeNames),
+            inArray(schema.symbols.kind, CALLABLE_KINDS),
+          ),
+        )
+      for (const sym of calleeSymbols) {
+        if (!nameToId.has(sym.name)) nameToId.set(sym.name, sym.id)
+      }
+    }
+
+    return this.sqlite.transaction(() => {
+      for (const call of callsData) {
+        const calleeId = nameToId.get(call.callee_name) ?? null
+        this.preparedCallInsert?.run(call.id, call.caller_id, call.callee_name, calleeId)
+      }
+    })()
+  }
+
+  async getCallsForSymbols(
+    callerIds: string[],
+  ): Promise<IndexedSymbolCall['Select'][]> {
+    if (callerIds.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbol_calls)
+      .where(inArray(schema.symbol_calls.caller_id, callerIds))
+  }
+
+  async getSymbolsByIds(ids: string[]): Promise<IndexedSymbol['Select'][]> {
+    if (ids.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(inArray(schema.symbols.id, ids))
   }
 
   async upsertImports(importsData: IndexedImport['Insert'][]) {
@@ -231,6 +293,41 @@ export class IndexerDB {
       .select()
       .from(schema.imports)
       .where(like(schema.imports.module_name, pattern))
+  }
+
+  async getSymbolsForFile(path: string): Promise<IndexedSymbol['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(eq(schema.symbols.file_path, path))
+      .orderBy(schema.symbols.line)
+  }
+
+  // Fetches a symbol and all its descendants via a recursive parent_id walk.
+  // Returns rows ordered by line so the caller can assume source order.
+  async getSymbolSubtree(symbolId: string): Promise<IndexedSymbol['Select'][]> {
+    const rows = this.sqlite
+      .prepare(
+        `WITH RECURSIVE subtree AS (
+          SELECT * FROM symbols WHERE id = ?
+          UNION ALL
+          SELECT s.* FROM symbols s INNER JOIN subtree t ON s.parent_id = t.id
+        )
+        SELECT * FROM subtree ORDER BY line`,
+      )
+      .all(symbolId) as any[]
+
+    return rows.map((row) => ({
+      ...row,
+      exported: Boolean(row.exported),
+    })) as IndexedSymbol['Select'][]
+  }
+
+  async getAllSymbols(): Promise<IndexedSymbol['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
   async clear() {

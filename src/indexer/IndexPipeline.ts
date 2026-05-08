@@ -57,6 +57,7 @@ export class IndexPipeline {
         language: ext,
       })
       await this.options.store.upsertSymbols(parsed.symbols)
+      await this.options.store.upsertCalls(parsed.calls)
       await this.options.store.upsertImports(parsed.imports)
 
       processed++
@@ -88,6 +89,7 @@ export class IndexPipeline {
 
       await this.options.store.upsertFile({ path: relPath, hash, language: ext })
       await this.options.store.upsertSymbols(parsed.symbols)
+      await this.options.store.upsertCalls(parsed.calls)
       await this.options.store.upsertImports(parsed.imports)
       console.error(`[watcher] Re-indexed: ${relPath}`)
     } catch(e) {

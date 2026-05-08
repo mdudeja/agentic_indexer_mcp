@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "5355d16f-2304-4fcd-b5df-64fc7be16915",
+  "id": "24eb4ebb-a748-4230-8961-f1021dd745b7",
   "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
+    "92f3a407-9a53-4744-9731-38b4989b366e"
   ],
   "ddl": [
     {
@@ -12,6 +12,10 @@
     },
     {
       "name": "imports",
+      "entityType": "tables"
+    },
+    {
+      "name": "symbol_calls",
       "entityType": "tables"
     },
     {
@@ -97,6 +101,46 @@
       "name": "imported_name",
       "entityType": "columns",
       "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "caller_id",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_name",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_id",
+      "entityType": "columns",
+      "table": "symbol_calls"
     },
     {
       "type": "text",
@@ -209,6 +253,16 @@
       "table": "symbols"
     },
     {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "decorator",
+      "entityType": "columns",
+      "table": "symbols"
+    },
+    {
       "type": "integer",
       "notNull": false,
       "autoincrement": false,
@@ -232,6 +286,36 @@
       "name": "fk_imports_file_path_files_path_fk",
       "entityType": "fks",
       "table": "imports"
+    },
+    {
+      "columns": [
+        "caller_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_symbol_calls_caller_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        "callee_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_symbol_calls_callee_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "symbol_calls"
     },
     {
       "columns": [
@@ -264,6 +348,15 @@
       "nameExplicit": false,
       "name": "imports_pk",
       "table": "imports",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "symbol_calls_pk",
+      "table": "symbol_calls",
       "entityType": "pks"
     },
     {
@@ -348,6 +441,48 @@
     {
       "columns": [
         {
+          "value": "caller_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_symbol_calls_caller",
+      "entityType": "indexes",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        {
+          "value": "callee_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_symbol_calls_callee",
+      "entityType": "indexes",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        {
+          "value": "callee_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_symbol_calls_callee_id",
+      "entityType": "indexes",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        {
           "value": "name",
           "isExpression": false
         }
@@ -384,6 +519,20 @@
       "where": null,
       "origin": "manual",
       "name": "idx_symbols_file",
+      "entityType": "indexes",
+      "table": "symbols"
+    },
+    {
+      "columns": [
+        {
+          "value": "decorator",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_symbols_decorator",
       "entityType": "indexes",
       "table": "symbols"
     }
