@@ -8,6 +8,7 @@ import { logWarning } from 'src/utils/logger'
 import { resolvePath } from 'src/utils/paths'
 import { loadConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
+import { TsMorphEnhancer } from 'src/indexer/enhancers/TsMorphEnhancer'
 
 declare module 'bun' {
   interface Env {
@@ -38,6 +39,10 @@ const { values, positionals } = parseArgs({
       type: 'boolean',
       short: 'h',
     },
+    includeGitIgnored: {
+      type: 'boolean',
+      short: 'g',
+    },
   },
   strict: true,
   allowPositionals: true,
@@ -57,10 +62,11 @@ Commands:
   query       Query the existing index from CLI
 
 Options:
-  --cwd       Workspace directory (default: current directory)
-  -q, --query Search query pattern (e.g. "auth*")
-  -k, --kind  Filter by symbol kind (e.g. "function")
-  -h, --help  Show this help message
+  --cwd                       Workspace directory (default: current directory)
+  -q,   --query               Search query pattern (e.g. "auth*")
+  -k,   --kind                Filter by symbol kind (e.g. "function")
+  -h,   --help                Show this help message
+  -g,  --include-gitignored  Include files ignored by .gitignore (default: false)
   `)
   process.exit(values.help ? 0 : 1)
 }
@@ -77,18 +83,26 @@ async function main() {
     case 'serve':
       await startMcpServer()
       break
+
     case 'index': {
       logWarning(`Running index on ${cwd}`)
       const pipeline = new IndexPipeline({
         cwd,
         store,
-        extensions: ['ts', 'js', 'tsx', 'jsx'],
-        ignorePatterns: ['node_modules', '.git', 'dist', 'build'],
+        includeGitIgnored: values.includeGitIgnored ?? false,
       })
 
       await pipeline.run()
+
+      const enhancer = new TsMorphEnhancer(cwd)
+      await enhancer.init()
+
+      await Bun.sleep(500) // slight delay to ensure all DB transactions are settled before enhancement
+      await enhancer.enhanceSymbolTypes(store, filesProcessed)
+      await enhancer.resolveAllPendingCalls(store)
       break
     }
+
     case 'query': {
       if (!values.query) {
         console.error('Error: --query is required for the query command')

@@ -1,4 +1,5 @@
-node_modules
-.agentic
-
+node_modules/
+.agentic/
 .env*
+dist/
+build/

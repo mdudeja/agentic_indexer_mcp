@@ -11,17 +11,16 @@ import type {
   IndexedFile,
   IndexedImport,
   IndexedSymbolCall,
+  IndexerConfig,
 } from '../config/types'
 import { resolvePath } from 'src/utils/paths'
 import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
-
-// Kinds that map to callable symbols — used to prefer e.g. arrowFunction over const
-// when both share the same name (e.g. `const foo = () => {}`).
-const CALLABLE_KINDS: SymbolKind[] = [SymbolKind.function, SymbolKind.method, SymbolKind.arrowFunction]
+import { AppStateManager } from 'src/state'
 
 export class IndexerDB {
   private db: SQLiteBunDatabase<typeof schema>
+  private config: IndexerConfig
 
   private dbInited: boolean = false
   private dbFilePath?: string
@@ -39,7 +38,7 @@ export class IndexerDB {
     this.isMemory = dbPath === ':memory:'
     this.dbFilePath = this.isMemory
       ? dbPath
-      : resolvePath(dbPath || (process.env.DB_FILE_URL as string))
+      : resolvePath(dbPath || (import.meta.env.DB_FILE_URL as string))
 
     if (!this.isMemory) {
       const dbDir = dirname(this.dbFilePath!)
@@ -47,6 +46,13 @@ export class IndexerDB {
         logDebug(`Creating database directory at ${dbDir}`)
         mkdirSync(dbDir, { recursive: true })
       }
+    }
+
+    this.config = AppStateManager.getInstance().getItem('config') ?? {
+      enabled: false,
+      languages: {},
+      extnToLangMap: {},
+      ignore_patterns: [],
     }
 
     this.sqlite = new Database(this.dbFilePath, { create: true, strict: true })
@@ -80,7 +86,7 @@ export class IndexerDB {
 
     // Run Drizzle migrations
     const migrationsDir = resolvePath(
-      process.env.DB_MIGRATIONS_DIR || './drizzle_migrations',
+      import.meta.env.DB_MIGRATIONS_DIR || './drizzle_migrations',
     )
     migrate(this.db, { migrationsFolder: migrationsDir })
 
@@ -102,7 +108,7 @@ export class IndexerDB {
     )
 
     this.preparedCallInsert = this.sqlite.prepare(
-      `INSERT INTO symbol_calls (id, caller_id, callee_name, callee_id) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO symbol_calls (id, caller_id, callee_name, callee_id, language_name, call_line, call_column, caller_file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
 
     this.dbInited = true
@@ -171,25 +177,46 @@ export class IndexerDB {
     // and an 'arrowFunction' entry, we link to the callable one.
     const calleeNames = [...new Set(callsData.map((c) => c.callee_name))]
     const nameToId = new Map<string, string>()
-    if (calleeNames.length > 0) {
-      const calleeSymbols = await this.db
-        .select({ id: schema.symbols.id, name: schema.symbols.name })
-        .from(schema.symbols)
-        .where(
-          and(
-            inArray(schema.symbols.name, calleeNames),
-            inArray(schema.symbols.kind, CALLABLE_KINDS),
-          ),
-        )
-      for (const sym of calleeSymbols) {
-        if (!nameToId.has(sym.name)) nameToId.set(sym.name, sym.id)
-      }
+
+    if (calleeNames.length === 0) {
+      logDebug('No calls to upsert, skipping callee resolution')
+      return
+    }
+
+    const allLanguages = [...new Set(callsData.map((c) => c.language_name))]
+    const relevantLanguageConfig = Object.entries(this.config.languages).filter(
+      ([lang]) => allLanguages.includes(lang),
+    )
+    const CALLABLE_KINDS = relevantLanguageConfig.flatMap(
+      ([, cfg]) => cfg.treesitter.lists.callable_kinds,
+    )
+
+    const calleeSymbols = await this.db
+      .select({ id: schema.symbols.id, name: schema.symbols.name })
+      .from(schema.symbols)
+      .where(
+        and(
+          inArray(schema.symbols.name, calleeNames),
+          inArray(schema.symbols.kind, CALLABLE_KINDS),
+        ),
+      )
+    for (const sym of calleeSymbols) {
+      if (!nameToId.has(sym.name)) nameToId.set(sym.name, sym.id)
     }
 
     return this.sqlite.transaction(() => {
       for (const call of callsData) {
         const calleeId = nameToId.get(call.callee_name) ?? null
-        this.preparedCallInsert?.run(call.id, call.caller_id, call.callee_name, calleeId)
+        this.preparedCallInsert?.run(
+          call.id,
+          call.caller_id,
+          call.callee_name,
+          calleeId,
+          call.language_name,
+          call.call_line ?? null,
+          call.call_column ?? null,
+          call.caller_file_path,
+        )
       }
     })()
   }
@@ -330,9 +357,95 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  async getUnresolvedCalls(): Promise<
+    Array<{
+      id: string
+      caller_id: string
+      callee_name: string
+      call_line: number
+      call_column: number
+      caller_file: string
+    }>
+  > {
+    return this.sqlite
+      .prepare(
+        `SELECT sc.id, sc.caller_id, sc.callee_name,
+                sc.call_line, sc.call_column, s.file_path AS caller_file
+         FROM symbol_calls sc
+         JOIN symbols s ON s.id = sc.caller_id
+         WHERE sc.callee_id IS NULL
+           AND sc.call_line IS NOT NULL
+         ORDER BY s.file_path`,
+      )
+      .all() as any[]
+  }
+
+  async updateCalleeId(callId: string, calleeId: string): Promise<void> {
+    await this.db
+      .update(schema.symbol_calls)
+      .set({ callee_id: calleeId })
+      .where(eq(schema.symbol_calls.id, callId))
+  }
+
+  async getSymbolAtLocation(
+    filePath: string,
+    line: number,
+  ): Promise<IndexedSymbol['Select'] | null> {
+    const exact = await this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        and(
+          eq(schema.symbols.file_path, filePath),
+          eq(schema.symbols.line, line),
+        ),
+      )
+      .limit(1)
+    if (exact[0]) return exact[0]
+
+    // Fallback: match by line only; return if unambiguous
+    const byLine = await this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        and(
+          eq(schema.symbols.file_path, filePath),
+          eq(schema.symbols.line, line),
+        ),
+      )
+    return byLine.length === 1 ? byLine[0]! : null
+  }
+
+  async updateSymbolTypeInfo(
+    symbolId: string,
+    parametersJson: string,
+    returnType: string,
+  ): Promise<void> {
+    await this.db
+      .update(schema.symbols)
+      .set({ parameters_json: parametersJson, return_type: returnType })
+      .where(eq(schema.symbols.id, symbolId))
+  }
+
+  async getCallers(
+    symbolName: string,
+  ): Promise<Array<{ callerFile: string; callerName: string; line: number }>> {
+    return this.sqlite
+      .prepare(
+        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line
+         FROM symbol_calls sc
+         JOIN symbols callee ON callee.name = ?
+         JOIN symbols s ON s.id = sc.caller_id
+         WHERE sc.callee_id = callee.id OR sc.callee_name = ?
+         ORDER BY s.file_path, s.line`,
+      )
+      .all(symbolName, symbolName) as any[]
+  }
+
   async clear() {
     await this.db.delete(schema.symbols)
     await this.db.delete(schema.imports)
     await this.db.delete(schema.files)
+    await this.db.delete(schema.symbol_calls)
   }
 }

@@ -6,7 +6,7 @@ import {
   type IndexedSymbolCall,
   type LanguageConfig,
 } from '../../config/types'
-import { randomUUID } from 'crypto'
+import { randomUUIDv7, hash } from 'bun'
 
 type TreesitterConfig = LanguageConfig['treesitter']
 
@@ -57,14 +57,20 @@ function getDecorators(node: Node): string | null {
 
   for (const child of node.namedChildren) {
     if (!child || child.type !== 'decorator') continue
-    const text = child.text.slice(1).replace(/\([\s\S]*\)$/, '').trim()
+    const text = child.text
+      .slice(1)
+      .replace(/\([\s\S]*\)$/, '')
+      .trim()
     if (text) names.push(text)
   }
 
   const siblingDecorators: string[] = []
   let prev = node.previousNamedSibling
   while (prev?.type === 'decorator') {
-    const text = prev.text.slice(1).replace(/\([\s\S]*\)$/, '').trim()
+    const text = prev.text
+      .slice(1)
+      .replace(/\([\s\S]*\)$/, '')
+      .trim()
     if (text) siblingDecorators.unshift(text)
     prev = prev.previousNamedSibling
   }
@@ -80,7 +86,7 @@ function buildSignature(node: Node, config: TreesitterConfig): string | null {
   const isTypedef = config.lists.typedef_nodes.includes(node.type)
   const raw = isTypedef
     ? node.text.trim()
-    : node.text.split(config.block_init_marker)[0]?.trim() ?? ''
+    : (node.text.split(config.block_init_marker)[0]?.trim() ?? '')
   if (!raw) return null
   return raw.length > 200 ? raw.substring(0, 197) + '...' : raw
 }
@@ -102,7 +108,9 @@ function addSymbol({
 }): string | null {
   if (!nameNode) return null
 
-  const id = randomUUID()
+  const id = `${hash(
+    `${file_path}:${nameNode.text}:${kind}:${node.startPosition.row}:${node.startPosition.column}`,
+  )}`
 
   symbols.push({
     id,
@@ -114,6 +122,8 @@ function addSymbol({
     end_line: node.endPosition.row,
     end_column: node.endPosition.column,
     signature: buildSignature(node, config),
+    parameters_json: null,
+    return_type: null,
     docstring: getDocstring(node, config) ?? null,
     parent_id: parent_id ?? null,
     exported: isExported(node, config),
@@ -139,10 +149,17 @@ function handleImport(
     moduleName = moduleName.slice(1, -1)
   }
 
-  const importClause = node.namedChildren.find(c => c?.type === 'import_clause')
+  const importClause = node.namedChildren.find(
+    (c) => c?.type === 'import_clause',
+  )
   if (!importClause) {
     // bare side-effect import: import 'module'
-    imports.push({ id: randomUUID(), file_path, module_name: moduleName, imported_name: null })
+    imports.push({
+      id: randomUUIDv7(),
+      file_path,
+      module_name: moduleName,
+      imported_name: null,
+    })
     return
   }
 
@@ -162,16 +179,26 @@ function handleImport(
       }
     } else if (child.type === 'namespace_import') {
       // namespace import: import * as Foo from 'module'
-      const nameNode = child.namedChildren.find(c => c?.type === 'identifier')
+      const nameNode = child.namedChildren.find((c) => c?.type === 'identifier')
       if (nameNode) importedNames.push('* as ' + nameNode.text)
     }
   }
 
   if (importedNames.length === 0) {
-    imports.push({ id: randomUUID(), file_path, module_name: moduleName, imported_name: null })
+    imports.push({
+      id: randomUUIDv7(),
+      file_path,
+      module_name: moduleName,
+      imported_name: null,
+    })
   } else {
     for (const name of importedNames) {
-      imports.push({ id: randomUUID(), file_path, module_name: moduleName, imported_name: name })
+      imports.push({
+        id: randomUUIDv7(),
+        file_path,
+        module_name: moduleName,
+        imported_name: name,
+      })
     }
   }
 }
@@ -187,18 +214,32 @@ function handleVariableDeclaration(
 ) {
   const keyword = node.children[0]?.type // 'const' | 'let' | 'var'
   const kind =
-    keyword === 'const' ? SymbolKind.const
-    : keyword === 'let' ? SymbolKind.let
-    : SymbolKind.var
+    keyword === 'const'
+      ? SymbolKind.const
+      : keyword === 'let'
+        ? SymbolKind.let
+        : SymbolKind.var
 
   for (const child of node.namedChildren) {
     if (!child || child.type !== 'variable_declarator') continue
     const nameNode = child.childForFieldName('name')
-    addSymbol({ node, nameNode, kind, parent_id: currentParentId, file_path, config })
+    addSymbol({
+      node,
+      nameNode,
+      kind,
+      parent_id: currentParentId,
+      file_path,
+      config,
+    })
   }
 }
 
-function recordCall(node: Node, currentCallableId: string) {
+function recordCall(
+  node: Node,
+  currentCallableId: string,
+  languageName: string,
+  file_path: string,
+) {
   const funcNode = node.childForFieldName('function')
   if (!funcNode) return
   let calleeName: string | null = null
@@ -209,14 +250,22 @@ function recordCall(node: Node, currentCallableId: string) {
     calleeName = prop?.text ?? null
   }
   if (calleeName) {
-    calls.push({ id: randomUUID(), caller_id: currentCallableId, callee_name: calleeName })
+    calls.push({
+      id: randomUUIDv7(),
+      caller_id: currentCallableId,
+      callee_name: calleeName,
+      language_name: languageName,
+      call_line: node.startPosition.row,
+      call_column: node.startPosition.column,
+      caller_file_path: file_path,
+    })
   }
 }
 
 function traverse(
   node: Node,
   file_path: string,
-  config?: TreesitterConfig,
+  config: TreesitterConfig,
   currentParentId?: string,
   currentCallableId?: string,
 ) {
@@ -224,7 +273,12 @@ function traverse(
   let nextCallableId = currentCallableId
 
   if (node.type === 'call_expression' && currentCallableId) {
-    recordCall(node, currentCallableId)
+    recordCall(
+      node,
+      currentCallableId,
+      config?.language_name ?? 'unknown',
+      file_path,
+    )
   }
 
   const nodeInfo = config?.nodes_info?.[node.type]
@@ -288,7 +342,7 @@ function traverse(
 export function extractSymbols(
   rootNode: Node,
   file_path: string,
-  config?: TreesitterConfig,
+  config: TreesitterConfig,
 ): {
   symbols: IndexedSymbol['Select'][]
   imports: IndexedImport['Select'][]

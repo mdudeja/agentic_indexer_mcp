@@ -34,6 +34,8 @@ export const symbols = sqliteTable(
     end_line: integer(),
     end_column: integer(),
     signature: text(),
+    parameters_json: text(),
+    return_type: text(),
     docstring: text(),
     parent_id: text(),
     decorator: text(),

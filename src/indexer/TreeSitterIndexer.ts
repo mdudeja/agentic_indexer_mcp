@@ -8,22 +8,23 @@ import type {
 } from '../config/types.js'
 import { logError } from 'src/utils/logger.js'
 import { AppStateManager } from 'src/state'
-import { extractSymbols } from './steps/symbol_extractor.js'
+import { extractSymbols } from './steps/s1_symbol_extractor.js'
 
 export class TreeSitterIndexer {
   private parser: Parser | null = null
   private languages: Map<string, any> = new Map()
+  private config: IndexerConfig
 
-  private extnToLangMap = {}
+  constructor() {
+    this.config = AppStateManager.getInstance().getItem('config') ?? {
+      enabled: false,
+      languages: {},
+      ignore_patterns: [],
+      extnToLangMap: {},
+    }
+  }
 
   async init() {
-    this.extnToLangMap = {
-      tsx: 'tsx',
-      ts: 'typescript',
-      js: 'javascript',
-      jsx: 'javascript',
-    }
-
     await Parser.init()
     this.parser = new Parser()
   }
@@ -63,17 +64,25 @@ export class TreeSitterIndexer {
     }
 
     try {
-      const langName = this.extnToLangMap[ext]
+      const langName = this.config.extnToLangMap[ext]
+
+      if (!langName) {
+        logError(`No language mapping found for extension: ${ext}`)
+        return { symbols: [], imports: [], calls: [] }
+      }
+
       const tree = await this.parseFile(sourceCode, langName)
 
       if (!tree) {
         return { symbols: [], imports: [], calls: [] }
       }
 
-      const config = AppStateManager.getInstance().getItem(
-        'config',
-      ) as IndexerConfig | null
-      const tsConfig = config?.languages?.[langName]?.treesitter
+      const tsConfig = this.config.languages?.[langName]?.treesitter
+
+      if (!tsConfig) {
+        logError(`No Tree-sitter config found for language: ${langName}`)
+        return { symbols: [], imports: [], calls: [] }
+      }
 
       return extractSymbols(tree.rootNode, filePath, tsConfig)
     } catch (err) {

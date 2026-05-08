@@ -1,0 +1,1 @@
+ALTER TABLE `symbol_calls` ADD `caller_file_path` text NOT NULL;

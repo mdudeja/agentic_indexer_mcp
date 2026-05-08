@@ -36,6 +36,7 @@ export type LanguageConfig = {
       typedef_nodes: string[]
       decorator_nodes: string[]
       callable_nodes: string[]
+      callable_kinds: SymbolKind[]
       additional_nodes: string[]
     }
   }
@@ -43,5 +44,7 @@ export type LanguageConfig = {
 
 export type IndexerConfig = {
   enabled: boolean
+  ignore_patterns: string[]
+  extnToLangMap: Record<string, string>
   languages: Record<string, LanguageConfig>
 }

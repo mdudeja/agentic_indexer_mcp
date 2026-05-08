@@ -22,8 +22,7 @@ export class Watcher {
     const pipeline = new IndexPipeline({
       cwd: this.cwd,
       store: db,
-      extensions: ['ts', 'js', 'tsx', 'jsx', 'py', 'go', 'rs', 'java'],
-      ignorePatterns: ['node_modules', 'dist', 'build', '.git'],
+      includeGitIgnored: false,
     })
 
     this.watcher

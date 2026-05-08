@@ -1,4 +1,4 @@
-import { sqliteTable, text, index } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 import { symbols } from './symbols.schema'
 
 export const symbol_calls = sqliteTable(
@@ -9,9 +9,13 @@ export const symbol_calls = sqliteTable(
       .notNull()
       .references(() => symbols.id, { onDelete: 'cascade' }),
     callee_name: text().notNull(),
+    language_name: text().notNull(),
+    caller_file_path: text().notNull(),
     // Resolved at upsert time; null when the callee hasn't been indexed yet.
     // SET NULL rather than CASCADE so a callee re-index doesn't delete call records.
     callee_id: text().references(() => symbols.id, { onDelete: 'set null' }),
+    call_line: integer(),
+    call_column: integer(),
   },
   (table) => [
     index('idx_symbol_calls_caller').on(table.caller_id),

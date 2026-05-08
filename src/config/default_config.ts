@@ -3,9 +3,27 @@ import { DocstringStrategy, SymbolKind, type IndexerConfig } from './types'
 export const default_config: Record<'indexer', IndexerConfig> = {
   indexer: {
     enabled: true,
+    ignore_patterns: [
+      '.git',
+      '.vscode',
+      '.idea',
+      '*.md',
+      'drizzle_migrations',
+      '*.lock',
+      'tsconfig',
+      '.prettier*',
+      '.claude/*.json',
+    ],
+    extnToLangMap: {
+      tsx: 'tsx',
+      ts: 'tsx',
+      js: 'javascript',
+      jsx: 'javascript',
+      json: 'json',
+    },
     languages: {
-      typescript: {
-        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+      tsx: {
+        extensions: ['.ts', '.tsx'],
         treesitter: {
           language_name: 'typescript',
           block_init_marker: '{',
@@ -89,6 +107,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'function_declaration',
               'method_definition',
               'arrow_function',
+            ],
+            callable_kinds: [
+              SymbolKind.function,
+              SymbolKind.method,
+              SymbolKind.arrowFunction,
             ],
             container_nodes: ['class_declaration', 'module', 'internal_module'],
             typedef_nodes: [

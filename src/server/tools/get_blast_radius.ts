@@ -20,7 +20,7 @@ export function registerGetBlastRadiusTool(server: McpServer) {
            return { content: [{ type: 'text', text: `No direct callers found for ${symbol_name}` }] }
         }
         
-        const uniquePaths = [...new Set(callers.map(c => c.file_path))]
+        const uniquePaths = [...new Set(callers.map(c => c.callerFile))]
         const text = uniquePaths.map(p => `- File: ${p}`).join('\n')
         return { content: [{ type: 'text', text: `Blast Radius for ${symbol_name} (Direct Callers):\n${text}\nEnsure testing covers these paths.` }] }
       } catch (err) {

@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import type { IndexerConfig } from './types'
 import { existsSync } from 'node:fs'
 import { logError, logWarning } from 'src/utils/logger'
-export const AGENTIC_DIR = process.env.AGENTIC_DIR || '.agentic'
-export const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.json'
+export const AGENTIC_DIR = import.meta.env.AGENTIC_DIR || '.agentic'
+export const CONFIG_FILENAME = import.meta.env.CONFIG_FILENAME || 'config.json'
 
 export const DEFAULT_CONFIG = default_config
 
