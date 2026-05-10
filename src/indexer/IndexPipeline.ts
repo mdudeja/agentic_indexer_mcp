@@ -128,7 +128,7 @@ export class IndexPipeline {
       await this.options.store.upsertFile({
         path: relPath,
         hash,
-        language: ext,
+        language: this.config.extnToLangMap[ext] || 'unknown',
       })
       await this.options.store.upsertSymbols(parsed.symbols)
       await this.options.store.upsertCalls(parsed.calls)

@@ -94,12 +94,12 @@ async function main() {
 
       await pipeline.run()
 
-      const enhancer = new TsMorphEnhancer(cwd)
-      await enhancer.init()
+      // const enhancer = new TsMorphEnhancer(cwd)
+      // await enhancer.init()
 
-      await Bun.sleep(500) // slight delay to ensure all DB transactions are settled before enhancement
-      await enhancer.enhanceSymbolTypes(store, filesProcessed)
-      await enhancer.resolveAllPendingCalls(store)
+      // await Bun.sleep(500) // slight delay to ensure all DB transactions are settled before enhancement
+      // await enhancer.enhanceSymbolTypes(store, filesProcessed)
+      // await enhancer.resolveAllPendingCalls(store)
       break
     }
 
