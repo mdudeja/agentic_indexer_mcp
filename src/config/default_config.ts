@@ -33,6 +33,18 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               name_field: 'name',
               source_field: 'source',
             },
+            export_statement: {
+              kind: SymbolKind.export,
+              name_field: 'name',
+              source_field: 'source',
+              docstring: DocstringStrategy.comment_before,
+            },
+            export_default_declaration: {
+              kind: SymbolKind.export,
+              name_field: 'name',
+              source_field: 'source',
+              docstring: DocstringStrategy.comment_before,
+            },
             function_declaration: {
               kind: SymbolKind.function,
               name_field: 'name',

@@ -109,6 +109,7 @@ function addSymbol({
   config: TreesitterConfig
 }): string | null {
   if (!nameNode) return null
+
   const appConfig = AppStateManager.getInstance().getItem('config')
   const fileExtn = file_path.split('.').pop() ?? ''
   const language = appConfig?.extnToLangMap[fileExtn] ?? 'unknown'

@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from 'chokidar'
-import { IndexPipeline } from './IndexPipeline'
+import { IndexPipeline } from '../indexer/IndexPipeline'
 import { IndexerDB } from '../database/IndexerDB'
 import { relative } from 'path'
 import { logInfo, logError } from 'src/utils/logger'
@@ -13,9 +13,9 @@ export class Watcher {
     logInfo(`[watcher] Starting file watcher for ${this.cwd}`)
 
     this.watcher = watch(this.cwd, {
-      ignored: /(^|[\/\\])(\..+|node_modules|dist|build)/, 
+      ignored: /(^|[\/\\])(\..+|node_modules|dist|build)/,
       persistent: true,
-      ignoreInitial: true, 
+      ignoreInitial: true,
     })
 
     const db = IndexerDB.getInstance()
@@ -26,8 +26,12 @@ export class Watcher {
     })
 
     this.watcher
-      .on('add', async (path) => { await pipeline.runOnFile(path) })
-      .on('change', async (path) => { await pipeline.runOnFile(path) })
+      .on('add', async (path) => {
+        await pipeline.runOnFile(path)
+      })
+      .on('change', async (path) => {
+        await pipeline.runOnFile(path)
+      })
       .on('unlink', async (path) => {
         const relPath = relative(this.cwd, path)
         await db.deleteFile(relPath)

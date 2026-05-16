@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { registerTools } from './tools/index'
 import { logInfo } from '../utils/logger'
 import { AppStateManager } from 'src/state'
-import { Watcher } from '../indexer/Watcher'
+import { Watcher } from '../watcher/Watcher'
 
 export async function startMcpServer() {
   const server = new McpServer({
