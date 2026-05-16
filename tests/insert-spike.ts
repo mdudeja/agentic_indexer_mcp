@@ -12,13 +12,13 @@ async function main() {
     .values({ path: 'test.ts', hash: 'abc', indexed_at: 123, language: 'ts' })
 
   await db.insert(schema.symbols).values({
-    id: 'some-id',
-    name: 'testFunc',
+    id: 'sym1',
+    name: 'myFunction',
     kind: schema.SymbolKind.function,
     file_path: 'test.ts',
-    line: 1,
-    column: 1,
-    exported: true, // Drizzle boolean mode
+    line: 10,
+    column: 5,
+    language: 'ts',
   })
 
   const res = await db.select().from(schema.symbols)

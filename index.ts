@@ -8,7 +8,6 @@ import { logWarning } from 'src/utils/logger'
 import { resolvePath } from 'src/utils/paths'
 import { loadConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
-import { TsMorphEnhancer } from 'src/indexer/enhancers/TsMorphEnhancer'
 
 declare module 'bun' {
   interface Env {
@@ -93,13 +92,6 @@ async function main() {
       })
 
       await pipeline.run()
-
-      // const enhancer = new TsMorphEnhancer(cwd)
-      // await enhancer.init()
-
-      // await Bun.sleep(500) // slight delay to ensure all DB transactions are settled before enhancement
-      // await enhancer.enhanceSymbolTypes(store, filesProcessed)
-      // await enhancer.resolveAllPendingCalls(store)
       break
     }
 

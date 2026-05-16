@@ -319,7 +319,7 @@ export class IndexerDB {
     return this.db
       .select()
       .from(schema.imports)
-      .where(like(schema.imports.module_name, pattern))
+      .where(like(schema.imports.module_path, pattern))
   }
 
   async getSymbolsForFile(path: string): Promise<IndexedSymbol['Select'][]> {
@@ -328,6 +328,20 @@ export class IndexerDB {
       .from(schema.symbols)
       .where(eq(schema.symbols.file_path, path))
       .orderBy(schema.symbols.line)
+  }
+
+  async getFileByPath(path: string): Promise<IndexedFile['Select'] | null> {
+    const result = await this.db
+      .select()
+      .from(schema.files)
+      .where(eq(schema.files.path, path))
+      .limit(1)
+
+    return result[0] || null
+  }
+
+  async getAllFiles(): Promise<IndexedFile['Select'][]> {
+    return this.db.select().from(schema.files)
   }
 
   // Fetches a symbol and all its descendants via a recursive parent_id walk.

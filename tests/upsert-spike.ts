@@ -22,6 +22,7 @@ async function main() {
       end_column: 2,
       signature: 'const myVar = 1',
       exported: true,
+      language: 'typescript',
     },
   ]
   await store.upsertSymbols(symbols)

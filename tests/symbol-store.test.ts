@@ -49,6 +49,7 @@ describe('SymbolStore', () => {
         end_column: 1,
         signature: 'function testFunction()',
         exported: true,
+        language: 'typescript',
       },
     ]
 

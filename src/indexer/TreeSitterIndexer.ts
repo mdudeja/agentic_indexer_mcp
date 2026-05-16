@@ -77,14 +77,14 @@ export class TreeSitterIndexer {
         return { symbols: [], imports: [], calls: [] }
       }
 
-      const tsConfig = this.config.languages?.[langName]?.treesitter
+      const treesitterConfig = this.config.languages?.[langName]?.treesitter
 
-      if (!tsConfig) {
+      if (!treesitterConfig) {
         logError(`No Tree-sitter config found for language: ${langName}`)
         return { symbols: [], imports: [], calls: [] }
       }
 
-      return extractSymbols(tree.rootNode, filePath, tsConfig)
+      return extractSymbols(tree.rootNode, filePath, treesitterConfig)
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)

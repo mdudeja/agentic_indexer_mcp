@@ -8,12 +8,12 @@ export const imports = sqliteTable(
     file_path: text()
       .notNull()
       .references(() => files.path, { onDelete: 'cascade' }),
-    module_name: text().notNull(),
+    module_path: text().notNull(),
     imported_name: text(),
   },
   (table) => [
     index('idx_imports_file').on(table.file_path),
-    index('idx_imports_module').on(table.module_name),
+    index('idx_imports_module').on(table.module_path),
   ],
 )
 

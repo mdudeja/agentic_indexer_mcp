@@ -15,7 +15,7 @@ export enum DocstringStrategy {
 }
 
 export type NodeInfo = {
-  kind: SymbolKind[]
+  kind: SymbolKind
   name_field?: string
   source_field?: string
   parameters_field?: string

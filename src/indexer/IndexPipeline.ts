@@ -5,6 +5,14 @@ import type { IndexerDB } from '../database/IndexerDB.ts'
 import type { IndexerConfig } from 'src/config/types.ts'
 import { AppStateManager } from 'src/state/index.ts'
 import { logError, logInfo } from 'src/utils/logger.ts'
+import type { Enhancer } from './steps/s2_Enhancer.ts'
+import { TsMorphEnhancer } from './enhancers/TsMorphEnhancer.ts'
+
+const fileTypeToEnhancerMap: Record<string, new (cwd: string) => Enhancer> = {
+  ts: TsMorphEnhancer,
+  tsx: TsMorphEnhancer,
+}
+
 export interface IndexPipelineOptions {
   cwd: string
   store: IndexerDB
@@ -15,6 +23,7 @@ export class IndexPipeline {
   private indexer: TreeSitterIndexer
   private config: IndexerConfig
   private ignoreRegexPatterns: Set<RegExp> = new Set()
+  private enhancers: Record<string, Enhancer> = {}
 
   constructor(private options: IndexPipelineOptions) {
     this.indexer = new TreeSitterIndexer()
@@ -92,17 +101,11 @@ export class IndexPipeline {
       await this.populateIgnorePatterns()
     }
 
-    const files = await this.findFiles(this.options.cwd)
-    const processedFiles: string[] = []
+    const processedFiles = await this.runSymbolExtractionStep()
 
-    for (const absPath of files) {
-      const relPath = await this.runOnFile(absPath)
-      if (relPath) processedFiles.push(relPath)
-    }
+    await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
 
-    logInfo(
-      `[Indexer] Indexed ${processedFiles.length} files. Total found: ${files.length}`,
-    )
+    await this.runEnhancementStep(processedFiles)
   }
 
   // Returns the relative path if the file was actually indexed, null if skipped (cache hit).
@@ -166,5 +169,79 @@ export class IndexPipeline {
     }
 
     return fileList
+  }
+
+  private async runSymbolExtractionStep(): Promise<string[]> {
+    const files = await this.findFiles(this.options.cwd)
+    const processedFiles: string[] = []
+
+    logInfo(
+      `[Indexer] Running Step 1: Tree-sitter Indexing on ${files.length} files...`,
+    )
+
+    for (const absPath of files) {
+      const relPath = await this.runOnFile(absPath)
+      if (relPath) processedFiles.push(relPath)
+    }
+
+    logInfo(
+      `[Indexer] Indexed ${processedFiles.length} files. Total found: ${files.length}`,
+    )
+
+    logInfo(`[Indexer] Step 1 complete.`)
+
+    return processedFiles
+  }
+
+  private async loadEnhancerForFileType(ext: string): Promise<Enhancer | null> {
+    if (this.enhancers[ext]) {
+      return this.enhancers[ext]
+    }
+
+    const EnhancerClass = fileTypeToEnhancerMap[ext]
+    if (!EnhancerClass) {
+      return null
+    }
+
+    const enhancer = new EnhancerClass(this.options.cwd)
+    const initialized = await enhancer.init()
+    if (initialized) {
+      this.enhancers[ext] = enhancer
+      logInfo(`[Indexer] Loaded enhancer for .${ext} files.`)
+      return enhancer
+    } else {
+      logError(
+        `[Indexer] Failed to initialize enhancer for .${ext} files. It will be skipped.`,
+      )
+      return null
+    }
+  }
+
+  private async runEnhancementStep(processedFiles: string[]): Promise<void> {
+    logInfo(
+      `[Indexer] Running Step 2: Symbol Enhancement on ${processedFiles.length} files...`,
+    )
+
+    const processedFilesByExt: Record<string, string[]> = {}
+    for (const file of processedFiles) {
+      const ext = file.split('.').pop() || ''
+      if (!processedFilesByExt[ext]) {
+        processedFilesByExt[ext] = []
+      }
+      processedFilesByExt[ext].push(file)
+    }
+
+    for (const ext in processedFilesByExt) {
+      const enhancer = await this.loadEnhancerForFileType(ext)
+      if (enhancer) {
+        await enhancer.enhanceSymbolTypes(
+          this.options.store,
+          processedFilesByExt[ext]!,
+        )
+        await enhancer.resolveAllPendingCalls(this.options.store)
+      }
+    }
+
+    logInfo(`[Indexer] Step 2 complete.`)
   }
 }

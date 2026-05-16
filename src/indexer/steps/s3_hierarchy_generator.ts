@@ -1,9 +1,8 @@
-import type { IndexedSymbol, LanguageConfig, NodeInfo } from '../../config/types'
+import type { IndexedSymbol, NodeInfo } from '../../config/types'
 import { AppStateManager } from 'src/state'
 import { IndexerDB } from '../../database/IndexerDB'
-
-type TreesitterConfig = LanguageConfig['treesitter']
-type ListName = keyof TreesitterConfig['lists']
+import type { ListName, TreesitterConfig } from 'src/state/types'
+import { logInfo, logWarning } from 'src/utils/logger'
 
 export type HierarchyNode = {
   id: string
@@ -68,16 +67,73 @@ export function buildKindToListMap(
   return map
 }
 
+function checkAndPopulateKindToListMaps(languages: string[]) {
+  const stateManager = AppStateManager.getInstance()
+  let globalKindToListMap =
+    stateManager.getItem('kindToListMap') ??
+    new Map<string, Map<string, ListName>>()
+
+  for (const lang of languages) {
+    if (!globalKindToListMap.has(lang)) {
+      const langConfig = getLangConfig(lang)
+      if (langConfig) {
+        const kindToList = buildKindToListMap(langConfig)
+        globalKindToListMap.set(lang, kindToList)
+        logInfo(`Populated kind→list map for language: ${lang}`)
+      } else {
+        logWarning(
+          `No config found for language: ${lang}, kind→list mapping will be unavailable for this language.`,
+        )
+      }
+    }
+  }
+
+  stateManager.setItem('kindToListMap', globalKindToListMap)
+}
+
+function getKindToListMap(lang: string): Map<string, ListName> | undefined {
+  const stateManager = AppStateManager.getInstance()
+  const globalKindToListMap = stateManager.getItem('kindToListMap')
+  return globalKindToListMap?.get(lang)
+}
+
 /**
  * Return the treesitter config for the first configured language.
  * Used to derive the kind→list classification when no language is specified.
  * In a multi-language project this can be made smarter per-symbol.
  */
-function getFirstLangConfig(): TreesitterConfig | undefined {
+function getLangConfig(lang: string): TreesitterConfig | undefined {
   const config = AppStateManager.getInstance().getItem('config')
   if (!config) return undefined
-  const first = Object.values(config.languages)[0]
-  return first?.treesitter
+  const langConfig = config.languages[lang]
+  return langConfig?.treesitter
+}
+
+async function getLanguagesInScope(
+  scope: HierarchyScope,
+): Promise<(string | null)[]> {
+  const db = IndexerDB.getInstance()
+
+  switch (scope.type) {
+    case 'file': {
+      const file = await db.getFileByPath(scope.file_path)
+      return file ? [file.language] : []
+    }
+
+    case 'symbol': {
+      const symbol = await db.getSymbolsByIds([scope.symbol_id])
+      if (symbol.length === 0) return []
+      return [symbol[0]!.language]
+    }
+
+    case 'codebase': {
+      const files = await db.getAllFiles()
+      const languages = Array.from(
+        new Set(files.map((f) => f.language).filter((l): l is string => !!l)),
+      )
+      return languages
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -100,10 +156,11 @@ export async function buildHierarchy(
   scope: HierarchyScope,
 ): Promise<HierarchyGraph> {
   const db = IndexerDB.getInstance()
-  const langConfig = getFirstLangConfig()
-  const kindToList = langConfig
-    ? buildKindToListMap(langConfig)
-    : new Map<string, ListName>()
+
+  const languagesInScope = await getLanguagesInScope(scope)
+  checkAndPopulateKindToListMaps(
+    languagesInScope.filter((l): l is string => !!l),
+  )
 
   // --- Fetch symbols for the requested scope ---
   let symbols: IndexedSymbol['Select'][]
@@ -126,7 +183,7 @@ export async function buildHierarchy(
       id: sym.id,
       name: sym.name,
       kind: sym.kind,
-      category: kindToList.get(sym.kind) ?? null,
+      category: getKindToListMap(sym.language)?.get(sym.kind) ?? null,
       file_path: sym.file_path,
       line: sym.line,
       end_line: sym.end_line,

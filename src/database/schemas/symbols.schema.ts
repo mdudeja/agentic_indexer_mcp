@@ -40,6 +40,7 @@ export const symbols = sqliteTable(
     parent_id: text(),
     decorator: text(),
     exported: integer({ mode: 'boolean' }).default(false),
+    language: text().notNull(),
   },
   (table) => [
     index('idx_symbols_name').on(table.name),

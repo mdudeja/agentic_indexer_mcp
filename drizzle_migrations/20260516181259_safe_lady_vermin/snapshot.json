@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "5317d504-f13c-48da-9c1d-4fae14beccb1",
+  "id": "41dacd9b-9dc1-41f0-9bd6-ed1707518e1f",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -88,7 +88,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "module_name",
+      "name": "module_path",
       "entityType": "columns",
       "table": "imports"
     },
@@ -333,6 +333,16 @@
       "table": "symbols"
     },
     {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "language",
+      "entityType": "columns",
+      "table": "symbols"
+    },
+    {
       "columns": [
         "file_path"
       ],
@@ -487,7 +497,7 @@
     {
       "columns": [
         {
-          "value": "module_name",
+          "value": "module_path",
           "isExpression": false
         }
       ],

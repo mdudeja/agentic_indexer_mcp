@@ -7,6 +7,8 @@ import {
   type LanguageConfig,
 } from '../../config/types'
 import { randomUUIDv7, hash } from 'bun'
+import { AppStateManager } from 'src/state'
+import { resolveImportedModulePath } from 'src/utils/paths'
 
 type TreesitterConfig = LanguageConfig['treesitter']
 
@@ -107,6 +109,9 @@ function addSymbol({
   config: TreesitterConfig
 }): string | null {
   if (!nameNode) return null
+  const appConfig = AppStateManager.getInstance().getItem('config')
+  const fileExtn = file_path.split('.').pop() ?? ''
+  const language = appConfig?.extnToLangMap[fileExtn] ?? 'unknown'
 
   const id = `${hash(
     `${file_path}:${nameNode.text}:${kind}:${node.startPosition.row}:${node.startPosition.column}`,
@@ -128,6 +133,7 @@ function addSymbol({
     parent_id: parent_id ?? null,
     exported: isExported(node, config),
     decorator: getDecorators(node),
+    language,
   })
 
   return id
@@ -156,8 +162,8 @@ function handleImport(
     // bare side-effect import: import 'module'
     imports.push({
       id: randomUUIDv7(),
-      file_path,
-      module_name: moduleName,
+      file_path: file_path,
+      module_path: resolveImportedModulePath(moduleName, file_path),
       imported_name: null,
     })
     return
@@ -187,16 +193,16 @@ function handleImport(
   if (importedNames.length === 0) {
     imports.push({
       id: randomUUIDv7(),
-      file_path,
-      module_name: moduleName,
+      file_path: file_path,
+      module_path: resolveImportedModulePath(moduleName, file_path),
       imported_name: null,
     })
   } else {
     for (const name of importedNames) {
       imports.push({
         id: randomUUIDv7(),
-        file_path,
-        module_name: moduleName,
+        file_path: file_path,
+        module_path: resolveImportedModulePath(moduleName, file_path),
         imported_name: name,
       })
     }
@@ -284,7 +290,7 @@ function traverse(
   const nodeInfo = config?.nodes_info?.[node.type]
 
   if (nodeInfo) {
-    const kind = nodeInfo.kind[0]
+    const kind = nodeInfo.kind
     if (kind === undefined) {
       // Malformed config entry — skip but still recurse into children
     } else if (kind === SymbolKind.import) {

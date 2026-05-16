@@ -8,7 +8,7 @@ CREATE TABLE `files` (
 CREATE TABLE `imports` (
 	`id` text PRIMARY KEY,
 	`file_path` text NOT NULL,
-	`module_name` text NOT NULL,
+	`module_path` text NOT NULL,
 	`imported_name` text,
 	CONSTRAINT `fk_imports_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
 );
@@ -42,6 +42,7 @@ CREATE TABLE `symbols` (
 	`parent_id` text,
 	`decorator` text,
 	`exported` integer DEFAULT false,
+	`language` text NOT NULL,
 	CONSTRAINT `fk_symbols_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
 );
 --> statement-breakpoint
@@ -49,7 +50,7 @@ CREATE INDEX `idx_files_path` ON `files` (`path`);--> statement-breakpoint
 CREATE INDEX `idx_files_hash` ON `files` (`hash`);--> statement-breakpoint
 CREATE INDEX `idx_files_indexed_at` ON `files` (`indexed_at`);--> statement-breakpoint
 CREATE INDEX `idx_imports_file` ON `imports` (`file_path`);--> statement-breakpoint
-CREATE INDEX `idx_imports_module` ON `imports` (`module_name`);--> statement-breakpoint
+CREATE INDEX `idx_imports_module` ON `imports` (`module_path`);--> statement-breakpoint
 CREATE INDEX `idx_symbol_calls_caller` ON `symbol_calls` (`caller_id`);--> statement-breakpoint
 CREATE INDEX `idx_symbol_calls_callee` ON `symbol_calls` (`callee_name`);--> statement-breakpoint
 CREATE INDEX `idx_symbol_calls_callee_id` ON `symbol_calls` (`callee_id`);--> statement-breakpoint
