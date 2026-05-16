@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "24eb4ebb-a748-4230-8961-f1021dd745b7",
+  "id": "5317d504-f13c-48da-9c1d-4fae14beccb1",
   "prevIds": [
-    "92f3a407-9a53-4744-9731-38b4989b366e"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -134,11 +134,51 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "language_name",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "caller_file_path",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "callee_id",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_line",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_column",
       "entityType": "columns",
       "table": "symbol_calls"
     },
@@ -229,6 +269,26 @@
       "default": null,
       "generated": null,
       "name": "signature",
+      "entityType": "columns",
+      "table": "symbols"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parameters_json",
+      "entityType": "columns",
+      "table": "symbols"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "return_type",
       "entityType": "columns",
       "table": "symbols"
     },

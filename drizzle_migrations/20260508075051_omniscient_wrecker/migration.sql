@@ -1,1 +1,0 @@
-ALTER TABLE `symbol_calls` ADD `language_name` text NOT NULL;
