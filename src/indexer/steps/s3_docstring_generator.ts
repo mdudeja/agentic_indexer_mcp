@@ -72,7 +72,7 @@ export class DocstringGenerationStep {
         generated++
 
         if (docCfg.write_to_file) {
-          const indent = ' '.repeat(sym.column)
+          const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
           const comment = formatComment(docstring, sym.language)
           const indentedComment = comment
             .split('\n')
