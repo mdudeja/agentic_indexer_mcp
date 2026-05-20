@@ -16,11 +16,13 @@ const symbols: IndexedSymbol['Select'][] = []
 const imports: IndexedImport['Select'][] = []
 const calls: IndexedSymbolCall['Insert'][] = []
 
+/** Checks if the given node is exported by verifying if its parent type is included in the configuration's exported nodes list. */
 function isExported(node: Node, config: TreesitterConfig): boolean {
   const parent = node.parent
   return parent !== null && config.lists.exported_nodes.includes(parent.type)
 }
 
+/** Extracts the documentation comments associated with a syntax node by traversing its adjacent comment siblings as defined in the configuration. */
 function getDocstring(
   node: Node,
   config: TreesitterConfig,
@@ -93,6 +95,7 @@ function buildSignature(node: Node, config: TreesitterConfig): string | null {
   return raw.length > 200 ? raw.substring(0, 197) + '...' : raw
 }
 
+/** Adds a code symbol to the registry by extracting metadata from the provided node and returns a unique hash-based identifier. */
 function addSymbol({
   node,
   nameNode,
@@ -241,6 +244,7 @@ function handleVariableDeclaration(
   }
 }
 
+/** Extracts the callee name from a syntax node and records call metadata, including location and caller ID, to the calls collection. */
 function recordCall(
   node: Node,
   currentCallableId: string,
@@ -269,6 +273,7 @@ function recordCall(
   }
 }
 
+/** Recursively traverses a syntax tree to index symbols and record call expressions based on configuration while maintaining hierarchical context. */
 function traverse(
   node: Node,
   file_path: string,
@@ -346,6 +351,7 @@ function traverse(
   }
 }
 
+/** Extracts symbols, imports, and function calls from a tree-sitter root node by traversing it according to the provided configuration and file path. */
 export function extractSymbols(
   rootNode: Node,
   file_path: string,

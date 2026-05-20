@@ -1,3 +1,4 @@
+/** Formats a given string into a language-specific comment by removing existing markers and applying new syntax based on the specified programming language. */
 export function formatComment(docstring: string, language: string): string {
   const lines = docstring
     .split('\n')
@@ -5,7 +6,7 @@ export function formatComment(docstring: string, language: string): string {
     .filter(Boolean)
 
   // Remove all existing comment syntax from the docstring
-  const commentSyntax = [/^\/\*\*?/, /^\*\/?/, /^\/\/+/, /^#+/, /^"""/]
+  const commentSyntax = [/^\/\*\*?/, /^\*\/?/, /^\/\/+/, /^#+/]
   lines.forEach((line, idx) => {
     commentSyntax.forEach((regex) => {
       if (regex.test(line)) {

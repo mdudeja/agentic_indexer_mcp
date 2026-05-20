@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, relative } from 'node:path'
 import { isAbsolute, resolve } from 'path'
 
+/** Resolves a path by expanding home directory aliases and converting relative paths into absolute paths. */
 export const resolvePath = (inputPath: string): string => {
   let resolvedPath = inputPath
   if (inputPath.startsWith('~/')) {
@@ -18,6 +19,7 @@ export const resolvePath = (inputPath: string): string => {
   return resolvedPath
 }
 
+/** Resolves an import path relative to the project's base directory, handling both relative file paths and package identifiers. */
 export const resolveImportedModulePath = (
   importPath: string,
   filePath: string,

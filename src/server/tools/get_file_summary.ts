@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 
+/** Registers the get_file_summary tool with the MCP server to provide an aggregated summary of all symbols, including functions, classes, and variables, defined within a specified file. */
 export function registerGetFileSummaryTool(server: McpServer) {
   server.registerTool(
     'get_file_summary',

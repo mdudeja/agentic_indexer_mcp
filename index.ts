@@ -9,6 +9,7 @@ import { resolvePath } from 'src/utils/paths'
 import { loadConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
 
+/** Extends the Bun module with type definitions for environment variables covering configuration, logging, database settings, and AI service API keys. */
 declare module 'bun' {
   interface Env {
     AGENTIC_DIR?: string
@@ -73,6 +74,7 @@ Options:
   process.exit(values.help ? 0 : 1)
 }
 
+/** Initializes application configuration and state, opens the database, and executes the specified command to either start the server, index files, or query symbols. */
 async function main() {
   const config = await loadConfig(cwd)
   AppStateManager.getInstance().setItem('config', config)

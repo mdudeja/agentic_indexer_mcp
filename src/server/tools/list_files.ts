@@ -4,6 +4,7 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { like, eq, and, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 
+/** Registers the list_files tool to the MCP server for listing indexed workspace files with optional path pattern and language filtering. */
 export function registerListFilesTool(server: McpServer) {
   server.registerTool(
     'list_files',

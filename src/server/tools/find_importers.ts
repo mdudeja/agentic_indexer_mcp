@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 
+/** Registers a tool with the MCP server to find and list all unique file paths that import a specified module name or pattern. */
 export function registerFindImportersTool(server: McpServer) {
   server.registerTool(
     'find_importers',

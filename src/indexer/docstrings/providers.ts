@@ -5,9 +5,12 @@ export interface DocstringProvider {
   generate(prompt: string): Promise<string | null>
 }
 
+/** Implementation of DocstringProvider that generates text responses using the Anthropic Claude API. */
 class ClaudeProvider implements DocstringProvider {
+  /** Initializes the Claude provider with the specified configuration. */
   constructor(private cfg: NonNullable<DocstringConfig['claude']>) {}
 
+  /** Asynchronously generates a text response for the given prompt using the Anthropic API, returning the resulting text or null if the request fails. */
   async generate(prompt: string): Promise<string | null> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -35,9 +38,12 @@ class ClaudeProvider implements DocstringProvider {
   }
 }
 
+/** An implementation of the DocstringProvider interface that generates content using the Google Gemini API. */
 class GeminiProvider implements DocstringProvider {
+  /** Initializes a new instance of the GeminiProvider with the specified configuration. */
   constructor(private cfg: NonNullable<DocstringConfig['gemini']>) {}
 
+  /** Generates text content from the Gemini API using the provided prompt and returns the result or null on error. */
   async generate(prompt: string): Promise<string | null> {
     const model = this.cfg.model ?? 'gemini-3-flash-preview'
     const res = await fetch(
@@ -66,9 +72,12 @@ class GeminiProvider implements DocstringProvider {
   }
 }
 
+/** Implementation of the DocstringProvider interface that generates text using the OpenAI API based on a provided configuration. */
 class OpenAIProvider implements DocstringProvider {
+  /** Initializes a new instance of the OpenAIProvider with the specified configuration. */
   constructor(private cfg: NonNullable<DocstringConfig['openai']>) {}
 
+  /** Generates text by sending a prompt to the OpenAI API and returns the trimmed response content or null if the request fails or is malformed. */
   async generate(prompt: string): Promise<string | null> {
     const res = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -94,12 +103,15 @@ class OpenAIProvider implements DocstringProvider {
   }
 }
 
+/** Provides docstring generation services via the Ollama API using a specified model and base URL. */
 class OllamaProvider implements DocstringProvider {
+  /** Initializes a new instance of the OllamaProvider class with a specific model and an optional base URL. */
   constructor(
     private model: string,
     private baseUrl: string = 'http://localhost:11434',
   ) {}
 
+  /** Generates a response for the given prompt by calling the API and returns the trimmed result or null if the request fails. */
   async generate(prompt: string): Promise<string | null> {
     const res = await fetch(`${this.baseUrl}/api/generate`, {
       method: 'POST',
@@ -115,6 +127,7 @@ class OllamaProvider implements DocstringProvider {
   }
 }
 
+/** Instantiates a docstring provider based on the provided configuration or returns null if required settings are missing. */
 export function createProvider(
   config: DocstringConfig,
 ): DocstringProvider | null {

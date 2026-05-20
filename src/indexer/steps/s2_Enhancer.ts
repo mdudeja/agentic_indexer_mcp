@@ -18,6 +18,7 @@ export abstract class Enhancer {
   protected available = false
   protected initialized = false
 
+  /** Initializes a new Enhancer instance with the specified working directory and loads the application configuration. */
   constructor(protected cwd: string) {
     this.config = AppStateManager.getInstance().getItem('config') ?? {
       enabled: false,
@@ -27,10 +28,12 @@ export abstract class Enhancer {
     }
   }
 
+  /** Initializes the instance and returns a boolean indicating success. */
   async init(): Promise<boolean> {
     throw new Error('init() not implemented')
   }
 
+  /** Enriches symbol type metadata for the specified relative paths within the indexer store. */
   async enhanceSymbolTypes(
     _store: IndexerDB,
     _relPaths: string[],
@@ -38,10 +41,12 @@ export abstract class Enhancer {
     throw new Error('enhanceSymbolTypes() not implemented')
   }
 
+  /** Resolves all pending calls within the specified indexer database store. */
   async resolveAllPendingCalls(_store: IndexerDB): Promise<void> {
     throw new Error('resolveAllPendingCalls() not implemented')
   }
 
+  /** Refreshes cached data for a file at the specified absolute path when it changes. */
   refreshFile(_absPath: string): void {
     // Optional method to refresh cached data for a file when it changes
   }

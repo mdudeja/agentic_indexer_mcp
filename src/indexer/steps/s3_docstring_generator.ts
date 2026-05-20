@@ -4,19 +4,22 @@ import type { IndexerDB } from 'src/database/IndexerDB'
 import type { IndexerConfig, IndexedSymbol } from 'src/config/types'
 import { SymbolKind } from 'src/config/types'
 import { AppStateManager } from 'src/state'
-import { logInfo, logWarning } from 'src/utils/logger'
+import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider } from '../docstrings/providers'
 import { formatComment } from '../docstrings/formatComment'
 
+/** Orchestrates the generation and application of missing docstrings for code symbols by querying a database, using an AI provider, and optionally updating source files. */
 export class DocstringGenerationStep {
   private config: IndexerConfig
   private cwd: string
 
+  /** Initializes a new instance with the specified current working directory and retrieves the application configuration. */
   constructor(cwd: string) {
     this.cwd = cwd
     this.config = AppStateManager.getInstance().getItem('config')!
   }
 
+  /** Generates and applies missing docstrings to symbols by querying the database, using a configured provider, and optionally updating source files. */
   async run(store: IndexerDB): Promise<void> {
     const docCfg = this.config.docstring_generation
     if (!docCfg?.enabled) return
@@ -31,6 +34,13 @@ export class DocstringGenerationStep {
       logInfo('[Indexer] No symbols need docstrings. Step 3 complete.')
       return
     }
+
+    logDebug(`[Indexer] Found ${symbols.length} symbols needing docstrings.`)
+    symbols.forEach((s) =>
+      logDebug(
+        `[Indexer] Symbol needing docstring: ${s.name} (${s.kind}) in ${s.file_path}:${s.line}`,
+      ),
+    )
 
     const provider = createProvider(docCfg)
     if (!provider) return
@@ -90,6 +100,7 @@ export class DocstringGenerationStep {
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
   }
 
+  /** Aggregates a unique list of symbol kinds associated with container and callable nodes across all configured languages. */
   private collectTargetKinds(): SymbolKind[] {
     const kinds = new Set<SymbolKind>()
     for (const langCfg of Object.values(this.config.languages)) {
@@ -105,6 +116,7 @@ export class DocstringGenerationStep {
     return [...kinds]
   }
 
+  /** Constructs a prompt string for generating a docstring using symbol metadata and source code. */
   private buildPrompt(
     sym: IndexedSymbol['Select'],
     sourceText: string,

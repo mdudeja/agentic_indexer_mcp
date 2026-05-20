@@ -10,11 +10,13 @@ import { logError } from 'src/utils/logger.js'
 import { AppStateManager } from 'src/state'
 import { extractSymbols } from './steps/s1_symbol_extractor.js'
 
+/** Handles source code indexing by using Tree-sitter to parse files and extract symbols, imports, and calls based on language-specific configurations. */
 export class TreeSitterIndexer {
   private parser: Parser | null = null
   private languages: Map<string, any> = new Map()
   private config: IndexerConfig
 
+  /** Initializes the TreeSitterIndexer instance with configuration settings retrieved from the application state. */
   constructor() {
     this.config = AppStateManager.getInstance().getItem('config') ?? {
       enabled: false,
@@ -24,11 +26,13 @@ export class TreeSitterIndexer {
     }
   }
 
+  /** Performs static parser initialization and creates a new parser instance. */
   async init() {
     await Parser.init()
     this.parser = new Parser()
   }
 
+  /** Asynchronously loads and caches the tree-sitter WASM grammar for the specified language. */
   async loadLanguage(langName: string): Promise<any> {
     if (this.languages.has(langName)) {
       return this.languages.get(langName)!
@@ -50,6 +54,7 @@ export class TreeSitterIndexer {
     }
   }
 
+  /** Parses source code to extract symbols, imports, and calls using Tree-sitter based on the provided file extension. */
   async parse(
     sourceCode: string,
     ext: string,
@@ -92,6 +97,7 @@ export class TreeSitterIndexer {
     }
   }
 
+  /** Asynchronously parses the provided source code using the specified language. */
   async parseFile(sourceCode: string, langName: string): Promise<any> {
     const lang = await this.loadLanguage(langName)
 

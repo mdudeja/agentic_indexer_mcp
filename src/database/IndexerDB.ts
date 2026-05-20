@@ -27,6 +27,7 @@ import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
 import { AppStateManager } from 'src/state'
 
+/** Manages an SQLite database for indexing and querying code symbols, files, imports, and call relationships using Drizzle ORM. */
 export class IndexerDB {
   private db: SQLiteBunDatabase<typeof schema>
   private config: IndexerConfig
@@ -43,6 +44,7 @@ export class IndexerDB {
   private preparedImportInsert: Statement | null = null
   private preparedCallInsert: Statement | null = null
 
+  /** Initializes the IndexerDB instance, resolves the database path, and configures the SQLite connection with Drizzle ORM. */
   private constructor(dbPath?: string) {
     this.isMemory = dbPath === ':memory:'
     this.dbFilePath = this.isMemory
@@ -76,6 +78,7 @@ export class IndexerDB {
     })
   }
 
+  /** Returns the singleton instance of IndexerDB, optionally re-initializing it if a different database path is provided. */
   public static getInstance(dbPath?: string) {
     if (
       !IndexerDB.instance ||
@@ -86,10 +89,12 @@ export class IndexerDB {
     return IndexerDB.instance
   }
 
+  /** Returns the underlying database instance. */
   getDb() {
     return this.db
   }
 
+  /** Initializes the database by running migrations and preparing SQL statements for symbols, imports, and calls. */
   async init() {
     if (this.dbInited) return
 
@@ -124,6 +129,7 @@ export class IndexerDB {
     logDebug('Database migrations applied')
   }
 
+  /** Inserts or updates a file record in the database by path, updating its hash, indexing timestamp, and language if it already exists. */
   async upsertFile(file: IndexedFile['Insert']) {
     return this.db
       .insert(schema.files)
@@ -138,6 +144,7 @@ export class IndexerDB {
       })
   }
 
+  /** Retrieves the hash for a specific file path from the database or null if the path does not exist. */
   async getFileHash(path: string): Promise<string | null> {
     const result = await this.db
       .select({ hash: schema.files.hash })
@@ -148,11 +155,13 @@ export class IndexerDB {
     return result.length > 0 ? result[0]!.hash : null
   }
 
+  /** Deletes a file record from the database using the specified path. */
   async deleteFile(path: string) {
     // Cascades to symbols if ON DELETE CASCADE is set up correctly in schema
     return this.db.delete(schema.files).where(eq(schema.files.path, path))
   }
 
+  /** Inserts or updates code symbols by deleting existing records for the specified files and inserting the new symbol data within a single transaction. */
   async upsertSymbols(symbolsData: IndexedSymbol['Insert'][]) {
     if (
       symbolsData.length === 0 ||
@@ -178,6 +187,7 @@ export class IndexerDB {
     })()
   }
 
+  /** Resolves callee names to symbol IDs and performs a bulk upsert of call relationship records. */
   async upsertCalls(callsData: IndexedSymbolCall['Insert'][]) {
     if (callsData.length === 0 || !this.preparedCallInsert) return
 
@@ -230,6 +240,7 @@ export class IndexerDB {
     })()
   }
 
+  /** Retrieves symbol call records for the specified caller IDs. */
   async getCallsForSymbols(
     callerIds: string[],
   ): Promise<IndexedSymbolCall['Select'][]> {
@@ -240,6 +251,7 @@ export class IndexerDB {
       .where(inArray(schema.symbol_calls.caller_id, callerIds))
   }
 
+  /** Retrieves symbol records matching the specified array of unique identifiers. */
   async getSymbolsByIds(ids: string[]): Promise<IndexedSymbol['Select'][]> {
     if (ids.length === 0) return []
     return this.db
@@ -248,6 +260,7 @@ export class IndexerDB {
       .where(inArray(schema.symbols.id, ids))
   }
 
+  /** Atomically updates import records by deleting existing entries for the target file paths and inserting the provided data. */
   async upsertImports(importsData: IndexedImport['Insert'][]) {
     if (
       importsData.length === 0 ||
@@ -266,6 +279,7 @@ export class IndexerDB {
     })()
   }
 
+  /** Searches for code symbols matching a name pattern with optional filters for symbol kind and file path, returning metadata for results up to a specified limit. */
   async searchSymbols(
     queryStr: string,
     kind?: SymbolKind | 'all',
@@ -293,6 +307,7 @@ export class IndexerDB {
       .limit(limitVal)
   }
 
+  /** Retrieves a summary of all symbols in the specified file path, ordered by line number. */
   async getFileSummary(path: string) {
     return this.db
       .select()
@@ -301,6 +316,7 @@ export class IndexerDB {
       .orderBy(schema.symbols.line)
   }
 
+  /** Retrieves the definition and metadata for a specific symbol by its unique identifier from the database. */
   async getDefinition(id: string) {
     const result = await this.db
       .select()
@@ -311,6 +327,7 @@ export class IndexerDB {
     return result[0] || null
   }
 
+  /** Retrieves a symbol definition from the database by its name and file path. */
   async getDefinitionByName(name: string, path: string) {
     const result = await this.db
       .select()
@@ -323,6 +340,7 @@ export class IndexerDB {
     return result[0] || null
   }
 
+  /** Retrieves import records matching a module name pattern, supporting asterisk wildcards. */
   async getImporters(moduleNamePattern: string) {
     const pattern = moduleNamePattern.replace(/\*/g, '%')
     return this.db
@@ -331,6 +349,7 @@ export class IndexerDB {
       .where(like(schema.imports.module_path, pattern))
   }
 
+  /** Retrieves all indexed symbols associated with the specified file path, ordered by line number. */
   async getSymbolsForFile(path: string): Promise<IndexedSymbol['Select'][]> {
     return this.db
       .select()
@@ -339,6 +358,7 @@ export class IndexerDB {
       .orderBy(schema.symbols.line)
   }
 
+  /** Retrieves a single file record from the database using its path. */
   async getFileByPath(path: string): Promise<IndexedFile['Select'] | null> {
     const result = await this.db
       .select()
@@ -349,6 +369,7 @@ export class IndexerDB {
     return result[0] || null
   }
 
+  /** Retrieves all indexed files from the database. */
   async getAllFiles(): Promise<IndexedFile['Select'][]> {
     return this.db.select().from(schema.files)
   }
@@ -373,6 +394,7 @@ export class IndexerDB {
     })) as IndexedSymbol['Select'][]
   }
 
+  /** Retrieves all indexed symbols from the database, ordered by file path and line number. */
   async getAllSymbols(): Promise<IndexedSymbol['Select'][]> {
     return this.db
       .select()
@@ -380,6 +402,7 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves all unresolved symbol calls including their source locations and caller file paths. */
   async getUnresolvedCalls(): Promise<
     Array<{
       id: string
@@ -403,6 +426,7 @@ export class IndexerDB {
       .all() as any[]
   }
 
+  /** Updates the callee identifier for a specified call record. */
   async updateCalleeId(callId: string, calleeId: string): Promise<void> {
     await this.db
       .update(schema.symbol_calls)
@@ -410,6 +434,7 @@ export class IndexerDB {
       .where(eq(schema.symbol_calls.id, callId))
   }
 
+  /** Retrieves a symbol at a specific file path and line number, returning the unique match or null if ambiguous or not found. */
   async getSymbolAtLocation(
     filePath: string,
     line: number,
@@ -439,6 +464,7 @@ export class IndexerDB {
     return byLine.length === 1 ? byLine[0]! : null
   }
 
+  /** Retrieves symbols of the specified kinds that lack a docstring, ordered by file path and line number. */
   async getSymbolsNeedingDocstrings(
     targetKinds: SymbolKind[],
   ): Promise<IndexedSymbol['Select'][]> {
@@ -458,6 +484,7 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Updates the docstring of a symbol with the specified ID. */
   async updateSymbolDocstring(id: string, docstring: string): Promise<void> {
     await this.db
       .update(schema.symbols)
@@ -465,6 +492,7 @@ export class IndexerDB {
       .where(eq(schema.symbols.id, id))
   }
 
+  /** Updates the parameter JSON and return type for the specified symbol. */
   async updateSymbolTypeInfo(
     symbolId: string,
     parametersJson: string,
@@ -476,6 +504,7 @@ export class IndexerDB {
       .where(eq(schema.symbols.id, symbolId))
   }
 
+  /** Retrieves a list of distinct callers for a specified symbol, including the file path, name, and line number for each call location. */
   async getCallers(
     symbolName: string,
   ): Promise<Array<{ callerFile: string; callerName: string; line: number }>> {
@@ -491,6 +520,7 @@ export class IndexerDB {
       .all(symbolName, symbolName) as any[]
   }
 
+  /** Clears all symbols, imports, files, and symbol calls from the database. */
   async clear() {
     await this.db.delete(schema.symbols)
     await this.db.delete(schema.imports)

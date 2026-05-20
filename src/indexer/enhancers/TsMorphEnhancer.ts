@@ -20,6 +20,7 @@ const CALLABLE_SYNTAX_KINDS = [
 
 const MAX_TYPE_TEXT_LENGTH = 500
 
+/** Provides TypeScript-specific project enhancement by using ts-morph to resolve symbol signatures and call site definitions. */
 export class TsMorphEnhancer extends Enhancer {
   private project: Project | null = null
 
@@ -32,10 +33,12 @@ export class TsMorphEnhancer extends Enhancer {
     'tsconfig.build.json',
   ]
 
+  /** Initializes a new TsMorphEnhancer instance with the specified working directory. */
   constructor(cwd: string) {
     super(cwd)
   }
 
+  /** Initializes the project by locating a tsconfig file and setting up the ts-morph instance, returning true if successful. */
   override async init(): Promise<boolean> {
     if (this.initialized) return this.available
     this.initialized = true
@@ -61,6 +64,7 @@ export class TsMorphEnhancer extends Enhancer {
     return this.available
   }
 
+  /** Asynchronously resolves and updates parameter and return type information in the database for callable symbols within the specified file paths. */
   override async enhanceSymbolTypes(
     store: IndexerDB,
     relPaths: string[],
@@ -98,6 +102,7 @@ export class TsMorphEnhancer extends Enhancer {
     )
   }
 
+  /** Resolves all pending function call sites in the database by mapping them to their corresponding symbol definitions and updating the store. */
   override async resolveAllPendingCalls(store: IndexerDB): Promise<void> {
     if (!this.available) return
 
@@ -144,12 +149,14 @@ export class TsMorphEnhancer extends Enhancer {
     )
   }
 
+  /** Refreshes the source file at the specified absolute path from the file system. */
   override refreshFile(absPath: string): void {
     if (!this.project) return
     const sf = this.project.getSourceFile(absPath)
     if (sf) sf.refreshFromFileSystemSync()
   }
 
+  /** Searches upwards from the current directory through up to five parent levels for a TypeScript configuration file and returns its path if found. */
   private findTsConfig(): string | null {
     let dir = this.cwd
     for (let i = 0; i < 5; i++) {
@@ -164,6 +171,7 @@ export class TsMorphEnhancer extends Enhancer {
     return null
   }
 
+  /** Retrieves an existing source file or adds it to the project from the specified absolute path. */
   private getSourceFile(absPath: string) {
     if (!this.project) return null
     return (
@@ -172,6 +180,7 @@ export class TsMorphEnhancer extends Enhancer {
     )
   }
 
+  /** Resolves the definition location for a function call at the specified file path, line, and column. */
   private resolveCallSite(
     absFilePath: string,
     callLine: number,
@@ -229,6 +238,7 @@ export class TsMorphEnhancer extends Enhancer {
     }
   }
 
+  /** Retrieves the parameter and return type information for a callable node at the specified file location. */
   private getSymbolSignature(
     absFilePath: string,
     line: number,

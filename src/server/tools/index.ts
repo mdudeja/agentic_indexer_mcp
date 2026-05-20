@@ -7,6 +7,7 @@ import { registerFindImportersTool } from './find_importers'
 import { registerGetBlastRadiusTool } from './get_blast_radius'
 import { registerPlanRefactoringTool } from './plan_refactoring'
 
+/** Registers code analysis and refactoring tools to the specified MCP server. */
 export function registerTools(server: McpServer) {
   registerSearchSymbolsTool(server)
   registerGetFileSummaryTool(server)

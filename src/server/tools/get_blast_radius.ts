@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 
+/** Registers a tool to the MCP server that identifies the direct callers and affected files for a specified symbol to determine the potential impact of a change. */
 export function registerGetBlastRadiusTool(server: McpServer) {
   server.registerTool(
     'get_blast_radius',

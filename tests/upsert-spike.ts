@@ -2,6 +2,7 @@ import { logInfo } from 'src/utils/logger'
 import { IndexerDB } from '../src/database/IndexerDB'
 import { SymbolKind, type IndexedSymbol } from '../src/config/types'
 
+/** Initializes an in-memory IndexerDB, upserts a sample file and symbol, and performs a search to verify indexing functionality. */
 async function main() {
   const store = IndexerDB.getInstance(':memory:')
   await store.init()

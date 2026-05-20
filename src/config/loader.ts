@@ -8,6 +8,7 @@ export const CONFIG_FILENAME = import.meta.env.CONFIG_FILENAME || 'config.json'
 
 export const DEFAULT_CONFIG = default_config
 
+/** Loads and merges indexer configuration from the specified root directory, returning default settings if the configuration file is missing or invalid. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
   const configPath = join(rootDir, AGENTIC_DIR, CONFIG_FILENAME)
 

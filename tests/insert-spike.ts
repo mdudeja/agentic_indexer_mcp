@@ -2,6 +2,7 @@ import { logInfo } from 'src/utils/logger'
 import { IndexerDB } from '../src/database/IndexerDB'
 import * as schema from '../src/database/schemas'
 
+/** Initializes an in-memory database, inserts sample file and symbol data, and logs the retrieved symbols. */
 async function main() {
   const store = IndexerDB.getInstance(':memory:')
   await store.init()

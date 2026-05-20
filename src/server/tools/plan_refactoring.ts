@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
+/** Registers a refactoring planning tool to the MCP server for generating structured rename, move, and extract instruction frameworks. */
 export function registerPlanRefactoringTool(server: McpServer) {
   server.registerTool(
     'plan_refactoring',

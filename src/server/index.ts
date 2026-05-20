@@ -5,6 +5,7 @@ import { logInfo } from '../utils/logger'
 import { AppStateManager } from 'src/state'
 import { Watcher } from '../watcher/Watcher'
 
+/** Starts the workspace-indexer MCP server using stdio transport, registers tools, and initiates a file watcher for the workspace root. */
 export async function startMcpServer() {
   const server = new McpServer({
     name: 'workspace-indexer',

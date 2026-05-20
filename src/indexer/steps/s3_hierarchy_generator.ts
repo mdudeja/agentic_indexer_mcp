@@ -67,6 +67,7 @@ export function buildKindToListMap(
   return map
 }
 
+/** Populates the global state with kind-to-list maps for the specified languages if they are not already present. */
 function checkAndPopulateKindToListMaps(languages: string[]) {
   const stateManager = AppStateManager.getInstance()
   let globalKindToListMap =
@@ -91,6 +92,7 @@ function checkAndPopulateKindToListMaps(languages: string[]) {
   stateManager.setItem('kindToListMap', globalKindToListMap)
 }
 
+/** Retrieves the mapping of node kinds to list names for the specified language from the application state manager. */
 function getKindToListMap(lang: string): Map<string, ListName> | undefined {
   const stateManager = AppStateManager.getInstance()
   const globalKindToListMap = stateManager.getItem('kindToListMap')
@@ -109,6 +111,7 @@ function getLangConfig(lang: string): TreesitterConfig | undefined {
   return langConfig?.treesitter
 }
 
+/** Retrieves the unique programming languages associated with a given hierarchy scope, such as a specific file, symbol, or the entire codebase. */
 async function getLanguagesInScope(
   scope: HierarchyScope,
 ): Promise<(string | null)[]> {
