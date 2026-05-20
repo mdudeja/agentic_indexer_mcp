@@ -17,6 +17,9 @@ declare module 'bun' {
     LOG_LEVEL?: string
     DB_FILE_URL?: string
     DB_MIGRATIONS_DIR?: string
+    CLAUDE_API_KEY?: string
+    GEMINI_API_KEY?: string
+    OPENAI_API_KEY?: string
   }
 }
 

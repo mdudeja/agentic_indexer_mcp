@@ -33,6 +33,8 @@ export class DocstringGenerationStep {
     }
 
     const provider = createProvider(docCfg)
+    if (!provider) return
+
     let generated = 0
 
     const byFile = new Map<string, IndexedSymbol['Select'][]>()
@@ -103,9 +105,13 @@ export class DocstringGenerationStep {
     return [...kinds]
   }
 
-  private buildPrompt(sym: IndexedSymbol['Select'], sourceText: string): string {
+  private buildPrompt(
+    sym: IndexedSymbol['Select'],
+    sourceText: string,
+  ): string {
     const parts = [
       `Generate a concise docstring for the following ${sym.kind} named "${sym.name}".`,
+      `Do not format the docstring in a way that is specific to any particular programming language. Just return the plain text of the docstring without any code fences, markdown formatting, or language-specific comment syntax.`,
       `Language: ${sym.language}`,
     ]
 

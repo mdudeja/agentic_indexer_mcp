@@ -42,16 +42,16 @@ export type LanguageConfig = {
   }
 }
 
-export type DocstringProviderName = 'claude' | 'gemini' | 'codex' | 'ollama'
+export type DocstringProviderName = 'claude' | 'gemini' | 'openai' | 'ollama'
 
 export type DocstringConfig = {
   enabled: boolean
   provider: DocstringProviderName
   write_to_file: boolean
-  ollama?: {
-    model: string
-    base_url?: string
-  }
+  claude?: { api_key: string; model?: string }
+  gemini?: { api_key: string; model?: string }
+  openai?: { api_key: string; model?: string }
+  ollama?: { model: string; base_url?: string }
 }
 
 export type IndexerConfig = {

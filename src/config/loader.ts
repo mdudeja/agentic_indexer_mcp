@@ -38,9 +38,18 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
         write_to_file:
           userConfig.indexer?.docstring_generation?.write_to_file ??
           DEFAULT_CONFIG.indexer.docstring_generation!.write_to_file,
-        ...(userConfig.indexer?.docstring_generation?.ollama
-          ? { ollama: { ...userConfig.indexer.docstring_generation.ollama } }
-          : {}),
+        ...(userConfig.indexer?.docstring_generation?.claude && {
+          claude: userConfig.indexer.docstring_generation.claude,
+        }),
+        ...(userConfig.indexer?.docstring_generation?.gemini && {
+          gemini: userConfig.indexer.docstring_generation.gemini,
+        }),
+        ...(userConfig.indexer?.docstring_generation?.openai && {
+          openai: userConfig.indexer.docstring_generation.openai,
+        }),
+        ...(userConfig.indexer?.docstring_generation?.ollama && {
+          ollama: userConfig.indexer.docstring_generation.ollama,
+        }),
       },
     }
   } catch (err) {

@@ -6,6 +6,7 @@ import { registerGetDefinitionTool } from './get_definition'
 import { registerFindImportersTool } from './find_importers'
 import { registerGetBlastRadiusTool } from './get_blast_radius'
 import { registerPlanRefactoringTool } from './plan_refactoring'
+
 export function registerTools(server: McpServer) {
   registerSearchSymbolsTool(server)
   registerGetFileSummaryTool(server)
