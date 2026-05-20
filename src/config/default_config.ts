@@ -250,5 +250,10 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       //   lua: { extensions: ['.lua'] },
       //   go: { extensions: ['.go'] },
     },
+    docstring_generation: {
+      enabled: false,
+      provider: 'claude',
+      write_to_file: true,
+    },
   },
 }

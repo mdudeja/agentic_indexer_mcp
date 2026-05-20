@@ -42,9 +42,22 @@ export type LanguageConfig = {
   }
 }
 
+export type DocstringProviderName = 'claude' | 'gemini' | 'codex' | 'ollama'
+
+export type DocstringConfig = {
+  enabled: boolean
+  provider: DocstringProviderName
+  write_to_file: boolean
+  ollama?: {
+    model: string
+    base_url?: string
+  }
+}
+
 export type IndexerConfig = {
   enabled: boolean
   ignore_patterns: string[]
   extnToLangMap: Record<string, string>
   languages: Record<string, LanguageConfig>
+  docstring_generation?: DocstringConfig
 }

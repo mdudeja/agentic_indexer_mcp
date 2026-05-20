@@ -28,6 +28,20 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
         ...DEFAULT_CONFIG.indexer.languages,
         ...userConfig.indexer?.languages,
       },
+      docstring_generation: {
+        enabled:
+          userConfig.indexer?.docstring_generation?.enabled ??
+          DEFAULT_CONFIG.indexer.docstring_generation!.enabled,
+        provider:
+          userConfig.indexer?.docstring_generation?.provider ??
+          DEFAULT_CONFIG.indexer.docstring_generation!.provider,
+        write_to_file:
+          userConfig.indexer?.docstring_generation?.write_to_file ??
+          DEFAULT_CONFIG.indexer.docstring_generation!.write_to_file,
+        ...(userConfig.indexer?.docstring_generation?.ollama
+          ? { ollama: { ...userConfig.indexer.docstring_generation.ollama } }
+          : {}),
+      },
     }
   } catch (err) {
     logError(

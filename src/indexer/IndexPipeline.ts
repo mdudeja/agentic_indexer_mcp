@@ -7,6 +7,7 @@ import { AppStateManager } from 'src/state/index.ts'
 import { logError, logInfo } from 'src/utils/logger.ts'
 import type { Enhancer } from './steps/s2_Enhancer.ts'
 import { TsMorphEnhancer } from './enhancers/TsMorphEnhancer.ts'
+import { DocstringGenerationStep } from './steps/s3_docstring_generator.ts'
 
 const fileTypeToEnhancerMap: Record<string, new (cwd: string) => Enhancer> = {
   ts: TsMorphEnhancer,
@@ -106,6 +107,7 @@ export class IndexPipeline {
     await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
 
     await this.runEnhancementStep(processedFiles)
+    await this.runDocstringStep()
   }
 
   // Returns the relative path if the file was actually indexed, null if skipped (cache hit).
@@ -243,5 +245,10 @@ export class IndexPipeline {
     }
 
     logInfo(`[Indexer] Step 2 complete.`)
+  }
+
+  private async runDocstringStep(): Promise<void> {
+    const step = new DocstringGenerationStep(this.options.cwd)
+    await step.run(this.options.store)
   }
 }

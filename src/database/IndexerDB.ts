@@ -1,6 +1,15 @@
 import { Database, Statement } from 'bun:sqlite'
 import { drizzle, type SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
-import { eq, like, SQL, and, getColumns, inArray } from 'drizzle-orm'
+import {
+  eq,
+  like,
+  SQL,
+  and,
+  getColumns,
+  inArray,
+  isNull,
+  or,
+} from 'drizzle-orm'
 import * as schema from './schemas'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { dirname } from 'path'
@@ -428,6 +437,32 @@ export class IndexerDB {
         ),
       )
     return byLine.length === 1 ? byLine[0]! : null
+  }
+
+  async getSymbolsNeedingDocstrings(
+    targetKinds: SymbolKind[],
+  ): Promise<IndexedSymbol['Select'][]> {
+    if (targetKinds.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        and(
+          inArray(schema.symbols.kind, targetKinds),
+          or(
+            isNull(schema.symbols.docstring),
+            eq(schema.symbols.docstring, ''),
+          ),
+        ),
+      )
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
+  async updateSymbolDocstring(id: string, docstring: string): Promise<void> {
+    await this.db
+      .update(schema.symbols)
+      .set({ docstring })
+      .where(eq(schema.symbols.id, id))
   }
 
   async updateSymbolTypeInfo(
