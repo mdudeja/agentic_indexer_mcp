@@ -111,8 +111,7 @@ export class DocstringGenerationStep {
   ): string {
     const parts = [
       `Generate a concise docstring for the following ${sym.kind} named "${sym.name}".`,
-      `Do not format the docstring in a way that is specific to any particular programming language. Just return the plain text of the docstring without any code fences, markdown formatting, or language-specific comment syntax.`,
-      `Language: ${sym.language}`,
+      `Do not format the docstring in a way. No code fences, markdown formatting, triple quotes, or language-specific comment syntax.`,
     ]
 
     if (sym.signature) parts.push(`Signature: ${sym.signature}`)
@@ -136,6 +135,7 @@ export class DocstringGenerationStep {
     if (sym.return_type) parts.push(`Return type: ${sym.return_type}`)
 
     parts.push(`Source:\n${sourceText}`)
+    parts.push(`Programming language: ${sym.language}`)
     parts.push(
       'Return only the docstring text, no code fences, no explanations.',
     )

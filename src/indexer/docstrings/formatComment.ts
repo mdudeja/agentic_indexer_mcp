@@ -4,36 +4,28 @@ export function formatComment(docstring: string, language: string): string {
     .map((l) => l.trim())
     .filter(Boolean)
 
+  // Remove all existing comment syntax from the docstring
+  const commentSyntax = [/^\/\*\*?/, /^\*\/?/, /^\/\/+/, /^#+/, /^"""/]
+  lines.forEach((line, idx) => {
+    commentSyntax.forEach((regex) => {
+      if (regex.test(line)) {
+        lines[idx] = line.replace(regex, '').trim()
+      }
+    })
+  })
+
   if (
     language === 'typescript' ||
     language === 'tsx' ||
     language === 'javascript'
   ) {
-    if (
-      lines[0]?.startsWith('/**') &&
-      lines[lines.length - 1]?.endsWith('*/')
-    ) {
-      return docstring
-    }
-
     if (lines.length === 1) return `/** ${lines[0]} */`
     return `/**\n${lines.map((l) => ` * ${l}`).join('\n')}\n */`
   }
 
   if (language === 'python') {
-    if (
-      lines[0]?.startsWith('"""') &&
-      lines[lines.length - 1]?.endsWith('"""')
-    ) {
-      return docstring
-    }
-
     if (lines.length === 1) return `""" ${lines[0]} """`
     return `"""\n${lines.join('\n')}\n"""`
-  }
-
-  if (lines[0]?.startsWith('#')) {
-    return docstring
   }
 
   if (lines.length === 1) return `# ${lines[0]}`

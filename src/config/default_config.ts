@@ -268,7 +268,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       ollama: {
         base_url: 'http://localhost:11434',
-        model: 'llama3.2',
+        model: 'qwen2.5',
       },
     },
   },
