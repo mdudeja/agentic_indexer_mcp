@@ -1,19 +1,40 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerSearchSymbolsTool } from './search_symbols'
-import { registerGetFileSummaryTool } from './get_file_summary'
+import { registerGetFileDetailsTool } from './get_file_details'
 import { registerListFilesTool } from './list_files'
 import { registerGetDefinitionTool } from './get_definition'
-import { registerFindImportersTool } from './find_importers'
 import { registerGetBlastRadiusTool } from './get_blast_radius'
-import { registerPlanRefactoringTool } from './plan_refactoring'
+import { registerTraceCallGraphTool } from './trace_call_graph'
+import { registerFindSymbolReferencesTool } from './find_symbol_references'
+import { registerGetCodebaseMapTool } from './get_codebase_map'
+import { registerFindRelatedTestsTool } from './find_related_tests'
+import { registerResolveTypeTool } from './resolve_type'
+import { registerTraceDataFlowTool } from './trace_data_flow'
+import { registerFindSimilarPatternsTool } from './find_similar_patterns'
+import { registerGetEntryPointsTool } from './get_entry_points'
+import { registerGetHierarchyTool } from './get_hierarchy'
 
-/** Registers various tools on the given server to provide functionality for code analysis and refactoring. */
+/** Registers all MCP tools on the server. */
 export function registerTools(server: McpServer) {
+  // Core navigation
   registerSearchSymbolsTool(server)
-  registerGetFileSummaryTool(server)
-  registerListFilesTool(server)
+  registerGetFileDetailsTool(server)
   registerGetDefinitionTool(server)
-  registerFindImportersTool(server)
+  registerListFilesTool(server)
+
+  // Graph traversal
+  registerTraceCallGraphTool(server)
   registerGetBlastRadiusTool(server)
-  registerPlanRefactoringTool(server)
+  registerFindSymbolReferencesTool(server)
+  registerTraceDataFlowTool(server)
+
+  // Codebase structure
+  registerGetCodebaseMapTool(server)
+  registerGetEntryPointsTool(server)
+  registerFindRelatedTestsTool(server)
+  registerGetHierarchyTool(server)
+
+  // Type and pattern analysis
+  registerResolveTypeTool(server)
+  registerFindSimilarPatternsTool(server)
 }

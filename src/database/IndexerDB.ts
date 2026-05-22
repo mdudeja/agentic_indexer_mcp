@@ -351,6 +351,14 @@ export class IndexerDB {
       .where(like(schema.imports.module_path, pattern))
   }
 
+  /** Retrieves all import records where the imported symbol name matches exactly. */
+  async getImportsByName(importedName: string): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(eq(schema.imports.imported_name, importedName))
+  }
+
   /** Retrieves all symbols defined within the specified file. */
   async getSymbolsForFile(path: string): Promise<IndexedSymbol['Select'][]> {
     return this.db
