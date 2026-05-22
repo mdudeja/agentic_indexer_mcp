@@ -9,7 +9,6 @@ import {
 import { randomUUIDv7, hash } from 'bun'
 import { AppStateManager } from 'src/state'
 import { resolveImportedModulePath } from 'src/utils/paths'
-import { no } from 'zod/locales'
 
 type TreesitterConfig = LanguageConfig['treesitter']
 
