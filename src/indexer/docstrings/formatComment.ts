@@ -46,6 +46,7 @@ export function formatComment(docstring: string, language: string): string {
   return lines.map((l) => `# ${l}`).join('\n')
 }
 
+/** Extracts the raw text from a formatted comment string by removing syntax-specific markers and empty lines. */
 export function getCommentText(formattedComment: string): string {
   const lines = formattedComment.split('\n').map((l) => l.trim())
   const textLines: string[] = []
