@@ -6,11 +6,23 @@ export function formatComment(docstring: string, language: string): string {
     .filter(Boolean)
 
   // Remove all existing comment syntax from the docstring
-  const commentSyntax = [/^\/\*\*?/, /^\*\/?/, /^\/\/+/, /^#+/]
-  lines.forEach((line, idx) => {
+  const commentSyntax = [
+    /^\/\*\*?/,
+    /^\*\/?/,
+    /^\/\/+/,
+    /^#+/,
+    /^"""/,
+    /^'''/,
+    /^--+/,
+    /"""$/,
+    /'''$/,
+    /--+$/,
+    /\*\/$/,
+  ]
+  lines.forEach((_, idx) => {
     commentSyntax.forEach((regex) => {
-      if (regex.test(line)) {
-        lines[idx] = line.replace(regex, '').trim()
+      if (regex.test(lines[idx]!)) {
+        lines[idx] = lines[idx]!.replace(regex, '').trim()
       }
     })
   })
