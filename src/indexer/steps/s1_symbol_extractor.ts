@@ -9,6 +9,7 @@ import {
 import { randomUUIDv7, hash } from 'bun'
 import { AppStateManager } from 'src/state'
 import { resolveImportedModulePath } from 'src/utils/paths'
+import { no } from 'zod/locales'
 
 type TreesitterConfig = LanguageConfig['treesitter']
 
@@ -27,8 +28,26 @@ function getDocstring(
   node: Node,
   config: TreesitterConfig,
 ): string | undefined {
-  const targetNode = node.parent?.type.includes('export') ? node.parent : node
-  const nodeInfo = config.nodes_info[targetNode.type]
+  let targetNode: Node | null = node
+
+  if (node.type === 'arrow_function') {
+    // For arrow functions, check if the parent variable_declarator has a docstring, since the function itself won't have one.
+    const parent = node.parent
+    if (parent?.type === 'variable_declarator') {
+      targetNode = parent.parent
+    }
+  }
+
+  if (!targetNode) return undefined
+
+  if (
+    targetNode.parent?.type.includes('export') ||
+    targetNode.parent?.type.includes('ambient')
+  ) {
+    targetNode = targetNode.parent
+  }
+
+  const nodeInfo = config.nodes_info[node.type]
   if (!nodeInfo || !nodeInfo.docstring) return undefined
 
   let docStringNode =

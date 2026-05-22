@@ -18,5 +18,19 @@
             "stopOnEntry": false,
             "watchMode": false
         },
+        {
+            "type": "bun",
+            "internalConsoleOptions": "openOnSessionStart",
+            "request": "launch",
+            "name": "Debug Index File",
+            "runtime": "bun",
+            "runtimeArgs": [
+                "run",
+                "index-file",
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "watchMode": false
+        },
     ]
 }

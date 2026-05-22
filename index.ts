@@ -46,6 +46,9 @@ const { values, positionals } = parseArgs({
       type: 'boolean',
       short: 'g',
     },
+    file: {
+      type: 'string',
+    },
   },
   strict: true,
   allowPositionals: true,
@@ -62,6 +65,7 @@ Usage: agentic-indexer <command> [options]
 Commands:
   serve       Run the MCP server (reads over stdio)
   index       Run a one-off index of the workspace
+  index-file  Index a single file (provide path via --file option)
   query       Query the existing index from CLI
 
 Options:
@@ -70,6 +74,7 @@ Options:
   -k,   --kind                Filter by symbol kind (e.g. "function")
   -h,   --help                Show this help message
   -g,  --include-gitignored  Include files ignored by .gitignore (default: false)
+  --file                      Path to a single file to index (required for index-file command)
   `)
   process.exit(values.help ? 0 : 1)
 }
@@ -97,6 +102,24 @@ async function main() {
       })
 
       await pipeline.run()
+      break
+    }
+
+    case 'index-file': {
+      if (!values.file) {
+        console.error('Error: --file is required for the index-file command')
+        process.exit(1)
+      }
+
+      const absPath = resolvePath(values.file)
+      logWarning(`Indexing single file: ${absPath}`)
+      const pipeline = new IndexPipeline({
+        cwd,
+        store,
+        includeGitIgnored: true, // For single file indexing, we should include it even if it's gitignored
+      })
+
+      await pipeline.runOnFile(absPath)
       break
     }
 
