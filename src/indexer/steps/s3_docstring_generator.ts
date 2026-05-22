@@ -8,18 +8,15 @@ import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider } from '../docstrings/providers'
 import { formatComment, getCommentText } from '../docstrings/formatComment'
 
-/** Orchestrates the generation and application of missing docstrings for code symbols by querying a database, using an AI provider, and optionally updating source files. */
 export class DocstringGenerationStep {
   private config: IndexerConfig
   private cwd: string
 
-  /** Initializes a new instance with the specified current working directory and retrieves the application configuration. */
   constructor(cwd: string) {
     this.cwd = cwd
     this.config = AppStateManager.getInstance().getItem('config')!
   }
 
-  /** Generates and applies missing docstrings to symbols by querying the database, using a configured provider, and optionally updating source files. */
   async run(store: IndexerDB): Promise<void> {
     const docCfg = this.config.docstring_generation
     if (!docCfg?.enabled) return
@@ -78,12 +75,29 @@ export class DocstringGenerationStep {
           continue
         }
 
-        await store.updateSymbolDocstring(sym.id, docstring)
+        // Remove anything within <think> tags if present
+        const cleanedDocstring = docstring
+          .replace(/<think>[\s\S]*?<\/think>/g, '')
+          .trim()
+        if (cleanedDocstring.length === 0) {
+          logWarning(
+            `[Indexer] Generated docstring for ${sym.name} in ${relPath} was empty after cleaning. Skipping.`,
+          )
+          continue
+        }
+
+        await store.updateSymbolDocstring(sym.id, cleanedDocstring)
         generated++
+        logDebug(
+          `[Indexer] Generated docstring for ${sym.name} in ${relPath}:${sym.line}`,
+        )
+        logInfo(
+          `[Indexer] Generated ${generated} / ${symbols.length} docstrings...`,
+        )
 
         if (docCfg.write_to_file) {
           const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
-          const comment = formatComment(docstring, sym.language)
+          const comment = formatComment(cleanedDocstring, sym.language)
           const indentedComment = comment
             .split('\n')
             .map((l) => `${indent}${l}`)
@@ -100,7 +114,6 @@ export class DocstringGenerationStep {
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
   }
 
-  /** Removes all symbol docstrings from the database and corresponding source files. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
     const targetKinds = this.collectTargetKinds()
     if (targetKinds.length === 0) return
@@ -170,7 +183,6 @@ export class DocstringGenerationStep {
     )
   }
 
-  /** Aggregates a unique list of symbol kinds associated with container and callable nodes across all configured languages. */
   private collectTargetKinds(): SymbolKind[] {
     const kinds = new Set<SymbolKind>()
     for (const langCfg of Object.values(this.config.languages)) {
@@ -186,14 +198,13 @@ export class DocstringGenerationStep {
     return [...kinds]
   }
 
-  /** Constructs a prompt string for generating a docstring using symbol metadata and source code. */
   private buildPrompt(
     sym: IndexedSymbol['Select'],
     sourceText: string,
   ): string {
     const parts = [
       `Generate a concise docstring for the following ${sym.kind} named "${sym.name}".`,
-      `Do not format the docstring in a way. No code fences, markdown formatting, triple quotes, or language-specific comment syntax.`,
+      `Do not format the docstring in any way. No code fences, markdown formatting, triple quotes, \`\`\`[language] blocks, or language-specific comment syntax.`,
     ]
 
     if (sym.signature) parts.push(`Signature: ${sym.signature}`)

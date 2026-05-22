@@ -252,7 +252,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
     },
     docstring_generation: {
       enabled: true,
-      provider: 'gemini',
+      provider: 'ollama',
       write_to_file: true,
       claude: {
         api_key: Bun.env.CLAUDE_API_KEY || '',
@@ -268,7 +268,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       ollama: {
         base_url: 'http://localhost:11434',
-        model: 'llama3.2',
+        model: 'deepcoder',
       },
     },
   },

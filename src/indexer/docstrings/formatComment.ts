@@ -6,13 +6,23 @@ const commentSyntax = [
   /^"""/,
   /^'''/,
   /^--+/,
+  /^```\s*[a-zA-Z0-9_-]*$/,
+  /^```$/,
   /"""$/,
   /'''$/,
   /--+$/,
   /\*\/$/,
+  /^```$/,
 ]
 
-/** Formats a given string into a language-specific comment by removing existing markers and applying new syntax based on the specified programming language. */
+/**
+ * A function that formats a docstring into the appropriate comment syntax for a specified programming language. It processes the input docstring by removing existing comment syntax and then applies formatting specific to the target language (TypeScript/JavaScript, Python, or others). The formatted string is returned as a single line or multi-line comment based on the language requirements.
+ * Parameters:
+ * - `docstring`: The input text to be formatted.
+ * - `language`: The programming language determining the output format.
+ * Returns:
+ * The formatted docstring as a comment in the specified language's syntax.
+ */
 export function formatComment(docstring: string, language: string): string {
   const lines = docstring
     .split('\n')
@@ -46,7 +56,7 @@ export function formatComment(docstring: string, language: string): string {
   return lines.map((l) => `# ${l}`).join('\n')
 }
 
-/** Extracts the raw text from a formatted comment string by removing syntax-specific markers and empty lines. */
+/** A function that processes a formatted comment string to extract and return the cleaned text content by removing specific comment syntax patterns. */
 export function getCommentText(formattedComment: string): string {
   const lines = formattedComment.split('\n').map((l) => l.trim())
   const textLines: string[] = []
