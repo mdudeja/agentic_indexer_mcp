@@ -1,3 +1,17 @@
+const commentSyntax = [
+  /^\/\*\*?/,
+  /^\*\/?/,
+  /^\/\/+/,
+  /^#+/,
+  /^"""/,
+  /^'''/,
+  /^--+/,
+  /"""$/,
+  /'''$/,
+  /--+$/,
+  /\*\/$/,
+]
+
 /** Formats a given string into a language-specific comment by removing existing markers and applying new syntax based on the specified programming language. */
 export function formatComment(docstring: string, language: string): string {
   const lines = docstring
@@ -6,19 +20,6 @@ export function formatComment(docstring: string, language: string): string {
     .filter(Boolean)
 
   // Remove all existing comment syntax from the docstring
-  const commentSyntax = [
-    /^\/\*\*?/,
-    /^\*\/?/,
-    /^\/\/+/,
-    /^#+/,
-    /^"""/,
-    /^'''/,
-    /^--+/,
-    /"""$/,
-    /'''$/,
-    /--+$/,
-    /\*\/$/,
-  ]
   lines.forEach((_, idx) => {
     commentSyntax.forEach((regex) => {
       if (regex.test(lines[idx]!)) {
@@ -43,4 +44,19 @@ export function formatComment(docstring: string, language: string): string {
 
   if (lines.length === 1) return `# ${lines[0]}`
   return lines.map((l) => `# ${l}`).join('\n')
+}
+
+export function getCommentText(formattedComment: string): string {
+  const lines = formattedComment.split('\n').map((l) => l.trim())
+  const textLines: string[] = []
+  lines.forEach((line) => {
+    let textLine = line
+    commentSyntax.forEach((regex) => {
+      if (regex.test(textLine)) {
+        textLine = textLine.replace(regex, '').trim()
+      }
+    })
+    if (textLine) textLines.push(textLine)
+  })
+  return textLines.join('\n')
 }

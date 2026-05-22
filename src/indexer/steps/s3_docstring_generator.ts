@@ -6,7 +6,7 @@ import { SymbolKind } from 'src/config/types'
 import { AppStateManager } from 'src/state'
 import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider } from '../docstrings/providers'
-import { formatComment } from '../docstrings/formatComment'
+import { formatComment, getCommentText } from '../docstrings/formatComment'
 
 /** Orchestrates the generation and application of missing docstrings for code symbols by querying a database, using an AI provider, and optionally updating source files. */
 export class DocstringGenerationStep {
@@ -150,7 +150,8 @@ export class DocstringGenerationStep {
           .trim()
 
         if (
-          docstringText !== formatComment(sym.docstring!, sym.language).trim()
+          getCommentText(docstringText) !==
+          getCommentText(formatComment(sym.docstring!, sym.language))
         ) {
           logWarning(
             `[Indexer] Docstring text in file for ${sym.name} does not match database. Skipping removal in file for safety.`,
