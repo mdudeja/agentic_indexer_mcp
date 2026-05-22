@@ -112,7 +112,7 @@ export class IndexPipeline {
     await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
 
     await this.runEnhancementStep(processedFiles)
-    // await this.runDocstringStep()
+    await this.runDocstringStep()
   }
 
   // Returns the relative path if the file was actually indexed, null if skipped (cache hit).
@@ -153,6 +153,7 @@ export class IndexPipeline {
     }
   }
 
+  /** Removes all docstrings from the specified indexer database store. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
     const step = new DocstringGenerationStep(this.options.cwd)
     await step.removeAllDocstrings(store)

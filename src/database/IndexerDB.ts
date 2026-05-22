@@ -486,6 +486,7 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves symbols of the specified kinds that have a non-empty docstring, ordered by file path and line. */
   async getSymbolsWithDocstrings(
     targetKinds: SymbolKind[],
   ): Promise<IndexedSymbol['Select'][]> {
@@ -513,6 +514,7 @@ export class IndexerDB {
       .where(eq(schema.symbols.id, id))
   }
 
+  /** Deletes the docstring for the specified symbol ID. */
   async deleteSymbolDocstring(id: string): Promise<void> {
     await this.db
       .update(schema.symbols)

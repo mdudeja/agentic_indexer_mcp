@@ -100,6 +100,7 @@ export class DocstringGenerationStep {
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
   }
 
+  /** Removes all symbol docstrings from the database and corresponding source files. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
     const targetKinds = this.collectTargetKinds()
     if (targetKinds.length === 0) return
