@@ -63,10 +63,11 @@ if (values.help || !command) {
 Usage: agentic-indexer <command> [options]
 
 Commands:
-  serve       Run the MCP server (reads over stdio)
-  index       Run a one-off index of the workspace
-  index-file  Index a single file (provide path via --file option)
-  query       Query the existing index from CLI
+  serve               Run the MCP server (reads over stdio)
+  index               Run a one-off index of the workspace
+  index-file          Index a single file (provide path via --file option)
+  remove-docstrings   Remove all generated docstrings from source files and database
+  query               Query the existing index from CLI
 
 Options:
   --cwd                       Workspace directory (default: current directory)
@@ -120,6 +121,16 @@ async function main() {
       })
 
       await pipeline.runOnFile(absPath)
+      break
+    }
+
+    case 'remove-docstrings': {
+      const pipeline = new IndexPipeline({
+        cwd,
+        store,
+        includeGitIgnored: true,
+      })
+      await pipeline.removeAllDocstrings(store)
       break
     }
 

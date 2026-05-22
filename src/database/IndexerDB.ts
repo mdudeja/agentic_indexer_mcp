@@ -9,6 +9,8 @@ import {
   inArray,
   isNull,
   or,
+  not,
+  isNotNull,
 } from 'drizzle-orm'
 import * as schema from './schemas'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
@@ -484,11 +486,37 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  async getSymbolsWithDocstrings(
+    targetKinds: SymbolKind[],
+  ): Promise<IndexedSymbol['Select'][]> {
+    if (targetKinds.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        and(
+          inArray(schema.symbols.kind, targetKinds),
+          and(
+            isNotNull(schema.symbols.docstring),
+            not(eq(schema.symbols.docstring, '')),
+          ),
+        ),
+      )
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
   /** Updates the docstring of a symbol with the specified ID. */
   async updateSymbolDocstring(id: string, docstring: string): Promise<void> {
     await this.db
       .update(schema.symbols)
       .set({ docstring })
+      .where(eq(schema.symbols.id, id))
+  }
+
+  async deleteSymbolDocstring(id: string): Promise<void> {
+    await this.db
+      .update(schema.symbols)
+      .set({ docstring: null })
       .where(eq(schema.symbols.id, id))
   }
 

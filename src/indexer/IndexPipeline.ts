@@ -112,7 +112,7 @@ export class IndexPipeline {
     await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
 
     await this.runEnhancementStep(processedFiles)
-    await this.runDocstringStep()
+    // await this.runDocstringStep()
   }
 
   // Returns the relative path if the file was actually indexed, null if skipped (cache hit).
@@ -151,6 +151,11 @@ export class IndexPipeline {
       logError(`[Indexer] Failed to index ${relPath}:`, e)
       return null
     }
+  }
+
+  async removeAllDocstrings(store: IndexerDB): Promise<void> {
+    const step = new DocstringGenerationStep(this.options.cwd)
+    await step.removeAllDocstrings(store)
   }
 
   /** Recursively collects absolute paths of files within a directory, excluding those that match defined ignore patterns. */

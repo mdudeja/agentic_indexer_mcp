@@ -100,6 +100,74 @@ export class DocstringGenerationStep {
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
   }
 
+  async removeAllDocstrings(store: IndexerDB): Promise<void> {
+    const targetKinds = this.collectTargetKinds()
+    if (targetKinds.length === 0) return
+
+    const symbols = await store.getSymbolsWithDocstrings(targetKinds)
+    if (symbols.length === 0) {
+      logInfo('[Indexer] No symbols have docstrings to remove.')
+      return
+    }
+
+    for (const sym of symbols) {
+      await store.deleteSymbolDocstring(sym.id)
+    }
+
+    logInfo(
+      `[Indexer] Removed docstrings from ${symbols.length} symbols in the database.`,
+    )
+
+    const docCfg = this.config.docstring_generation
+    if (!docCfg?.enabled || !docCfg.write_to_file) return
+
+    const byFile = new Map<string, IndexedSymbol['Select'][]>()
+    for (const sym of symbols) {
+      const list = byFile.get(sym.file_path) ?? []
+      list.push(sym)
+      byFile.set(sym.file_path, list)
+    }
+
+    for (const [relPath, fileSymbols] of byFile) {
+      const absPath = join(this.cwd, relPath)
+      if (!existsSync(absPath)) continue
+
+      // Process bottom-up so splice deletions don't shift unprocessed line indices
+      fileSymbols.sort((a, b) => b.line - a.line)
+      const fileLines = await Bun.file(absPath)
+        .text()
+        .then((t) => t.split('\n'))
+
+      for (const sym of fileSymbols) {
+        const startLine = sym.line
+        const docstringLines = sym.docstring?.split('\n').length ?? 0
+        if (docstringLines === 0) continue
+
+        const docstringText = fileLines
+          .slice(startLine - docstringLines, startLine)
+          .join('\n')
+          .trim()
+
+        if (
+          docstringText !== formatComment(sym.docstring!, sym.language).trim()
+        ) {
+          logWarning(
+            `[Indexer] Docstring text in file for ${sym.name} does not match database. Skipping removal in file for safety.`,
+          )
+          continue
+        }
+
+        fileLines.splice(startLine - docstringLines, docstringLines)
+      }
+
+      await Bun.write(absPath, fileLines.join('\n'))
+    }
+
+    logInfo(
+      `[Indexer] Removed docstrings from source files for ${symbols.length} symbols.`,
+    )
+  }
+
   /** Aggregates a unique list of symbol kinds associated with container and callable nodes across all configured languages. */
   private collectTargetKinds(): SymbolKind[] {
     const kinds = new Set<SymbolKind>()
