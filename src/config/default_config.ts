@@ -27,6 +27,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         treesitter: {
           language_name: 'typescript',
           block_init_marker: '{',
+          signature_max_length: 400,
           nodes_info: {
             import_statement: {
               kind: SymbolKind.import,
@@ -145,6 +146,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         treesitter: {
           language_name: 'tsx',
           block_init_marker: '{',
+          signature_max_length: 400,
           nodes_info: {
             import_statement: {
               kind: SymbolKind.import,

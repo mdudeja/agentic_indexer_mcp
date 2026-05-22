@@ -104,7 +104,9 @@ function buildSignature(node: Node, config: TreesitterConfig): string | null {
     ? node.text.trim()
     : (node.text.split(config.block_init_marker)[0]?.trim() ?? '')
   if (!raw) return null
-  return raw.length > 200 ? raw.substring(0, 197) + '...' : raw
+  return raw.length > config.signature_max_length
+    ? raw.substring(0, config.signature_max_length - 3) + '...'
+    : raw
 }
 
 /** Registers a new code symbol in the symbol database. */

@@ -352,7 +352,9 @@ export class IndexerDB {
   }
 
   /** Retrieves all import records where the imported symbol name matches exactly. */
-  async getImportsByName(importedName: string): Promise<IndexedImport['Select'][]> {
+  async getImportsByName(
+    importedName: string,
+  ): Promise<IndexedImport['Select'][]> {
     return this.db
       .select()
       .from(schema.imports)
@@ -377,6 +379,18 @@ export class IndexerDB {
       .limit(1)
 
     return result[0] || null
+  }
+
+  /** Retrieves a file from the database based on a partial file name or path match. */
+  async getFileByPartialNameOrPath(
+    partialNameOrPath: string,
+  ): Promise<IndexedFile['Select'][]> {
+    const pattern = `%${partialNameOrPath.replace(/\*/g, '%')}%`
+    return this.db
+      .select()
+      .from(schema.files)
+      .where(like(schema.files.path, pattern))
+      .orderBy(schema.files.path)
   }
 
   /** Fetches all files from the database, returning an array containing detailed information for each file, including its path, cryptographic hash, indexing timestamp, and associated language if applicable. */

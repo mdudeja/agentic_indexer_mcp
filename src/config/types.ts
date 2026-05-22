@@ -29,6 +29,7 @@ export type LanguageConfig = {
   treesitter: {
     language_name: string
     block_init_marker: string
+    signature_max_length: number
     nodes_info: Record<string, NodeInfo>
     lists: {
       exported_nodes: string[]
