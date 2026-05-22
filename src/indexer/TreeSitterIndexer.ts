@@ -10,13 +10,13 @@ import { logError } from 'src/utils/logger.js'
 import { AppStateManager } from 'src/state'
 import { extractSymbols } from './steps/s1_symbol_extractor.js'
 
-/** Handles source code indexing by using Tree-sitter to parse files and extract symbols, imports, and calls based on language-specific configurations. */
+/** A utility class for managing code parsing and indexing using TreeSitter. It handles initialization of parsers, loading language grammars from WebAssembly modules, and extracting code elements like symbols and imports from source files based on file extensions and configured language settings. */
 export class TreeSitterIndexer {
   private parser: Parser | null = null
   private languages: Map<string, any> = new Map()
   private config: IndexerConfig
 
-  /** Initializes the TreeSitterIndexer instance with configuration settings retrieved from the application state. */
+  /** Initializes the configuration using values from AppStateManager or default settings. */
   constructor() {
     this.config = AppStateManager.getInstance().getItem('config') ?? {
       enabled: false,
@@ -26,13 +26,13 @@ export class TreeSitterIndexer {
     }
   }
 
-  /** Performs static parser initialization and creates a new parser instance. */
+  /** Initializes the parser and prepares it for parsing operations. */
   async init() {
     await Parser.init()
     this.parser = new Parser()
   }
 
-  /** Asynchronously loads and caches the tree-sitter WASM grammar for the specified language. */
+  /** Load and return the language grammar for the specified language name. If the language is not already loaded, it will fetch and initialize it from a .wasm file. */
   async loadLanguage(langName: string): Promise<any> {
     if (this.languages.has(langName)) {
       return this.languages.get(langName)!
@@ -54,7 +54,7 @@ export class TreeSitterIndexer {
     }
   }
 
-  /** Parses source code to extract symbols, imports, and calls using Tree-sitter based on the provided file extension. */
+  /** Parses source code to extract symbols, imports, and calls based on file extension and language configuration. */
   async parse(
     sourceCode: string,
     ext: string,
@@ -97,7 +97,7 @@ export class TreeSitterIndexer {
     }
   }
 
-  /** Asynchronously parses the provided source code using the specified language. */
+  /** Parse the given source code using the specified programming language, returning the parsed result. */
   async parseFile(sourceCode: string, langName: string): Promise<any> {
     const lang = await this.loadLanguage(langName)
 

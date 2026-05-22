@@ -20,7 +20,7 @@ const CALLABLE_SYNTAX_KINDS = [
 
 const MAX_TYPE_TEXT_LENGTH = 500
 
-/** Provides TypeScript-specific project enhancement by using ts-morph to resolve symbol signatures and call site definitions. */
+/** Enhances code analysis by leveraging TypeScript configurations and type information to improve symbol type resolution and function call resolution. */
 export class TsMorphEnhancer extends Enhancer {
   private project: Project | null = null
 
@@ -33,12 +33,12 @@ export class TsMorphEnhancer extends Enhancer {
     'tsconfig.build.json',
   ]
 
-  /** Initializes a new TsMorphEnhancer instance with the specified working directory. */
+  /** Initializes a new instance of the enhancer with the specified current working directory. */
   constructor(cwd: string) {
     super(cwd)
   }
 
-  /** Initializes the project by locating a tsconfig file and setting up the ts-morph instance, returning true if successful. */
+  /** Initialize the enhancer by setting up the project configuration and returning whether initialization was successful. */
   override async init(): Promise<boolean> {
     if (this.initialized) return this.available
     this.initialized = true
@@ -64,7 +64,7 @@ export class TsMorphEnhancer extends Enhancer {
     return this.available
   }
 
-  /** Asynchronously resolves and updates parameter and return type information in the database for callable symbols within the specified file paths. */
+  /** Enhances symbol types by resolving and updating their type information from file signatures, improving code analysis capabilities. */
   override async enhanceSymbolTypes(
     store: IndexerDB,
     relPaths: string[],
@@ -102,7 +102,7 @@ export class TsMorphEnhancer extends Enhancer {
     )
   }
 
-  /** Resolves all pending function call sites in the database by mapping them to their corresponding symbol definitions and updating the store. */
+  /** Resolves all pending unresolved calls in the indexer database. */
   override async resolveAllPendingCalls(store: IndexerDB): Promise<void> {
     if (!this.available) return
 
@@ -149,14 +149,14 @@ export class TsMorphEnhancer extends Enhancer {
     )
   }
 
-  /** Refreshes the source file at the specified absolute path from the file system. */
+  /** Refreshes the source file at the specified absolute path to ensure it reflects current file system state. */
   override refreshFile(absPath: string): void {
     if (!this.project) return
     const sf = this.project.getSourceFile(absPath)
     if (sf) sf.refreshFromFileSystemSync()
   }
 
-  /** Searches upwards from the current directory through up to five parent levels for a TypeScript configuration file and returns its path if found. */
+  /** Finds the nearest TypeScript configuration file (tsconfig.json) by searching through directories upwards from the current working directory, up to five levels deep. */
   private findTsConfig(): string | null {
     let dir = this.cwd
     for (let i = 0; i < 5; i++) {
@@ -171,7 +171,7 @@ export class TsMorphEnhancer extends Enhancer {
     return null
   }
 
-  /** Retrieves an existing source file or adds it to the project from the specified absolute path. */
+  /** "Retrieves or creates the source file for the specified absolute path within the project." */
   private getSourceFile(absPath: string) {
     if (!this.project) return null
     return (
@@ -180,7 +180,7 @@ export class TsMorphEnhancer extends Enhancer {
     )
   }
 
-  /** Resolves the definition location for a function call at the specified file path, line, and column. */
+  /** Resolves the definition site of a function call based on the provided file path, line, and column. Returns the file path and line number of the function's definition if found. */
   private resolveCallSite(
     absFilePath: string,
     callLine: number,
@@ -238,7 +238,7 @@ export class TsMorphEnhancer extends Enhancer {
     }
   }
 
-  /** Retrieves the parameter and return type information for a callable node at the specified file location. */
+  /** Retrieves the signature information of a symbol located at a specific position in the file, including its parameters and return type. */
   private getSymbolSignature(
     absFilePath: string,
     line: number,

@@ -13,9 +13,7 @@ const CURRENT_LOG_LEVEL = parseLogLevel(Bun.env.LOG_LEVEL)
 const log_types = ['log', 'error', 'warn', 'info'] as const
 export type LogType = (typeof log_types)[number]
 
-/**
- * Parse log level from environment variable
- */
+/** Parses a log level string into its corresponding standard value, defaulting to INFO if unspecified or unrecognized. */
 function parseLogLevel(level: string | undefined): LogLevel {
   if (!level) return LogLevel.INFO // default level
 
@@ -36,9 +34,7 @@ function parseLogLevel(level: string | undefined): LogLevel {
   }
 }
 
-/**
- * Format log message with timestamp and level
- */
+/** Purpose: Creates a formatted log message including severity level, timestamp, message, and additional context from provided arguments. */
 function formatMessage(
   level: string,
   message: string,
@@ -68,17 +64,12 @@ function formatMessage(
   return `[AgIdxr] [${now}] [${level}] ${message}${argString}`
 }
 
-/**
- * Check if a message should be logged based on the current log level
- */
+/** Determines whether a log message with the specified level should be logged. */
 function shouldLog(messageLevel: LogLevel): boolean {
   return messageLevel >= CURRENT_LOG_LEVEL
 }
 
-/**
- * General log function (INFO level).
- * Uses console.error to not break JSON-RPC communication over stdio
- */
+/** Log an informational message to the console. */
 export function log(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.INFO)) {
     const formatted = formatMessage('INFO', message, ...args)
@@ -86,10 +77,7 @@ export function log(message: string, ...args: unknown[]): void {
   }
 }
 
-/**
- * Log error messages.
- * Uses console.error to not break JSON-RPC communication over stdio
- */
+/** Log an error message with optional additional arguments. */
 export function logError(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.ERROR)) {
     const formatted = formatMessage('ERROR', message, ...args)
@@ -97,10 +85,7 @@ export function logError(message: string, ...args: unknown[]): void {
   }
 }
 
-/**
- * Log warning messages.
- * Uses console.error to not break JSON-RPC communication over stdio
- */
+/** Logs a warning message. */
 export function logWarning(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.WARNING)) {
     const formatted = formatMessage('WARNING', message, ...args)
@@ -108,10 +93,7 @@ export function logWarning(message: string, ...args: unknown[]): void {
   }
 }
 
-/**
- * Log info messages.
- * Uses console.error to not break JSON-RPC communication over stdio
- */
+/** Log informational messages to the console. */
 export function logInfo(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.INFO)) {
     const formatted = formatMessage('INFO', message, ...args)
@@ -119,10 +101,7 @@ export function logInfo(message: string, ...args: unknown[]): void {
   }
 }
 
-/**
- * Log debug messages.
- * Uses console.error to not break JSON-RPC communication over stdio
- */
+/** Log a message at the DEBUG level if debugging is enabled. */
 export function logDebug(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.DEBUG)) {
     const formatted = formatMessage('DEBUG', message, ...args)

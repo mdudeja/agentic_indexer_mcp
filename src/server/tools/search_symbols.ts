@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import type { SymbolKind } from '../../config/types'
 
-/** Registers a tool to the provided MCP server for searching code symbols such as functions and classes using name patterns, kind filters, and file path filters. */
+/** Registers a tool to enable searching for symbols (functions, classes, etc.) by name or pattern, supporting filtering by kind, file path, and result limits. */
 export function registerSearchSymbolsTool(server: McpServer) {
   server.registerTool(
     'search_symbols',

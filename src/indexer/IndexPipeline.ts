@@ -20,14 +20,14 @@ export interface IndexPipelineOptions {
   includeGitIgnored: boolean
 }
 
-/** Manages the codebase indexing process by discovering files, extracting symbols using Tree-sitter, applying ignore patterns, and performing data enhancement. */
+/** Manages the overall indexing process, orchestrating symbol extraction, enhancement, and docstring processing for a project. */
 export class IndexPipeline {
   private indexer: TreeSitterIndexer
   private config: IndexerConfig
   private ignoreRegexPatterns: Set<RegExp> = new Set()
   private enhancers: Record<string, Enhancer> = {}
 
-  /** Initializes the IndexPipeline with the specified options and application configuration. */
+  /** Constructs a new IndexPipeline instance using provided configuration options. Initializes necessary components for indexing operations. */
   constructor(private options: IndexPipelineOptions) {
     this.indexer = new TreeSitterIndexer()
     this.config = AppStateManager.getInstance().getItem('config') ?? {
@@ -38,7 +38,7 @@ export class IndexPipeline {
     }
   }
 
-  /** Recursively searches a directory for .gitignore files and returns their absolute paths. */
+  /** Finds all `.gitignore` files in the specified directory and its subdirectories, returning their absolute paths. */
   async findGitignoreFiles(
     dir: string,
     foundFiles: string[] = [],
@@ -59,7 +59,7 @@ export class IndexPipeline {
     return foundFiles
   }
 
-  /** Populates ignore patterns by converting configuration and gitignore entries into regular expressions. */
+  /** Populates a set of regular expression patterns based on configured ignore patterns and Gitignore files, enabling file matching for exclusion purposes. */
   async populateIgnorePatterns() {
     for (const pattern of this.config.ignore_patterns) {
       const regex = new RegExp(
@@ -97,7 +97,7 @@ export class IndexPipeline {
     }
   }
 
-  /** Executes the indexing pipeline by processing ignore patterns, extracting symbols, enhancing data, and generating docstrings. */
+  /** Runs the indexing pipeline, orchestrating symbol extraction, enhancement, and docstring processing for the project. */
   async run() {
     logInfo(`[Indexer] Starting index pipeline in ${this.options.cwd}...`)
     if (
@@ -115,7 +115,7 @@ export class IndexPipeline {
     await this.runDocstringStep()
   }
 
-  // Returns the relative path if the file was actually indexed, null if skipped (cache hit).
+  /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
   async runOnFile(absPath: string): Promise<string | null> {
     const relPath = relative(this.options.cwd, absPath)
     if (this.config.ignore_patterns.some((p) => relPath.includes(p)))
@@ -153,13 +153,13 @@ export class IndexPipeline {
     }
   }
 
-  /** Removes all docstrings from the specified indexer database store. */
+  /** Removes all existing docstrings from the specified store. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
     const step = new DocstringGenerationStep(this.options.cwd)
     await step.removeAllDocstrings(store)
   }
 
-  /** Recursively collects absolute paths of files within a directory, excluding those that match defined ignore patterns. */
+  /** Finds all files in the specified directory and its subdirectories, ignoring any files that match specified patterns. Returns an array of file paths. */
   private async findFiles(
     dir: string,
     fileList: string[] = [],
@@ -185,7 +185,7 @@ export class IndexPipeline {
     return fileList
   }
 
-  /** Performs Tree-sitter indexing on files within the working directory and returns the list of processed file paths. */
+  /** "Runs a step to extract symbols from source files using Tree-sitter. Processes each file and collects paths of successfully processed files." */
   private async runSymbolExtractionStep(): Promise<string[]> {
     const files = await this.findFiles(this.options.cwd)
     const processedFiles: string[] = []
@@ -208,7 +208,7 @@ export class IndexPipeline {
     return processedFiles
   }
 
-  /** Loads, initializes, and caches an enhancer for the specified file extension, returning null if unsupported or if initialization fails. */
+  /** Load an enhancer for files of a given type. This method retrieves or creates an enhancer instance based on the provided file extension, initializes it if necessary, and returns the enhancer if successful. If no enhancer is found or initialization fails, it returns null. */
   private async loadEnhancerForFileType(ext: string): Promise<Enhancer | null> {
     if (this.enhancers[ext]) {
       return this.enhancers[ext]
@@ -233,7 +233,7 @@ export class IndexPipeline {
     }
   }
 
-  /** Executes symbol enhancement and call resolution on processed files by applying file-type-specific enhancers. */
+  /** Runs an enhancement step to improve symbol information in processed files by leveraging type-specific enhancers for better indexing and analysis. */
   private async runEnhancementStep(processedFiles: string[]): Promise<void> {
     logInfo(
       `[Indexer] Running Step 2: Symbol Enhancement on ${processedFiles.length} files...`,
@@ -262,7 +262,7 @@ export class IndexPipeline {
     logInfo(`[Indexer] Step 2 complete.`)
   }
 
-  /** Executes the docstring generation step using the configured working directory and store. */
+  /** Runs the step responsible for generating docstrings as part of the documentation process. */
   private async runDocstringStep(): Promise<void> {
     const step = new DocstringGenerationStep(this.options.cwd)
     await step.run(this.options.store)

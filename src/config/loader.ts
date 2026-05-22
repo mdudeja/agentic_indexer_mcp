@@ -8,13 +8,7 @@ export const CONFIG_FILENAME = import.meta.env.CONFIG_FILENAME || 'config.json'
 
 export const DEFAULT_CONFIG = default_config
 
-/**
- * Load configuration from a JSON file located at the specified root directory path, merging user-defined settings with default values. If the config file is missing or fails to load, fall back to the default configuration.
- * Parameters:
- * - rootDir: Path to the root directory containing the config file.
- * Return type:
- * - Promise<IndexerConfig>: Merged configuration based on the file and defaults.
- */
+/** Loads the configuration file from the specified directory, using default values if the file is not found. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
   const configPath = join(rootDir, AGENTIC_DIR, CONFIG_FILENAME)
 

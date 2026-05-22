@@ -8,18 +8,18 @@ import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider } from '../docstrings/providers'
 import { formatComment, getCommentText } from '../docstrings/formatComment'
 
-/** A class responsible for generating and managing docstrings for code symbols based on configured settings. It handles both the generation of new docstrings and the removal of existing ones, processing symbols in source files according to specified language configurations. */
+/** Generates and manages docstrings for code symbols based on configured settings, including generation of new docstrings and removal of existing ones. */
 export class DocstringGenerationStep {
   private config: IndexerConfig
   private cwd: string
 
-  /** Initializes the object with the specified current working directory and loads its configuration. */
+  /** Initializes an instance by setting the current working directory and fetching configuration data. */
   constructor(cwd: string) {
     this.cwd = cwd
     this.config = AppStateManager.getInstance().getItem('config')!
   }
 
-  /** Generates docstrings for symbols that need them based on configuration and stores the results. */
+  /** Generate docstrings for symbols in source files based on configured settings. */
   async run(store: IndexerDB): Promise<void> {
     const docCfg = this.config.docstring_generation
     if (!docCfg?.enabled) return
@@ -117,7 +117,7 @@ export class DocstringGenerationStep {
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
   }
 
-  /** Removes all docstrings from both the database and corresponding source files. */
+  /** Removes all docstrings from the database and optionally from source files if configured. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
     const targetKinds = this.collectTargetKinds()
     if (targetKinds.length === 0) return
@@ -187,7 +187,7 @@ export class DocstringGenerationStep {
     )
   }
 
-  /** Collects all unique symbol kinds from language configurations relevant to Treesitter parsing. */
+  /** Collects all unique symbol kinds defined in the tree-sitter configurations for different programming languages. */
   private collectTargetKinds(): SymbolKind[] {
     const kinds = new Set<SymbolKind>()
     for (const langCfg of Object.values(this.config.languages)) {
@@ -203,7 +203,7 @@ export class DocstringGenerationStep {
     return [...kinds]
   }
 
-  /** Constructs a prompt string to guide the generation of a concise docstring for a given symbol, including relevant context such as the symbol's name, kind, signature, parameters, return type, source code, and programming language. The prompt emphasizes focusing on the purpose and essential details while excluding unnecessary implementation specifics. */
+  /** Constructs a detailed prompt for generating a concise docstring by compiling relevant information about a symbol and its context. */
   private buildPrompt(
     sym: IndexedSymbol['Select'],
     sourceText: string,

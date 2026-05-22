@@ -4,14 +4,14 @@ import { IndexerDB } from '../database/IndexerDB'
 import { relative } from 'path'
 import { logInfo, logError } from 'src/utils/logger'
 
-/** Manages a file system watcher to monitor directory changes and synchronize an index database. */
+/** A class that monitors a specified directory for file system changes. It tracks additions, modifications, and deletions of files within the directory, triggering corresponding actions such as reindexing or cleaning up associated data. */
 export class Watcher {
   private watcher: FSWatcher | null = null
 
-  /** Initializes a new Watcher instance with the specified current working directory. */
+  /** Initializes a new instance of the Watcher with the specified current working directory. */
   constructor(private cwd: string) {}
 
-  /** Starts a file watcher to monitor directory changes and update the index database accordingly. */
+  /** Starts monitoring a directory for file changes, triggering corresponding actions for added, modified, or removed files. */
   start() {
     logInfo(`[watcher] Starting file watcher for ${this.cwd}`)
 
@@ -43,7 +43,7 @@ export class Watcher {
       .on('error', (error) => logError(`[watcher] Error: ${error}`))
   }
 
-  /** Stops the watcher if it is active. */
+  /** Stop the watching process. */
   stop() {
     if (this.watcher) {
       this.watcher.close()

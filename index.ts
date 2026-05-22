@@ -9,18 +9,7 @@ import { resolvePath } from 'src/utils/paths'
 import { loadConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
 
-/**
- * - Environment variables interface for the Bun module.
- * - AGENTIC_DIR: Directory path for agentic operations.
- * - CONFIG_FILENAME: Name of the configuration file.
- * - NODE_ENV: Node.js environment (e.g., development/production).
- * - LOG_LEVEL: Logging system level (e.g., debug/info/warn/error).
- * - DB_FILE_URL: URL or path to database file.
- * - DB_MIGRATIONS_DIR: Directory for database migrations.
- * - CLAUDE_API_KEY: API key for Claude AI service.
- * - GEMINI_API_KEY: API key for Gemini AI service.
- * - OPENAI_API_KEY: API key for OpenAI services.
- */
+/** The module 'bun' provides a set of environment variables for configuring application settings, including logging, database access, and API keys for services like Claude, Gemini, and OpenAI. */
 declare module 'bun' {
   interface Env {
     AGENTIC_DIR?: string
@@ -91,7 +80,7 @@ Options:
   process.exit(values.help ? 0 : 1)
 }
 
-/** Processes commands related to indexing, querying, and managing symbol information in the application state and database store. Handles different operations based on the specified command including serving a server, indexing files, removing docstrings, and searching symbols. */
+/** The main function serves as the entry point for executing various tasks such as serving, indexing files, querying data, or managing configurations. It processes commands and orchestrates the necessary setup and operations based on the specified command. */
 async function main() {
   const config = await loadConfig(cwd)
   AppStateManager.getInstance().setItem('config', config)

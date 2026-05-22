@@ -67,7 +67,7 @@ export function buildKindToListMap(
   return map
 }
 
-/** Populates the global state with kind-to-list maps for the specified languages if they are not already present. */
+/** This function ensures that each language in the provided list has its kind-to-list mappings configured. If a language lacks these mappings, the function creates and populates them using its configuration. */
 function checkAndPopulateKindToListMaps(languages: string[]) {
   const stateManager = AppStateManager.getInstance()
   let globalKindToListMap =
@@ -92,18 +92,14 @@ function checkAndPopulateKindToListMaps(languages: string[]) {
   stateManager.setItem('kindToListMap', globalKindToListMap)
 }
 
-/** Retrieves the mapping of node kinds to list names for the specified language from the application state manager. */
+/** Retrieves the mapping of node kinds for the specified programming language. Returns the corresponding map if it exists. */
 function getKindToListMap(lang: string): Map<string, ListName> | undefined {
   const stateManager = AppStateManager.getInstance()
   const globalKindToListMap = stateManager.getItem('kindToListMap')
   return globalKindToListMap?.get(lang)
 }
 
-/**
- * Return the treesitter config for the first configured language.
- * Used to derive the kind→list classification when no language is specified.
- * In a multi-language project this can be made smarter per-symbol.
- */
+/** The function `getLangConfig` retrieves the Treesitter configuration for a specified programming language. It returns this configuration data if available, or `undefined` if no configuration exists for the given language. */
 function getLangConfig(lang: string): TreesitterConfig | undefined {
   const config = AppStateManager.getInstance().getItem('config')
   if (!config) return undefined
@@ -111,7 +107,7 @@ function getLangConfig(lang: string): TreesitterConfig | undefined {
   return langConfig?.treesitter
 }
 
-/** Retrieves the unique programming languages associated with a given hierarchy scope, such as a specific file, symbol, or the entire codebase. */
+/** Returns the set of unique programming languages used in the specified scope (file, symbol, or entire codebase). */
 async function getLanguagesInScope(
   scope: HierarchyScope,
 ): Promise<(string | null)[]> {

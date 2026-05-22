@@ -1,16 +1,16 @@
 import { Temporal } from 'temporal-polyfill'
 
-/** Returns the current system time as a Temporal.Instant. */
+/** "Returns the current moment as an Instant." */
 const getNow = (): Temporal.Instant => {
   return Temporal.Now.instant()
 }
 
-/** Returns the current time in milliseconds since the Unix epoch. */
+/** "Returns the current timestamp in milliseconds." */
 const getNowMillis = (): number => {
   return Temporal.Now.instant().epochMilliseconds
 }
 
-/** Returns the epoch milliseconds for the start of the day of the given date in the current system time zone. */
+/** Returns the number of milliseconds since the start of the given date at midnight. */
 const getStartOfDayMillis = (date: Temporal.PlainDateLike): number => {
   const plainDate = Temporal.PlainDate.from(date)
   const startOfDay = plainDate.toPlainDateTime({
@@ -22,7 +22,7 @@ const getStartOfDayMillis = (date: Temporal.PlainDateLike): number => {
   return zonedDateTime.toInstant().epochMilliseconds
 }
 
-/** Calculates the epoch milliseconds for the end of the day (23:59:59.999) for a given date in the system current time zone. */
+/** "Returns the number of milliseconds remaining until the end of the given date in its local time zone." */
 const getEndOfDayMillis = (date: Temporal.PlainDateLike): number => {
   const plainDate = Temporal.PlainDate.from(date)
   const endOfDay = plainDate.toPlainDateTime({
@@ -35,7 +35,7 @@ const getEndOfDayMillis = (date: Temporal.PlainDateLike): number => {
   return zonedDateTime.toInstant().epochMilliseconds
 }
 
-/** Converts a duration in milliseconds to a formatted string of hours, minutes, and seconds. */
+/** Formats a given time duration in milliseconds into a human-readable string representation using hours (h), minutes (m), and seconds (s). The result includes only the necessary time units without any trailing zeros. */
 const formatTimeDuration = (durationMs: number): string => {
   const totalSeconds = Math.floor(durationMs / 1000)
   const hours = Math.floor(totalSeconds / 3600)
@@ -50,7 +50,7 @@ const formatTimeDuration = (durationMs: number): string => {
   return parts.join(' ')
 }
 
-/** Converts epoch milliseconds to a local ISO date-time string without fractional seconds. */
+/** Converts a given timestamp in milliseconds to a formatted date-time string in ISO format based on the local time zone. */
 const formatDateTime = (millis: number): string => {
   const instant = Temporal.Instant.fromEpochMilliseconds(millis)
   const zonedDateTime = instant.toZonedDateTimeISO(Temporal.Now.timeZoneId())

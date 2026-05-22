@@ -5,12 +5,12 @@ export interface DocstringProvider {
   generate(prompt: string): Promise<string | null>
 }
 
-/** Implementation of DocstringProvider that generates text responses using the Anthropic Claude API. */
+/** A class that provides integration with Claude AI for generating text from prompts as part of the DocstringProvider interface. */
 class ClaudeProvider implements DocstringProvider {
-  /** Initializes the Claude provider with the specified configuration. */
+  /** Initializes a new instance of ClaudeProvider with the given configuration. */
   constructor(private cfg: NonNullable<DocstringConfig['claude']>) {}
 
-  /** Asynchronously generates a text response for the given prompt using the Anthropic API, returning the resulting text or null if the request fails. */
+  /** Generates text based on a given prompt using an AI model. Returns the generated text or null if generation fails. */
   async generate(prompt: string): Promise<string | null> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -38,12 +38,12 @@ class ClaudeProvider implements DocstringProvider {
   }
 }
 
-/** An implementation of the DocstringProvider interface that generates content using the Google Gemini API. */
+/** A class that provides integration with Google's Gemini AI for generating text-based responses from given prompts. */
 class GeminiProvider implements DocstringProvider {
-  /** Initializes a new instance of the GeminiProvider with the specified configuration. */
+  /** Initializes a new instance of the Gemini provider using the specified configuration settings. */
   constructor(private cfg: NonNullable<DocstringConfig['gemini']>) {}
 
-  /** Generates text content from the Gemini API using the provided prompt and returns the result or null on error. */
+  /** Generates text based on a given prompt using Google's Gemini API. Returns the generated content as a string or null if generation fails. */
   async generate(prompt: string): Promise<string | null> {
     const model = this.cfg.model ?? 'gemini-3-flash-preview'
     const res = await fetch(
@@ -72,12 +72,12 @@ class GeminiProvider implements DocstringProvider {
   }
 }
 
-/** Implementation of the DocstringProvider interface that generates text using the OpenAI API based on a provided configuration. */
+/** A class providing integration with OpenAI's API for generating text-based responses from given prompts. It handles configuration settings like API keys and model selection, as well as error management during the generation process. */
 class OpenAIProvider implements DocstringProvider {
-  /** Initializes a new instance of the OpenAIProvider with the specified configuration. */
+  /** Initializes a new instance of the OpenAI provider with configuration settings, including API key and optional model. */
   constructor(private cfg: NonNullable<DocstringConfig['openai']>) {}
 
-  /** Generates text by sending a prompt to the OpenAI API and returns the trimmed response content or null if the request fails or is malformed. */
+  /** Generates text based on a given prompt by sending it to an AI service. Returns the generated response or null if an error occurs. */
   async generate(prompt: string): Promise<string | null> {
     const res = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -103,15 +103,15 @@ class OpenAIProvider implements DocstringProvider {
   }
 }
 
-/** Provides docstring generation services via the Ollama API using a specified model and base URL. */
+/** A class that interfaces with the Ollama API to generate responses based on provided prompts. */
 class OllamaProvider implements DocstringProvider {
-  /** Initializes a new instance of the OllamaProvider class with a specific model and an optional base URL. */
+  /** Initializes the OllamaProvider with a specified model and optional base URL for connecting to the Ollama API. */
   constructor(
     private model: string,
     private baseUrl: string = 'http://localhost:11434',
   ) {}
 
-  /** Generates a response for the given prompt by calling the API and returns the trimmed result or null if the request fails. */
+  /** Generates a response to the given prompt by interacting with an AI model through an API. Returns the generated text or null if no valid response is received. */
   async generate(prompt: string): Promise<string | null> {
     const res = await fetch(`${this.baseUrl}/api/generate`, {
       method: 'POST',
@@ -127,7 +127,7 @@ class OllamaProvider implements DocstringProvider {
   }
 }
 
-/** Instantiates a docstring provider based on the provided configuration or returns null if required settings are missing. */
+/** Creates a docstring provider based on the configuration settings. If the required configuration for the selected provider is missing, it returns null after logging a warning. */
 export function createProvider(
   config: DocstringConfig,
 ): DocstringProvider | null {

@@ -16,13 +16,13 @@ const symbols: IndexedSymbol['Select'][] = []
 const imports: IndexedImport['Select'][] = []
 const calls: IndexedSymbolCall['Insert'][] = []
 
-/** Checks if the given node is exported by verifying if its parent type is included in the configuration's exported nodes list. */
+/** Check if a given node is marked as exported based on its parent's type in the provided configuration. */
 function isExported(node: Node, config: TreesitterConfig): boolean {
   const parent = node.parent
   return parent !== null && config.lists.exported_nodes.includes(parent.type)
 }
 
-/** Extracts the documentation comments associated with a syntax node by traversing its adjacent comment siblings as defined in the configuration. */
+/** Retrieves and returns the docstring comment associated with a given syntax tree node. */
 function getDocstring(
   node: Node,
   config: TreesitterConfig,
@@ -69,11 +69,7 @@ function getDocstring(
   return comments.length > 0 ? comments.join('\n') : undefined
 }
 
-// Collect @decorator names for a node and return them as a comma-joined string.
-// Two placements exist in the TS grammar:
-//   - named children of the node itself (class_declaration keeps decorators inside)
-//   - preceding named siblings (method_definition / public_field_definition have their
-//     decorators as siblings in the containing class_body, not as children)
+/** "Retrieves and concatenates all decorators associated with a node and its preceding siblings." */
 function getDecorators(node: Node): string | null {
   const names: string[] = []
 
@@ -101,9 +97,7 @@ function getDecorators(node: Node): string | null {
   return names.length > 0 ? names.join(', ') : null
 }
 
-// Build a signature string for a node.
-// For typedef nodes (type alias, interface, enum) the full text is the definition,
-// so we keep it instead of truncating at '{'.
+/** Builds a signature string by extracting relevant text from a node, considering its type and configuration settings. If the extracted text is too long, it truncates it to fit within a specified limit. */
 function buildSignature(node: Node, config: TreesitterConfig): string | null {
   const isTypedef = config.lists.typedef_nodes.includes(node.type)
   const raw = isTypedef
@@ -113,7 +107,7 @@ function buildSignature(node: Node, config: TreesitterConfig): string | null {
   return raw.length > 200 ? raw.substring(0, 197) + '...' : raw
 }
 
-/** Adds a code symbol to the registry by extracting metadata from the provided node and returns a unique hash-based identifier. */
+/** Registers a new code symbol in the symbol database. */
 function addSymbol({
   node,
   nameNode,
@@ -161,8 +155,7 @@ function addSymbol({
   return id
 }
 
-// Handle import_statement: extract one record per imported name so that
-// `import { useState, useEffect } from 'react'` produces two records.
+/** Processes import statements by extracting module paths and imported names, recording them for further use. */
 function handleImport(
   node: Node,
   file_path: string,
@@ -231,9 +224,7 @@ function handleImport(
   }
 }
 
-// Handle lexical_declaration (const/let) and variable_declaration (var).
-// These wrap one or more variable_declarator children and the keyword ('const',
-// 'let', 'var') must be read from the first child token, not from the config kind array.
+/** Processes variable declarations (const/let/var) by extracting and recording their names as symbols in the project. */
 function handleVariableDeclaration(
   node: Node,
   file_path: string,
@@ -262,7 +253,7 @@ function handleVariableDeclaration(
   }
 }
 
-/** Extracts the callee name from a syntax node and records call metadata, including location and caller ID, to the calls collection. */
+/** Records a function call by extracting the callee name and logging relevant details such as caller, language, location, and file path. */
 function recordCall(
   node: Node,
   currentCallableId: string,
@@ -291,7 +282,7 @@ function recordCall(
   }
 }
 
-/** Recursively traverses a syntax tree to index symbols and record call expressions based on configuration while maintaining hierarchical context. */
+/** Recursively processes each node in a syntax tree to index symbols, their kinds (e.g., const, function), and call expressions, using configuration settings to determine how to handle different node types. */
 function traverse(
   node: Node,
   file_path: string,
@@ -369,7 +360,7 @@ function traverse(
   }
 }
 
-/** Extracts symbols, imports, and function calls from a tree-sitter root node by traversing it according to the provided configuration and file path. */
+/** Extracts and collects symbols, imports, and calls from the provided AST (root node) based on the given configuration, returning them for further processing or analysis. */
 export function extractSymbols(
   rootNode: Node,
   file_path: string,

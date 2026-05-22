@@ -4,15 +4,15 @@ type ObjectStateKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends object ? K : never
 }[keyof T]
 
-/** Singleton class for managing the application state with methods for item manipulation and retrieval. */
+/** Manages the application's global state, providing methods to set, update, delete, and retrieve state data consistently across the application. */
 export class AppStateManager implements IStateManager {
   private state: AppState = {}
   private static instance: AppStateManager
 
-  /** Prevents external instantiation of the AppStateManager class. */
+  /** Initializes an instance of the application state manager. */
   private constructor() {}
 
-  /** Returns the singleton instance of the AppStateManager. */
+  /** Returns the singleton instance of AppStateManager to manage application state consistently across the application. */
   public static getInstance(): AppStateManager {
     if (!AppStateManager.instance) {
       AppStateManager.instance = new AppStateManager()
@@ -20,12 +20,12 @@ export class AppStateManager implements IStateManager {
     return AppStateManager.instance
   }
 
-  /** Sets the value for the specified key in the application state. */
+  /** Updates the application state by assigning the given value to the specified key. */
   setItem<K extends keyof AppState>(key: K, value: AppState[K]): void {
     this.state[key] = value
   }
 
-  /** Updates an existing state item by merging a partial value into it, throwing an error if the key is not found. */
+  /** Updates an item in the application state by merging new values with the existing ones. Throws an error if the specified key does not exist in the current state. */
   updateItem<K extends ObjectStateKeys<AppState>>(
     key: K,
     value: Partial<NonNullable<AppState[K]>>,
@@ -40,22 +40,22 @@ export class AppStateManager implements IStateManager {
     } as AppState[K]
   }
 
-  /** Removes the item associated with the specified key from the application state. */
+  /** Deletes an item from the application state using the provided key. */
   deleteItem<K extends keyof AppState>(key: K): void {
     delete this.state[key]
   }
 
-  /** Retrieves the value associated with the specified key from the application state. */
+  /** Retrieves an item from the component's state based on the provided key. Returns the corresponding value stored in the component's state or undefined if not found. */
   getItem<K extends keyof AppState>(key: K): AppState[K] | undefined {
     return this.state[key]
   }
 
-  /** Returns the current application state. */
+  /** Retrieves the current application state. */
   getState(): AppState {
     return this.state
   }
 
-  /** Resets the internal state to an empty object. */
+  /** "Reset internal state for cleanup." */
   dispose() {
     this.state = {}
   }

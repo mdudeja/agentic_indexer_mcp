@@ -5,7 +5,7 @@ import { join } from 'path'
 import { readFileSync } from 'fs'
 import { AppStateManager } from 'src/state'
 
-/** Registers a tool with the MCP server to retrieve the source code definition of a symbol using its unique ID or name and file path. */
+/** Registers a tool to retrieve the full source code definition of a symbol, allowing users to fetch the definition using either a symbol ID or a combination of name and file path. */
 export function registerGetDefinitionTool(server: McpServer) {
   server.registerTool(
     'get_definition',
