@@ -204,7 +204,9 @@ export class DocstringGenerationStep {
   ): string {
     const parts = [
       `Generate a concise docstring for the following ${sym.kind} named "${sym.name}".`,
-      `Do not format the docstring in any way. No code fences, markdown formatting, triple quotes, \`\`\`[language] blocks, or language-specific comment syntax.`,
+      `The docstring should only describe the purpose of ${sym.name}. Do not include information about parameters, return types, or implementation details unless they are essential to understanding the purpose. Focus on the "why" and "what", not the "how".`,
+      `IMPORTANT: Do not format the docstring with comment syntax; just provide the raw text. No code fences, no syntax, no triple quotes, no \`\`\` blocks, no explanations, just the docstring text.`,
+      `The Signature, Parameters, Return type, Source and Programming language fields below are provided for context only, and should NOT be included in the generated docstring.`,
     ]
 
     if (sym.signature) parts.push(`Signature: ${sym.signature}`)
