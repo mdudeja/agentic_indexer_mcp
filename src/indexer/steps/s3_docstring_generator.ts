@@ -8,15 +8,18 @@ import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider } from '../docstrings/providers'
 import { formatComment, getCommentText } from '../docstrings/formatComment'
 
+/** A class responsible for generating and managing docstrings for code symbols based on configured settings. It handles both the generation of new docstrings and the removal of existing ones, processing symbols in source files according to specified language configurations. */
 export class DocstringGenerationStep {
   private config: IndexerConfig
   private cwd: string
 
+  /** Initializes the object with the specified current working directory and loads its configuration. */
   constructor(cwd: string) {
     this.cwd = cwd
     this.config = AppStateManager.getInstance().getItem('config')!
   }
 
+  /** Generates docstrings for symbols that need them based on configuration and stores the results. */
   async run(store: IndexerDB): Promise<void> {
     const docCfg = this.config.docstring_generation
     if (!docCfg?.enabled) return
@@ -114,6 +117,7 @@ export class DocstringGenerationStep {
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
   }
 
+  /** Removes all docstrings from both the database and corresponding source files. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
     const targetKinds = this.collectTargetKinds()
     if (targetKinds.length === 0) return
@@ -183,6 +187,7 @@ export class DocstringGenerationStep {
     )
   }
 
+  /** Collects all unique symbol kinds from language configurations relevant to Treesitter parsing. */
   private collectTargetKinds(): SymbolKind[] {
     const kinds = new Set<SymbolKind>()
     for (const langCfg of Object.values(this.config.languages)) {
@@ -198,6 +203,7 @@ export class DocstringGenerationStep {
     return [...kinds]
   }
 
+  /** Constructs a prompt string to guide the generation of a concise docstring for a given symbol, including relevant context such as the symbol's name, kind, signature, parameters, return type, source code, and programming language. The prompt emphasizes focusing on the purpose and essential details while excluding unnecessary implementation specifics. */
   private buildPrompt(
     sym: IndexedSymbol['Select'],
     sourceText: string,
