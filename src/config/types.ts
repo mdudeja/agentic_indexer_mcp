@@ -61,6 +61,7 @@ export type IndexerConfig = {
   enabled: boolean
   ignore_patterns: string[]
   extnToLangMap: Record<string, string>
+  testFilePatterns: RegExp[]
   languages: Record<string, LanguageConfig>
   docstring_generation?: DocstringConfig
 }

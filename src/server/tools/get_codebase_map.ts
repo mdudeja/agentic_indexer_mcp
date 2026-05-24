@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, isNull, isNotNull, like } from 'drizzle-orm'
+import { eq, and, isNull, sql, inArray, notInArray } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 
 /** Registers a tool to produce a top-down architectural map of the codebase grouped by directory. */
@@ -19,39 +19,55 @@ export function registerGetCodebaseMapTool(server: McpServer) {
           .describe(
             'Directory depth to group files by (1 = top-level dirs, 2 = two levels deep). Default 1.',
           ),
+        max_key_symbols: z
+          .number()
+          .default(5)
+          .describe('Max number of key symbols to show per group. Default 5.'),
       }),
     },
-    async ({ depth }) => {
+    async ({ depth, max_key_symbols }) => {
       const store = IndexerDB.getInstance()
       try {
         const db = store.getDb()
         const maxDepth = (depth as number) ?? 1
+        const maxKeySymbols = (max_key_symbols as number) ?? 5
 
         const allFiles = await store.getAllFiles()
         if (allFiles.length === 0) {
-          return {
-            content: [{ type: 'text', text: 'No files indexed yet.' }],
-          }
+          return { content: [{ type: 'text', text: 'No files indexed yet.' }] }
         }
 
-        // Group files by path prefix at given depth
+        // Group files by directory depth (filename excluded from depth count).
         const groups = new Map<string, string[]>()
         for (const file of allFiles) {
           const parts = file.path.split('/')
+          const dirParts = parts.slice(0, -1)
           const prefix =
-            parts.length <= maxDepth ? '(root)' : parts.slice(0, maxDepth).join('/')
+            dirParts.length === 0
+              ? '(root)'
+              : dirParts.slice(0, maxDepth).join('/')
           const list = groups.get(prefix) ?? []
           list.push(file.path)
           groups.set(prefix, list)
         }
 
-        const sections: string[] = []
+        // collect data for every group: key exported symbols + outgoing dependencies (callees in other groups)
+        type SymRow = {
+          name: string
+          kind: string
+          file_path: string
+          line: number
+          docstring: string | null
+          call_count: number
+        }
+        type GroupInfo = {
+          filePaths: string[]
+          keySymbols: SymRow[]
+          dependsOn: Set<string>
+        }
+        const groupInfo = new Map<string, GroupInfo>()
 
         for (const [prefix, filePaths] of groups) {
-          const fileCount = filePaths.length
-
-          // Key exported symbols with docstrings for this group
-          const pattern = prefix === '(root)' ? '%' : `${prefix}/%`
           const keySymbols = await db
             .select({
               name: schema.symbols.name,
@@ -59,59 +75,163 @@ export function registerGetCodebaseMapTool(server: McpServer) {
               file_path: schema.symbols.file_path,
               line: schema.symbols.line,
               docstring: schema.symbols.docstring,
+              call_count: sql<number>`count(${schema.symbol_calls.id})`.as(
+                'call_count',
+              ),
             })
             .from(schema.symbols)
+            .leftJoin(
+              schema.symbol_calls,
+              eq(schema.symbol_calls.callee_id, schema.symbols.id),
+            )
             .where(
               and(
                 eq(schema.symbols.exported, true),
                 isNull(schema.symbols.parent_id),
-                isNotNull(schema.symbols.docstring),
-                like(schema.symbols.file_path, pattern),
+                inArray(schema.symbols.file_path, filePaths),
               ),
             )
-            .limit(5)
+            .groupBy(schema.symbols.id)
+            .orderBy(sql`count(${schema.symbol_calls.id}) DESC`)
+            .limit(maxKeySymbols)
 
-          // Cross-group dependencies: which other groups does this group import from?
-          const importedBy = new Set<string>()
-          const importers = await store.getImporters(`%${prefix.replace('(root)', '')}%`)
-          for (const imp of importers) {
-            const importerParts = imp.file_path.split('/')
-            const importerGroup =
-              importerParts.length <= maxDepth
-                ? '(root)'
-                : importerParts.slice(0, maxDepth).join('/')
-            if (importerGroup !== prefix) {
-              importedBy.add(importerGroup)
-            }
+          const dependsOn = new Set<string>()
+          const calleeFiles = await db
+            .selectDistinct({ file_path: schema.symbols.file_path })
+            .from(schema.symbol_calls)
+            .innerJoin(
+              schema.symbols,
+              eq(schema.symbols.id, schema.symbol_calls.callee_id),
+            )
+            .where(
+              and(
+                inArray(schema.symbol_calls.caller_file_path, filePaths),
+                notInArray(schema.symbols.file_path, filePaths),
+              ),
+            )
+          for (const { file_path } of calleeFiles) {
+            const p = file_path.split('/')
+            const d = p.slice(0, -1)
+            const g = d.length === 0 ? '(root)' : d.slice(0, maxDepth).join('/')
+            dependsOn.add(g)
           }
 
-          const symbolLines =
-            keySymbols.length > 0
-              ? keySymbols
+          groupInfo.set(prefix, { filePaths, keySymbols, dependsOn })
+        }
+
+        // compute layer (depth) of each group in the dependency graph, so we can present a layered architecture overview (entry points → foundation) and order the per-module details in a logical way.
+        // Modules with no outgoing dependencies are at layer 0 (foundation); modules that depend only on foundation modules are at layer 1; and so on.
+        const allGroupKeys = [...groups.keys()]
+        const layerOf = new Map<string, number>()
+
+        /** Recursively computes the layer (depth) of a group in the dependency graph. A group with no dependencies is at layer 0.
+         * A group that depends on other groups is at one layer deeper than the maximum layer of its dependencies.
+         * The function uses memoization to avoid redundant calculations and a visiting set to prevent infinite recursion in case of cycles. */
+        const computeLayer = (
+          g: string,
+          visiting = new Set<string>(),
+        ): number => {
+          if (layerOf.has(g)) return layerOf.get(g)!
+          if (visiting.has(g)) return 0 // cycle guard
+          visiting.add(g)
+          const knownDeps = [...(groupInfo.get(g)?.dependsOn ?? [])].filter(
+            (d) => allGroupKeys.includes(d),
+          )
+          const layer =
+            knownDeps.length === 0
+              ? 0
+              : 1 +
+                Math.max(
+                  ...knownDeps.map((d) => computeLayer(d, new Set(visiting))),
+                )
+          layerOf.set(g, layer)
+          return layer
+        }
+        for (const g of allGroupKeys) computeLayer(g)
+
+        const layerBuckets = new Map<number, string[]>()
+        for (const g of allGroupKeys) {
+          const l = layerOf.get(g) ?? 0
+          const arr = layerBuckets.get(l) ?? []
+          arr.push(g)
+          layerBuckets.set(l, arr)
+        }
+        const maxLayer = Math.max(...layerBuckets.keys())
+
+        // render
+        const out: string[] = []
+        out.push(
+          `Codebase Map  ${allFiles.length} files · ${allGroupKeys.length} modules · depth=${maxDepth}`,
+        )
+        out.push('')
+
+        // Topology overview: one row per layer, top-down (entry points first).
+        out.push('Architecture (entry points → foundation):')
+        for (let l = maxLayer; l >= 0; l--) {
+          const members = (layerBuckets.get(l) ?? []).sort()
+          const tag =
+            l === maxLayer
+              ? 'entry points'
+              : l === 0
+                ? 'foundation  '
+                : `layer ${l}      `.slice(0, 12)
+          out.push(`  ${tag}  ${members.join('  ·  ')}`)
+        }
+        out.push('')
+
+        // Dependency graph: compact list showing outgoing deps for non-foundation modules.
+        out.push('Dependency graph:')
+        for (let l = maxLayer; l >= 1; l--) {
+          for (const g of (layerBuckets.get(l) ?? []).sort()) {
+            const deps = [...(groupInfo.get(g)?.dependsOn ?? [])]
+              .sort()
+              .join(', ')
+            out.push(`  ${g.padEnd(28)} →  ${deps || '(none)'}`)
+          }
+        }
+        out.push('')
+
+        // Per-module details ordered foundation → entry points.
+        out.push('Module details (foundation → entry points):')
+        for (let l = 0; l <= maxLayer; l++) {
+          for (const g of (layerBuckets.get(l) ?? []).sort()) {
+            const info = groupInfo.get(g)!
+            out.push('')
+            out.push(
+              `### ${g}  (${info.filePaths.length} file${info.filePaths.length !== 1 ? 's' : ''})`,
+            )
+            if (info.keySymbols.length === 0) {
+              out.push('  (no exported symbols)')
+            } else {
+              // Top symbol gets its docstring; rest are listed inline.
+              const [top, ...rest] = info.keySymbols as [SymRow, ...SymRow[]]
+              const topLabel = `${top.name} [${top.kind}]${top.call_count ? ' ×' + top.call_count : ''}`
+              const oneLiner = top.docstring
+                ?.replace(/^\/\*\*\s*|\s*\*\/$/g, '')
+                .split('\n')[0]
+                ?.trim()
+              out.push(
+                oneLiner ? `  ${topLabel}: ${oneLiner}` : `  ${topLabel}`,
+              )
+              if (rest.length > 0) {
+                const restStr = rest
                   .map(
                     (s) =>
-                      `  - ${s.name} [${s.kind}] (${s.file_path}:${s.line + 1}): ${s.docstring!.split('\n')[0]}`,
+                      `${s.name} [${s.kind}]${s.call_count ? ' ×' + s.call_count : ''}`,
                   )
-                  .join('\n')
-              : '  (no documented exports)'
-
-          const depsLine =
-            importedBy.size > 0
-              ? `Imported by: ${[...importedBy].join(', ')} (heuristic — based on module path patterns)`
-              : 'Imported by: (none detected)'
-
-          sections.push(
-            `## ${prefix} (${fileCount} file${fileCount !== 1 ? 's' : ''})\nKey exports:\n${symbolLines}\n${depsLine}`,
-          )
+                  .join(', ')
+                out.push(`  + ${restStr}`)
+              }
+            }
+          }
         }
 
-        const header = `Codebase Map (depth=${maxDepth}, ${groups.size} group${groups.size !== 1 ? 's' : ''}, ${allFiles.length} files total)\n`
-        return {
-          content: [{ type: 'text', text: header + '\n' + sections.join('\n\n') }],
-        }
+        return { content: [{ type: 'text', text: out.join('\n') }] }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error building codebase map: ${err}` }],
+          content: [
+            { type: 'text', text: `Error building codebase map: ${err}` },
+          ],
           isError: true,
         }
       }

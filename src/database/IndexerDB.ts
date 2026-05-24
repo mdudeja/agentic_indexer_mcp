@@ -65,6 +65,7 @@ export class IndexerDB {
       enabled: false,
       languages: {},
       extnToLangMap: {},
+      testFilePatterns: [],
       ignore_patterns: [],
     }
 
@@ -428,6 +429,14 @@ export class IndexerDB {
   /** Fetches all files from the database, returning an array containing detailed information for each file, including its path, cryptographic hash, indexing timestamp, and associated language if applicable. */
   async getAllFiles(): Promise<IndexedFile['Select'][]> {
     return this.db.select().from(schema.files)
+  }
+
+  /** Fetches every import record in the database, ordered by file path then module path. */
+  async getAllImports(): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .orderBy(schema.imports.file_path, schema.imports.module_path)
   }
 
   /** Returns all symbols in the hierarchy under the specified symbol, including nested children, ordered by their line numbers. */

@@ -1,8 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-
-const TEST_RE = /\.(test|spec)\.(ts|tsx|js|jsx)$|__tests__\//
+import { AppStateManager } from 'src/state'
 
 /** Registers a tool to find test files that exercise a given symbol or file. */
 export function registerFindRelatedTestsTool(server: McpServer) {
@@ -21,32 +20,53 @@ export function registerFindRelatedTestsTool(server: McpServer) {
       }),
     },
     async ({ target }) => {
+      const TEST_RE = AppStateManager.getInstance()
+        .getItem('config')
+        ?.testFilePatterns.map((p) => {
+          if (p instanceof RegExp) return p
+          if (typeof p === 'string') return new RegExp(p)
+          return null
+        })
+        .filter((p): p is RegExp => p !== null) ?? [
+        /\.(test|spec)\.(ts|tsx|js|jsx)$/,
+        /__tests__\//,
+        /tests\//,
+      ]
+
       const store = IndexerDB.getInstance()
       try {
         const name = target as string
 
         const allFiles = await store.getAllFiles()
         const testFilePaths = new Set(
-          allFiles.filter((f) => TEST_RE.test(f.path)).map((f) => f.path),
+          allFiles
+            .filter((f) => TEST_RE.some((re) => re.test(f.path)))
+            .map((f) => f.path),
         )
 
         if (testFilePaths.size === 0) {
           return {
-            content: [{ type: 'text', text: 'No test files found in the indexed workspace.' }],
+            content: [
+              {
+                type: 'text',
+                text: 'No test files found in the indexed workspace.',
+              },
+            ],
           }
         }
 
         const found = new Map<string, string[]>() // testFile → [reason]
 
         // Module importers (when target looks like a file path)
-        if (name.includes('/') || name.endsWith('.ts') || name.endsWith('.tsx')) {
+        if (name.includes('/')) {
           const importers = await store.getImporters(name)
-          for (const imp of importers) {
-            if (testFilePaths.has(imp.file_path)) {
-              const reasons = found.get(imp.file_path) ?? []
-              reasons.push(`imports module '${name}'`)
-              found.set(imp.file_path, reasons)
-            }
+          const testFileImporters = importers.filter((imp) =>
+            testFilePaths.has(imp.file_path),
+          )
+          for (const imp of testFileImporters) {
+            const reasons = found.get(imp.file_path) ?? []
+            reasons.push(`imports module '${imp.imported_name}'`)
+            found.set(imp.file_path, reasons)
           }
         }
 
@@ -56,7 +76,9 @@ export function registerFindRelatedTestsTool(server: McpServer) {
           for (const c of callers) {
             if (testFilePaths.has(c.callerFile)) {
               const reasons = found.get(c.callerFile) ?? []
-              reasons.push(`calls ${name} via ${c.callerName} (line ${c.line + 1})`)
+              reasons.push(
+                `calls ${name} via ${c.callerName} (line ${c.line + 1})`,
+              )
               found.set(c.callerFile, reasons)
             }
           }
@@ -97,7 +119,9 @@ export function registerFindRelatedTestsTool(server: McpServer) {
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error finding related tests: ${err}` }],
+          content: [
+            { type: 'text', text: `Error finding related tests: ${err}` },
+          ],
           isError: true,
         }
       }

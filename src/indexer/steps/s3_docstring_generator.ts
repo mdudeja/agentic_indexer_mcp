@@ -279,7 +279,10 @@ export class DocstringGenerationStep {
         continue
       }
 
-      await store.updateSymbolDocstring(sym.id, cleanedDocstring)
+      await store.updateSymbolDocstring(
+        sym.id,
+        getCommentText(cleanedDocstring),
+      )
       logDebug(
         `[Indexer] Generated docstring for ${sym.name} in ${relPath}:${sym.line}`,
       )

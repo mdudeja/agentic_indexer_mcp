@@ -24,6 +24,7 @@ export abstract class Enhancer {
       enabled: false,
       languages: {},
       ignore_patterns: [],
+      testFilePatterns: [],
       extnToLangMap: {},
     }
   }

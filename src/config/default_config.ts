@@ -21,6 +21,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       jsx: 'javascript',
       json: 'json',
     },
+    testFilePatterns: [
+      /\.(test|spec)\.(ts|tsx|js|jsx)$/,
+      /__tests__\//,
+      /tests\//,
+    ],
     languages: {
       typescript: {
         extensions: ['.ts'],

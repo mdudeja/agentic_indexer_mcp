@@ -10,6 +10,7 @@ import {
 import { randomUUIDv7, hash } from 'bun'
 import { AppStateManager } from 'src/state'
 import { resolveImportedModulePath } from 'src/utils/paths'
+import { getCommentText } from '../docstrings/formatComment'
 
 type TreesitterConfig = LanguageConfig['treesitter']
 
@@ -82,7 +83,7 @@ function getDocstring(
         : docStringNode.nextNamedSibling
   }
 
-  return comments.length > 0 ? comments.join('\n') : undefined
+  return comments.length > 0 ? getCommentText(comments.join('\n')) : undefined
 }
 
 /** "Retrieves and concatenates all decorators associated with a node and its preceding siblings." */

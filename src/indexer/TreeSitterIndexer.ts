@@ -22,6 +22,7 @@ export class TreeSitterIndexer {
       enabled: false,
       languages: {},
       ignore_patterns: [],
+      testFilePatterns: [],
       extnToLangMap: {},
     }
   }

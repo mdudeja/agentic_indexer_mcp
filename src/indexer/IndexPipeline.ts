@@ -34,6 +34,7 @@ export class IndexPipeline {
       enabled: false,
       languages: {},
       ignore_patterns: [],
+      testFilePatterns: [],
       extnToLangMap: {},
     }
   }

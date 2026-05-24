@@ -17,6 +17,29 @@ type HierarchyNode = {
   exported: boolean
   members: HierarchyNode[]
   calls: HierarchyNode[]
+  /** Number of distinct files outside this symbol's own file that call it (codebase scope only). */
+  calledFromFiles?: number
+}
+
+/** A directed file-level edge: fromFile calls into toFile (via resolved callee_id). */
+type CrossFileEdge = {
+  fromFile: string
+  toFile: string
+  /** Number of distinct call-sites (symbol_calls rows) on this edge. */
+  callCount: number
+}
+
+/** Import statements for one file, grouped by module path. */
+type FileImportGroup = {
+  fromFile: string
+  modulePath: string
+  /** Distinct imported names from this module (null entries filtered out). */
+  importedNames: string[]
+}
+
+type CodebaseExtras = {
+  importGroups: FileImportGroup[]
+  crossFileEdges: CrossFileEdge[]
 }
 
 type HierarchyGraph = {
@@ -24,6 +47,8 @@ type HierarchyGraph = {
   roots: HierarchyNode[]
   /** Full id→node map for O(1) lookup. */
   nodeMap: Map<string, HierarchyNode>
+  /** Only populated for scope=codebase. */
+  codebaseExtras?: CodebaseExtras
 }
 
 /**
@@ -158,6 +183,8 @@ async function buildHierarchy(scope: HierarchyScope): Promise<HierarchyGraph> {
     }
   }
 
+  let codebaseExtras: CodebaseExtras | undefined
+
   if (nodeMap.size > 0) {
     const nameToNodes = new Map<string, HierarchyNode[]>()
     for (const node of nodeMap.values()) {
@@ -175,6 +202,79 @@ async function buildHierarchy(scope: HierarchyScope): Promise<HierarchyGraph> {
         }
       }
     }
+
+    if (scope.type === 'codebase') {
+      // ── Cross-file call edges ────────────────────────────────────────────
+      // Primary signal: callee_id resolved to a symbol in a different file.
+      // Secondary signal: callee_id null but imports_id set — the call is
+      // import-backed (external or not-yet-indexed), so we still record
+      // the caller_file_path but mark the target as the import's module_path
+      // via the imports table (handled in the render layer using importGroups).
+      const crossFileEdgeMap = new Map<string, number>() // "from|to" → count
+      const calleeCallerFilesMap = new Map<string, Set<string>>() // callee id → caller file set
+
+      for (const edge of callEdges) {
+        const callerNode = nodeMap.get(edge.caller_id)
+        if (!callerNode) continue
+
+        if (edge.callee_id) {
+          // Fully resolved: check if callee lives in a different file
+          const calleeNode = nodeMap.get(edge.callee_id)
+          if (calleeNode && calleeNode.file_path !== callerNode.file_path) {
+            const key = `${callerNode.file_path}|${calleeNode.file_path}`
+            crossFileEdgeMap.set(key, (crossFileEdgeMap.get(key) ?? 0) + 1)
+            const callerFiles =
+              calleeCallerFilesMap.get(edge.callee_id) ?? new Set<string>()
+            callerFiles.add(callerNode.file_path)
+            calleeCallerFilesMap.set(edge.callee_id, callerFiles)
+          }
+        }
+        // When callee_id is null but imports_id is set, the call is to an
+        // imported (possibly external) symbol. We don't fabricate a target
+        // file here — those dependencies already appear in the import groups.
+      }
+
+      // Annotate symbols with how many distinct outside files call them
+      for (const [calleeId, callerFiles] of calleeCallerFilesMap) {
+        const node = nodeMap.get(calleeId)
+        if (node) node.calledFromFiles = callerFiles.size
+      }
+
+      const crossFileEdges: CrossFileEdge[] = [...crossFileEdgeMap.entries()]
+        .map(([key, count]) => {
+          const [fromFile, toFile] = key.split('|') as [string, string]
+          return { fromFile, toFile, callCount: count }
+        })
+        .sort(
+          (a, b) =>
+            b.callCount - a.callCount || a.fromFile.localeCompare(b.fromFile),
+        )
+
+      // ── Import groups ────────────────────────────────────────────────────
+      const allImports = await db.getAllImports()
+      const importGroupMap = new Map<string, FileImportGroup>()
+      for (const imp of allImports) {
+        const key = `${imp.file_path}|${imp.module_path}`
+        let group = importGroupMap.get(key)
+        if (!group) {
+          group = {
+            fromFile: imp.file_path,
+            modulePath: imp.module_path,
+            importedNames: [],
+          }
+          importGroupMap.set(key, group)
+        }
+        if (
+          imp.imported_name &&
+          !group.importedNames.includes(imp.imported_name)
+        ) {
+          group.importedNames.push(imp.imported_name)
+        }
+      }
+      const importGroups = [...importGroupMap.values()]
+
+      codebaseExtras = { importGroups, crossFileEdges }
+    }
   }
 
   for (const node of nodeMap.values()) {
@@ -183,7 +283,19 @@ async function buildHierarchy(scope: HierarchyScope): Promise<HierarchyGraph> {
   }
   roots.sort((a, b) => a.line - b.line)
 
-  return { roots, nodeMap }
+  return { roots, nodeMap, codebaseExtras }
+}
+
+/** Counts the total number of nodes in a set of root nodes, including all nested members. */
+function countNodes(roots: HierarchyNode[]): number {
+  let count = 0
+  const stack = [...roots]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    count++
+    stack.push(...node.members)
+  }
+  return count
 }
 
 /** Renders a hierarchical tree structure for a given node and its descendants as a formatted string. Each line represents a node with its name, type, category (if any), export status, and location. The output uses visual connectors ('└─' or '├─') to indicate hierarchy and includes calls and child nodes recursively. */
@@ -197,7 +309,11 @@ function renderNode(
 
   const badge = node.exported ? ' [exported]' : ''
   const cat = node.category ? ` (${node.category})` : ''
-  const header = `${prefix}${connector} ${node.name} [${node.kind}]${cat}${badge} — :${node.line + 1}`
+  const xFile =
+    node.calledFromFiles && node.calledFromFiles > 0
+      ? ` ← ${node.calledFromFiles} file${node.calledFromFiles > 1 ? 's' : ''}`
+      : ''
+  const header = `${prefix}${connector} ${node.name} [${node.kind}]${cat}${badge}${xFile} — :${node.line + 1}`
 
   const lines: string[] = [header]
 
@@ -233,14 +349,80 @@ function renderGraph(graph: HierarchyGraph, scope: HierarchyScope): string {
       list.push(root)
       byFile.set(root.file_path, list)
     }
-    const sections = [...byFile.entries()].map(([filePath, roots]) => {
-      const tree = roots
-        .map((root, i) => renderNode(root, '  ', i === roots.length - 1))
-        .join('\n')
-      return `${filePath}\n${tree}`
-    })
-    const header = `Hierarchy (codebase — ${graph.nodeMap.size} symbols across ${byFile.size} files)\n`
-    return header + '\n' + sections.join('\n\n')
+
+    const lines: string[] = []
+    lines.push(
+      `Codebase Hierarchy — ${graph.nodeMap.size} symbols across ${byFile.size} files`,
+    )
+
+    // ── File Dependency Graph ──────────────────────────────────────────────
+    if (graph.codebaseExtras) {
+      const { importGroups, crossFileEdges } = graph.codebaseExtras
+
+      lines.push('')
+      lines.push('FILE DEPENDENCY GRAPH')
+      lines.push('═'.repeat(60))
+
+      if (importGroups.length > 0) {
+        lines.push('Imports:')
+        // Group by fromFile
+        const byFromFile = new Map<string, FileImportGroup[]>()
+        for (const g of importGroups) {
+          const list = byFromFile.get(g.fromFile) ?? []
+          list.push(g)
+          byFromFile.set(g.fromFile, list)
+        }
+        for (const [fromFile, groups] of byFromFile) {
+          lines.push(`  ${fromFile}`)
+          groups.forEach((g, i) => {
+            const connector = i === groups.length - 1 ? '└─' : '├─'
+            const names =
+              g.importedNames.length > 0
+                ? `  →  ${g.importedNames.join(', ')}`
+                : ''
+            lines.push(`    ${connector} ${g.modulePath}${names}`)
+          })
+        }
+      } else {
+        lines.push('  (no import records)')
+      }
+
+      if (crossFileEdges.length > 0) {
+        lines.push('')
+        lines.push('Cross-file calls (resolved symbol edges):')
+        const maxFrom = Math.max(
+          ...crossFileEdges.map((e) => e.fromFile.length),
+        )
+        for (const edge of crossFileEdges) {
+          const pad = ' '.repeat(maxFrom - edge.fromFile.length)
+          lines.push(
+            `  ${edge.fromFile}${pad}  →  ${edge.toFile}  (${edge.callCount} call${edge.callCount > 1 ? 's' : ''})`,
+          )
+        }
+      } else {
+        lines.push('')
+        lines.push('  (no resolved cross-file call edges)')
+      }
+    }
+
+    // ── Per-file symbol trees ──────────────────────────────────────────────
+    lines.push('')
+    lines.push('SYMBOL TREES (per file)')
+    lines.push('═'.repeat(60))
+
+    for (const [filePath, roots] of byFile) {
+      const totalInFile = countNodes(roots)
+      const exportedCount = roots.filter((r) => r.exported).length
+      const exportedNote =
+        exportedCount > 0 ? `, ${exportedCount} exported` : ''
+      lines.push('')
+      lines.push(`${filePath}  [${totalInFile} symbols${exportedNote}]`)
+      roots.forEach((root, i) => {
+        lines.push(renderNode(root, '  ', i === roots.length - 1))
+      })
+    }
+
+    return lines.join('\n')
   }
 
   const label = scope.type === 'file' ? scope.file_path : 'symbol subtree'
