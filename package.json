@@ -6,7 +6,7 @@
   "scripts": {
     "start": "bun run --env-file .env index.ts serve",
     "index": "bun run --env-file .env index.ts index",
-    "index-file": "bun run --env-file .env index.ts index-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/index.ts",
+    "index-file": "bun run --env-file .env index.ts index-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/database/IndexerDB.ts",
     "remove-docstrings": "bun run --env-file .env index.ts remove-docstrings",
     "query": "bun run --env-file .env index.ts query",
     "inspect": "mcp-inspector bun run --env-file .env index.ts serve",

@@ -19,6 +19,7 @@ export enum SymbolKind {
   decorator = 'decorator',
   import = 'import',
   export = 'export',
+  symbol_call = 'symbol_call',
 }
 
 export const symbols = sqliteTable(

@@ -234,7 +234,7 @@ export class IndexPipeline {
   }
 
   /** Runs an enhancement step to improve symbol information in processed files by leveraging type-specific enhancers for better indexing and analysis. */
-  private async runEnhancementStep(processedFiles: string[]): Promise<void> {
+  async runEnhancementStep(processedFiles: string[]): Promise<void> {
     logInfo(
       `[Indexer] Running Step 2: Symbol Enhancement on ${processedFiles.length} files...`,
     )
@@ -263,8 +263,12 @@ export class IndexPipeline {
   }
 
   /** Runs the step responsible for generating docstrings as part of the documentation process. */
-  private async runDocstringStep(): Promise<void> {
+  async runDocstringStep(relativePath?: string): Promise<void> {
     const step = new DocstringGenerationStep(this.options.cwd)
-    await step.run(this.options.store)
+    if (relativePath) {
+      await step.runOnOneFile(relativePath, this.options.store)
+    } else {
+      await step.run(this.options.store)
+    }
   }
 }

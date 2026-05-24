@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
+import { logDebug } from 'src/utils/logger'
 
 /** Registers a tool to find all references to a symbol — both call sites and import locations. Supersedes find_importers with symbol-level precision. */
 export function registerFindSymbolReferencesTool(server: McpServer) {
@@ -33,12 +34,15 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         const sections: string[] = []
 
         if (include_calls) {
-          const callers = await store.getCallers(name)
-          if (callers.length > 0) {
-            const callLines = callers.map(
-              (c) => `  - ${c.callerName} in ${c.callerFile}:${c.line + 1}`,
+          const allCallers = await store.getCallersAll(name)
+          if (allCallers.length > 0) {
+            const callLines = allCallers.map(
+              (c) =>
+                `  - ${c.callerName}${c.childName ? ` (${name}.${c.childName})` : ''} in ${c.callerFile}:${c.line + 1}`,
             )
-            sections.push(`Called at (${callers.length} location${callers.length !== 1 ? 's' : ''}):\n${callLines.join('\n')}`)
+            sections.push(
+              `Called at (${allCallers.length} location${allCallers.length !== 1 ? 's' : ''}):\n${callLines.join('\n')}`,
+            )
           } else {
             sections.push(`Called at: (none found)`)
           }
@@ -50,7 +54,9 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
             const importLines = importRefs.map(
               (i) => `  - ${i.file_path} (from '${i.module_path}')`,
             )
-            sections.push(`Imported by name in (${importRefs.length} file${importRefs.length !== 1 ? 's' : ''}):\n${importLines.join('\n')}`)
+            sections.push(
+              `Imported by name in (${importRefs.length} file${importRefs.length !== 1 ? 's' : ''}):\n${importLines.join('\n')}`,
+            )
           } else {
             sections.push(`Imported by name: (none found)`)
           }
@@ -58,12 +64,16 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
 
         // Module-level importers when name looks like a path
         if (name.includes('/') || name.includes('.')) {
-          const moduleImporters = await store.getImporters(name)
+          const cleanedName = name.replace(/\//g, '').replace(/\.[\w]+$/g, '')
+          logDebug(`Finding module importers for cleaned name: ${cleanedName}`)
+          const moduleImporters = await store.getImporters(cleanedName)
           if (moduleImporters.length > 0) {
-            const modLines = [...new Set(moduleImporters.map((i) => i.file_path))].map(
-              (p) => `  - ${p}`,
+            const modLines = [
+              ...new Set(moduleImporters.map((i) => i.file_path)),
+            ].map((p) => `  - ${p}`)
+            sections.push(
+              `Module imported by (${modLines.length} file${modLines.length !== 1 ? 's' : ''}):\n${modLines.join('\n')}`,
             )
-            sections.push(`Module imported by (${modLines.length} file${modLines.length !== 1 ? 's' : ''}):\n${modLines.join('\n')}`)
           } else {
             sections.push(`Module imported by: (none found)`)
           }
@@ -71,7 +81,9 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
 
         if (sections.length === 0) {
           return {
-            content: [{ type: 'text', text: `No references found for: ${name}` }],
+            content: [
+              { type: 'text', text: `No references found for: ${name}` },
+            ],
           }
         }
 

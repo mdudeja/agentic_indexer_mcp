@@ -5,7 +5,7 @@ import type { IndexerConfig, IndexedSymbol } from 'src/config/types'
 import { SymbolKind } from 'src/config/types'
 import { AppStateManager } from 'src/state'
 import { logDebug, logInfo, logWarning } from 'src/utils/logger'
-import { createProvider } from '../docstrings/providers'
+import { createProvider, type DocstringProvider } from '../docstrings/providers'
 import { formatComment, getCommentText } from '../docstrings/formatComment'
 
 /** Generates and manages docstrings for code symbols based on configured settings, including generation of new docstrings and removal of existing ones. */
@@ -55,66 +55,56 @@ export class DocstringGenerationStep {
     }
 
     for (const [relPath, fileSymbols] of byFile) {
-      const absPath = join(this.cwd, relPath)
-      if (!existsSync(absPath)) continue
-
-      const sourceText = await Bun.file(absPath).text()
-      const fileLines = sourceText.split('\n')
-
-      // Process bottom-up so splice inserts don't shift unprocessed line indices
-      fileSymbols.sort((a, b) => b.line - a.line)
-
-      for (const sym of fileSymbols) {
-        // tree-sitter lines are 0-indexed
-        const endLine = sym.end_line ?? sym.line
-        const symText = fileLines.slice(sym.line, endLine + 1).join('\n')
-
-        const prompt = this.buildPrompt(sym, symText)
-        const docstring = await provider.generate(prompt)
-        if (!docstring) {
-          logWarning(
-            `[Indexer] Failed to generate docstring for ${sym.name} in ${relPath}`,
-          )
-          continue
-        }
-
-        // Remove anything within <think> tags if present
-        const cleanedDocstring = docstring
-          .replace(/<think>[\s\S]*?<\/think>/g, '')
-          .trim()
-        if (cleanedDocstring.length === 0) {
-          logWarning(
-            `[Indexer] Generated docstring for ${sym.name} in ${relPath} was empty after cleaning. Skipping.`,
-          )
-          continue
-        }
-
-        await store.updateSymbolDocstring(sym.id, cleanedDocstring)
-        generated++
-        logDebug(
-          `[Indexer] Generated docstring for ${sym.name} in ${relPath}:${sym.line}`,
-        )
-        logInfo(
-          `[Indexer] Generated ${generated} / ${symbols.length} docstrings...`,
-        )
-
-        if (docCfg.write_to_file) {
-          const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
-          const comment = formatComment(cleanedDocstring, sym.language)
-          const indentedComment = comment
-            .split('\n')
-            .map((l) => `${indent}${l}`)
-            .join('\n')
-          fileLines.splice(sym.line, 0, indentedComment)
-        }
-      }
-
-      if (docCfg.write_to_file) {
-        await Bun.write(absPath, fileLines.join('\n'))
-      }
+      const generatedForFile = await this.generateForFile(
+        store,
+        provider,
+        docCfg,
+        relPath,
+        fileSymbols,
+      )
+      generated += generatedForFile
+      logInfo(
+        `[Indexer] Generated ${generatedForFile} / ${fileSymbols.length} docstrings for ${relPath}...`,
+      )
     }
 
     logInfo(`[Indexer] Step 3 complete. Generated ${generated} docstrings.`)
+  }
+
+  /** Generate a docstring for a single file, used when processing an individual file change. */
+  async runOnOneFile(relativePath: string, store: IndexerDB): Promise<void> {
+    const docCfg = this.config.docstring_generation
+    if (!docCfg?.enabled) return
+
+    const targetKinds = this.collectTargetKinds()
+    if (targetKinds.length === 0) return
+
+    const fileSymbols = await store.getSymbolsNeedingDocstringsForFile(
+      relativePath,
+      targetKinds,
+    )
+    if (fileSymbols.length === 0) {
+      logInfo(
+        `[Indexer] No symbols needing docstrings found in ${relativePath}. Skipping docstring generation for this file.`,
+      )
+      return
+    }
+
+    logDebug(
+      `[Indexer] Found ${fileSymbols.length} symbols needing docstrings in ${relativePath}.`,
+    )
+
+    const generatedForFile = await this.generateForFile(
+      store,
+      createProvider(docCfg)!,
+      docCfg,
+      relativePath,
+      fileSymbols,
+    )
+
+    logInfo(
+      `[Indexer] Docstring generation complete for ${relativePath}. Generated ${generatedForFile} docstrings.`,
+    )
   }
 
   /** Removes all docstrings from the database and optionally from source files if configured. */
@@ -242,5 +232,72 @@ export class DocstringGenerationStep {
     )
 
     return parts.join('\n')
+  }
+
+  /** Generates docstrings for all symbols in a given file, updating the database and optionally writing them back to the source file based on configuration. */
+  private async generateForFile(
+    store: IndexerDB,
+    provider: DocstringProvider,
+    docCfg: NonNullable<IndexerConfig['docstring_generation']>,
+    relPath: string,
+    fileSymbols: IndexedSymbol['Select'][],
+  ): Promise<number> {
+    let generated = 0
+    const absPath = join(this.cwd, relPath)
+    if (!existsSync(absPath)) return generated
+
+    const sourceText = await Bun.file(absPath).text()
+    const fileLines = sourceText.split('\n')
+
+    // Process bottom-up so splice inserts don't shift unprocessed line indices
+    fileSymbols.sort((a, b) => b.line - a.line)
+
+    for (const sym of fileSymbols) {
+      // tree-sitter lines are 0-indexed
+      const endLine = sym.end_line ?? sym.line
+      const symText = fileLines.slice(sym.line, endLine + 1).join('\n')
+
+      const prompt = this.buildPrompt(sym, symText)
+      const docstring = await provider.generate(prompt)
+      if (!docstring) {
+        logWarning(
+          `[Indexer] Failed to generate docstring for ${sym.name} in ${relPath}`,
+        )
+        continue
+      }
+
+      generated++
+
+      // Remove anything within <think> tags if present
+      const cleanedDocstring = docstring
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .trim()
+      if (cleanedDocstring.length === 0) {
+        logWarning(
+          `[Indexer] Generated docstring for ${sym.name} in ${relPath} was empty after cleaning. Skipping.`,
+        )
+        continue
+      }
+
+      await store.updateSymbolDocstring(sym.id, cleanedDocstring)
+      logDebug(
+        `[Indexer] Generated docstring for ${sym.name} in ${relPath}:${sym.line}`,
+      )
+
+      if (docCfg.write_to_file) {
+        const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
+        const comment = formatComment(cleanedDocstring, sym.language)
+        const indentedComment = comment
+          .split('\n')
+          .map((l) => `${indent}${l}`)
+          .join('\n')
+        fileLines.splice(sym.line, 0, indentedComment)
+      }
+    }
+
+    if (docCfg.write_to_file) {
+      await Bun.write(absPath, fileLines.join('\n'))
+    }
+    return generated
   }
 }

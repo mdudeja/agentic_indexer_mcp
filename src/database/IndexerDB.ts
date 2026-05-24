@@ -124,7 +124,7 @@ export class IndexerDB {
     )
 
     this.preparedCallInsert = this.sqlite.prepare(
-      `INSERT INTO symbol_calls (id, caller_id, callee_name, callee_id, language_name, call_line, call_column, caller_file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO symbol_calls (id, caller_id, callee_name, callee_id, language_name, call_line, call_column, caller_file_path, call_text, docstring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
 
     this.dbInited = true
@@ -169,8 +169,9 @@ export class IndexerDB {
       symbolsData.length === 0 ||
       !this.preparedSymbolDelete ||
       !this.preparedSymbolInsert
-    )
+    ) {
       return
+    }
 
     return this.sqlite.transaction(() => {
       const uniqueFiles = [...new Set(symbolsData.map((s) => s.file_path))]
@@ -237,6 +238,8 @@ export class IndexerDB {
           call.call_line ?? null,
           call.call_column ?? null,
           call.caller_file_path,
+          call.call_text,
+          call.docstring ?? null,
         )
       }
     })()
@@ -345,10 +348,22 @@ export class IndexerDB {
   /** Searches for importers whose module paths match the given pattern. */
   async getImporters(moduleNamePattern: string) {
     const pattern = moduleNamePattern.replace(/\*/g, '%')
+    logDebug(`Searching for importers with pattern: ${pattern}`)
     return this.db
       .select()
       .from(schema.imports)
-      .where(like(schema.imports.module_path, pattern))
+      .where(like(schema.imports.module_path, `%${pattern}%`))
+  }
+
+  /** Retrieves an import record by its ID. */
+  async getImportById(id: string): Promise<IndexedImport['Select'] | null> {
+    const result = await this.db
+      .select()
+      .from(schema.imports)
+      .where(eq(schema.imports.id, id))
+      .limit(1)
+
+    return result[0] || null
   }
 
   /** Retrieves all import records where the imported symbol name matches exactly. */
@@ -359,6 +374,23 @@ export class IndexerDB {
       .select()
       .from(schema.imports)
       .where(eq(schema.imports.imported_name, importedName))
+  }
+
+  /** Retrieves import records that match both the imported symbol name and the file path. */
+  async getImportsByNameAndFile(
+    importedName: string,
+    filePath: string,
+  ): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(
+        and(
+          eq(schema.imports.imported_name, importedName),
+          eq(schema.imports.file_path, filePath),
+        ),
+      )
+      .orderBy(schema.imports.module_path)
   }
 
   /** Retrieves all symbols defined within the specified file. */
@@ -426,27 +458,21 @@ export class IndexerDB {
   }
 
   /** Retrieves a list of unresolved calls from the database. */
-  async getUnresolvedCalls(): Promise<
-    Array<{
-      id: string
-      caller_id: string
-      callee_name: string
-      call_line: number
-      call_column: number
-      caller_file: string
-    }>
-  > {
-    return this.sqlite
-      .prepare(
-        `SELECT sc.id, sc.caller_id, sc.callee_name,
-                sc.call_line, sc.call_column, s.file_path AS caller_file
-         FROM symbol_calls sc
-         JOIN symbols s ON s.id = sc.caller_id
-         WHERE sc.callee_id IS NULL
-           AND sc.call_line IS NOT NULL
-         ORDER BY s.file_path`,
+  async getUnresolvedCalls(): Promise<IndexedSymbolCall['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.symbol_calls)
+      .where(
+        and(
+          isNull(schema.symbol_calls.callee_id),
+          isNull(schema.symbol_calls.imports_id),
+          isNotNull(schema.symbol_calls.call_line),
+        ),
       )
-      .all() as any[]
+      .orderBy(
+        schema.symbol_calls.caller_file_path,
+        schema.symbol_calls.call_line,
+      )
   }
 
   /** Updates the callee ID for a specific call. Modifies the associated identifier of the called entity or function in the database record corresponding to the provided call ID. */
@@ -454,6 +480,14 @@ export class IndexerDB {
     await this.db
       .update(schema.symbol_calls)
       .set({ callee_id: calleeId })
+      .where(eq(schema.symbol_calls.id, callId))
+  }
+
+  /** Updates the imports ID for a specific call. Modifies the associated identifier of the import record linked to the call in the database based on the provided call ID. */
+  async updateImportsId(callId: string, importsId: string): Promise<void> {
+    await this.db
+      .update(schema.symbol_calls)
+      .set({ imports_id: importsId })
       .where(eq(schema.symbol_calls.id, callId))
   }
 
@@ -505,6 +539,28 @@ export class IndexerDB {
         ),
       )
       .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
+  /** Retrieves symbols that require documentation within a specific file, filtered by target symbol types (kinds). This method helps identify undocumented symbols in a particular file for focused documentation efforts. */
+  async getSymbolsNeedingDocstringsForFile(
+    relativePath: string,
+    targetKinds: SymbolKind[],
+  ): Promise<IndexedSymbol['Select'][]> {
+    if (targetKinds.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        and(
+          eq(schema.symbols.file_path, relativePath),
+          inArray(schema.symbols.kind, targetKinds),
+          or(
+            isNull(schema.symbols.docstring),
+            eq(schema.symbols.docstring, ''),
+          ),
+        ),
+      )
+      .orderBy(schema.symbols.line)
   }
 
   /** Retrieves symbols with associated docstrings for specified target kinds. */
@@ -569,6 +625,31 @@ export class IndexerDB {
          ORDER BY s.file_path, s.line`,
       )
       .all(symbolName, symbolName) as any[]
+  }
+
+  /** Get all callers of a symbol — direct calls and, if it is a container (class/module/namespace), calls to any of its child symbols.
+   *  Returns childName = null for direct callers; the child's name for member callers. */
+  async getCallersAll(symbolName: string): Promise<
+    Array<{
+      callerFile: string
+      callerName: string
+      line: number
+      childName: string | null
+    }>
+  > {
+    return this.sqlite
+      .prepare(
+        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line, child.name AS childName
+         FROM symbol_calls sc
+         JOIN symbols t ON t.name = ?
+         JOIN symbols s ON s.id = sc.caller_id
+         LEFT JOIN symbols child ON child.parent_id = t.id
+                                 AND (sc.callee_id = child.id OR sc.callee_name = child.name)
+         WHERE (sc.callee_id = t.id OR sc.callee_name = t.name)
+            OR child.id IS NOT NULL
+         ORDER BY s.file_path, s.line`,
+      )
+      .all(symbolName) as any[]
   }
 
   /** Clears all stored data. */

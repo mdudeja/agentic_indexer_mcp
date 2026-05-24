@@ -12,6 +12,7 @@ export enum DocstringStrategy {
   none = 'none',
   comment_before = 'comment_before',
   comment_after = 'comment_after',
+  either = 'either',
 }
 
 export type NodeInfo = {
@@ -39,6 +40,7 @@ export type LanguageConfig = {
       callable_nodes: string[]
       callable_kinds: SymbolKind[]
       additional_nodes: string[]
+      member_access_patterns: Array<string | RegExp>
     }
   }
 }

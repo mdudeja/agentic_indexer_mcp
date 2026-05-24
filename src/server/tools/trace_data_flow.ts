@@ -13,11 +13,15 @@ export function registerTraceDataFlowTool(server: McpServer) {
       description:
         'Show how data flows through a function: its parameter types, return type, what calls it (passing data in), and what it calls (passing data out). NOTE: This operates at call-chain and type-signature level only — no variable tracking is available.',
       inputSchema: z.object({
-        symbol_name: z.string().describe('Function or method name to trace data flow through'),
+        symbol_name: z
+          .string()
+          .describe('Function or method name to trace data flow through'),
         file_path: z
           .string()
           .optional()
-          .describe('Optional file path to disambiguate when multiple symbols share the name'),
+          .describe(
+            'Optional file path to disambiguate when multiple symbols share the name',
+          ),
       }),
     },
     async ({ symbol_name, file_path }) => {
@@ -35,7 +39,9 @@ export function registerTraceDataFlowTool(server: McpServer) {
 
         if (candidates.length === 0) {
           return {
-            content: [{ type: 'text', text: `Symbol '${name}' not found in index.` }],
+            content: [
+              { type: 'text', text: `Symbol '${name}' not found in index.` },
+            ],
           }
         }
 
@@ -56,7 +62,12 @@ export function registerTraceDataFlowTool(server: McpServer) {
             }>
             paramSummary =
               params.length > 0
-                ? params.map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type ?? 'unknown'}`).join(', ')
+                ? params
+                    .map(
+                      (p) =>
+                        `${p.name}${p.optional ? '?' : ''}: ${p.type ?? 'unknown'}`,
+                    )
+                    .join(', ')
                 : '(none)'
           } catch {
             paramSummary = '(could not parse)'
@@ -79,12 +90,41 @@ export function registerTraceDataFlowTool(server: McpServer) {
 
         // Consumers: what this calls, passing data out
         const outboundCalls = await store.getCallsForSymbols([target.id])
-        const calleeIds = outboundCalls
-          .filter((c) => c.callee_id != null)
-          .map((c) => c.callee_id!)
-        const calleeSymbols =
-          calleeIds.length > 0 ? await store.getSymbolsByIds(calleeIds) : []
-        const calleeMap = new Map(calleeSymbols.map((s) => [s.id, s]))
+        const calleeOrImportIds = outboundCalls
+          .filter((c) => c.callee_id != null || c.imports_id != null)
+          .map((c) => ({
+            id: c.callee_id || c.imports_id,
+            type: c.callee_id ? 'callee' : 'import',
+          }))
+        const calleeOrImportSymbols = calleeOrImportIds.map(async (entry) => {
+          if (entry.type === 'callee') {
+            return await store.getSymbolsByIds([entry.id!])
+          } else {
+            // For imports, we can create a synthetic symbol record with the module path as the name
+            const importRecord = await store.getImportById(entry.id!)
+            if (importRecord) {
+              return [
+                {
+                  id: entry.id,
+                  callee_name: importRecord.imported_name,
+                  kind: 'import' as const,
+                  file_path: importRecord.module_path,
+                  line: 0,
+                  parameters_json: null,
+                  return_type: null,
+                  signature: null,
+                },
+              ]
+            }
+          }
+          return []
+        })
+        const calleeOrImportSymbolsFlattened = (
+          await Promise.all(calleeOrImportSymbols)
+        ).flat()
+        const calleeMap = new Map(
+          calleeOrImportSymbolsFlattened.map((s) => [s.id, s]),
+        )
 
         const sections: string[] = []
 
@@ -104,19 +144,24 @@ export function registerTraceDataFlowTool(server: McpServer) {
             `Data flows IN from — callers (${callers.length}${callers.length > 15 ? ', showing first 15' : ''}):\n${callerLines.join('\n')}`,
           )
         } else {
-          sections.push(`Data flows IN from: (no callers found — may be an entry point)`)
+          sections.push(
+            `Data flows IN from: (no callers found — may be an entry point)`,
+          )
         }
 
         // Callees (data flowing OUT)
         if (outboundCalls.length > 0) {
           const calleeLines = outboundCalls.slice(0, 15).map((c) => {
-            if (c.callee_id) {
-              const sym = calleeMap.get(c.callee_id)
+            if (c.callee_id || c.imports_id) {
+              const sym = calleeMap.get(c.callee_id ?? c.imports_id)
               const sig = sym?.signature ? `: ${sym.signature}` : ''
-              const loc = sym ? `(${sym.file_path}:${sym.line + 1})` : '(resolved)'
+              const loc = sym
+                ? `(${sym.file_path}:${sym.line + 1})`
+                : '(resolved)'
               return `  - ${c.callee_name} ${loc}${sig}`
             }
-            const callLine = c.call_line != null ? ` at line ${c.call_line + 1}` : ''
+            const callLine =
+              c.call_line != null ? ` at line ${c.call_line + 1}` : ''
             return `  - ${c.callee_name} (unresolved${callLine})`
           })
           sections.push(

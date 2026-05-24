@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
+import type { IndexedFile } from 'src/database/schemas'
 
 /** Registers a tool to traverse the call graph inbound and/or outbound from a symbol, up to a configurable depth. */
 export function registerTraceCallGraphTool(server: McpServer) {
@@ -17,14 +18,19 @@ export function registerTraceCallGraphTool(server: McpServer) {
           .describe(
             'inbound = who calls this symbol; outbound = what this symbol calls; both = full graph',
           ),
-        depth: z.number().default(3).describe('Maximum traversal depth (default 3)'),
-        file_path: z
+        depth: z
+          .number()
+          .default(3)
+          .describe('Maximum traversal depth (default 3)'),
+        file_path_or_file_name: z
           .string()
           .optional()
-          .describe('Optional file path to disambiguate when multiple symbols share the name'),
+          .describe(
+            'Optional File name or File path relative to workspace root. Supports partial file name or file path matches. Used to disambiguate when multiple symbols share the name',
+          ),
       }),
     },
-    async ({ symbol_name, direction, depth, file_path }) => {
+    async ({ symbol_name, direction, depth, file_path_or_file_name }) => {
       const store = IndexerDB.getInstance()
       try {
         const maxDepth = (depth as number) ?? 3
@@ -34,10 +40,38 @@ export function registerTraceCallGraphTool(server: McpServer) {
         const lines: string[] = []
 
         if (dir === 'outbound' || dir === 'both') {
+          let fileRecord: IndexedFile['Select'] | null = null
+          if (file_path_or_file_name) {
+            const files = await store.getFileByPartialNameOrPath(
+              file_path_or_file_name,
+            )
+            if (files.length === 0) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `No file found matching: ${file_path_or_file_name}`,
+                  },
+                ],
+              }
+            }
+            if (files.length > 1) {
+              const fileList = files.map((f) => `  - ${f.path}`).join('\n')
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `Multiple files found matching '${file_path_or_file_name}':\n${fileList}\nPlease provide a more specific file path or name to disambiguate.`,
+                  },
+                ],
+              }
+            }
+            fileRecord = files[0] ?? null
+          }
           const startSymbols = await store.searchSymbols(
             name,
             undefined,
-            file_path as string | undefined,
+            fileRecord?.path,
             5,
           )
 
@@ -45,7 +79,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
             lines.push(`Outbound: symbol '${name}' not found in index.`)
           } else {
             const target = startSymbols[0]!
-            if (startSymbols.length > 1 && !file_path) {
+            if (startSymbols.length > 1 && !file_path_or_file_name) {
               lines.push(
                 `Note: ${startSymbols.length} symbols named '${name}' found; using first match (${target.file_path}:${target.line + 1}). Provide file_path to disambiguate.\n`,
               )
@@ -54,7 +88,18 @@ export function registerTraceCallGraphTool(server: McpServer) {
               `Outbound call graph for: ${name} (${target.file_path}:${target.line + 1})`,
             )
             const visitedOut = new Set<string>()
-            await buildOutbound(store, target.id, name, target.file_path, target.line + 1, 0, maxDepth, visitedOut, lines, '')
+            await buildOutbound(
+              store,
+              target.id,
+              name,
+              target.file_path,
+              target.line + 1,
+              0,
+              maxDepth,
+              visitedOut,
+              lines,
+              '',
+            )
           }
         }
 
@@ -111,16 +156,19 @@ async function buildOutbound(
     const isLast = i === calls.length - 1
     const connector = isLast ? '└─' : '├─'
     const childPrefix = prefix + (isLast ? '   ' : '│  ')
+    const docstringNote = call.docstring ? ` [${call.docstring}]` : ''
 
     if (call.callee_id) {
       if (visited.has(call.callee_id)) {
-        lines.push(`${prefix}${connector} ${call.callee_name} [cycle]`)
+        lines.push(
+          `${prefix}${connector} ${call.callee_name} [cycle] ${docstringNote}`,
+        )
         continue
       }
       const callee = await store.getDefinition(call.callee_id)
       if (callee) {
         lines.push(
-          `${prefix}${connector} ${callee.name} (${callee.file_path}:${callee.line + 1})`,
+          `${prefix}${connector} ${callee.name} (${callee.file_path}:${callee.line + 1}) ${docstringNote}`,
         )
         await buildOutbound(
           store,
@@ -135,11 +183,31 @@ async function buildOutbound(
           childPrefix,
         )
       } else {
-        lines.push(`${prefix}${connector} ${call.callee_name} (unresolved)`)
+        lines.push(
+          `${prefix}${connector} ${call.callee_name} (unresolved) ${docstringNote}`,
+        )
+      }
+    } else if (call.imports_id) {
+      const imp = await store.getImportsByNameAndFile(
+        call.callee_name,
+        call.caller_file_path,
+      )
+      if (imp.length > 0) {
+        const impRecord = imp[0]!
+        lines.push(
+          `${prefix}${connector} ${call.callee_name} (imported as ${impRecord.imported_name} from ${impRecord.module_path}) ${docstringNote}`,
+        )
+      } else {
+        lines.push(
+          `${prefix}${connector} ${call.callee_name} (unresolved import) ${docstringNote}`,
+        )
       }
     } else {
-      const callLine = call.call_line != null ? ` at line ${call.call_line + 1}` : ''
-      lines.push(`${prefix}${connector} ${call.callee_name} (unresolved${callLine})`)
+      const callLine =
+        call.call_line != null ? ` at line ${call.call_line + 1}` : ''
+      lines.push(
+        `${prefix}${connector} ${call.callee_name} (unresolved${callLine}) ${docstringNote}`,
+      )
     }
   }
 }
@@ -182,11 +250,15 @@ async function buildInbound(
     const childPrefix = prefix + (isLast ? '   ' : '│  ')
 
     if (visited.has(caller.callerName)) {
-      lines.push(`${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1}) [cycle]`)
+      lines.push(
+        `${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1}) [cycle]`,
+      )
       continue
     }
 
-    lines.push(`${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1})`)
+    lines.push(
+      `${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1})`,
+    )
     await buildInbound(
       store,
       caller.callerName,

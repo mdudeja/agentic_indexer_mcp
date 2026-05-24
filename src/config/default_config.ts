@@ -68,15 +68,17 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             public_field_definition: {
               kind: SymbolKind.property,
               name_field: 'name',
-              docstring: DocstringStrategy.comment_before,
+              docstring: DocstringStrategy.either,
             },
             variable_declaration: {
               kind: SymbolKind.var,
               name_field: 'name',
+              docstring: DocstringStrategy.comment_after,
             },
             lexical_declaration: {
               kind: SymbolKind.let,
               name_field: 'name',
+              docstring: DocstringStrategy.comment_after,
             },
             interface_declaration: {
               kind: SymbolKind.interface,
@@ -113,6 +115,10 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               docstring: DocstringStrategy.comment_before,
               inherit_name_from_parent: true,
             },
+            call_expression: {
+              kind: SymbolKind.symbol_call,
+              docstring: DocstringStrategy.comment_after,
+            },
           },
           lists: {
             exported_nodes: ['export_statement', 'export_default_declaration'],
@@ -138,6 +144,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'variable_declaration',
               'lexical_declaration',
             ],
+            member_access_patterns: [/([\w$]+)/g],
           },
         },
       },
@@ -245,6 +252,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'variable_declaration',
               'lexical_declaration',
             ],
+            member_access_patterns: [/([\w$]+)/g],
           },
         },
       },

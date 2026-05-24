@@ -31,9 +31,15 @@ export class Watcher {
     this.watcher
       .on('add', async (path) => {
         await pipeline.runOnFile(path)
+        await Bun.sleep(100) // slight delay to ensure file is fully written before enhancement/docstring steps
+        await pipeline.runEnhancementStep([relative(this.cwd, path)])
+        await pipeline.runDocstringStep(relative(this.cwd, path))
       })
       .on('change', async (path) => {
         await pipeline.runOnFile(path)
+        await Bun.sleep(100) // slight delay to ensure file is fully written before enhancement/docstring steps
+        await pipeline.runEnhancementStep([relative(this.cwd, path)])
+        await pipeline.runDocstringStep(relative(this.cwd, path))
       })
       .on('unlink', async (path) => {
         const relPath = relative(this.cwd, path)

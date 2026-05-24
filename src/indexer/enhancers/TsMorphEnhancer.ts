@@ -74,13 +74,18 @@ export class TsMorphEnhancer extends Enhancer {
 
     for (const relPath of relPaths) {
       const absPath = join(this.cwd, relPath)
+
+      const extn = relPath.split('.').pop() || ''
+      const language = this.config.extnToLangMap[extn]
+      if (!language) continue
+
       const symbols = await store.getSymbolsForFile(relPath)
 
       for (const sym of symbols) {
         if (
-          !this.config.languages.tsx?.treesitter.lists.callable_kinds.includes(
-            sym.kind,
-          )
+          !this.config.languages[
+            language
+          ]?.treesitter.lists.callable_kinds.includes(sym.kind)
         ) {
           continue
         }
@@ -117,9 +122,9 @@ export class TsMorphEnhancer extends Enhancer {
     // Group by caller_file to keep the SourceFile cache hot
     const byFile = new Map<string, typeof unresolved>()
     for (const call of unresolved) {
-      const list = byFile.get(call.caller_file) ?? []
+      const list = byFile.get(call.caller_file_path) ?? []
       list.push(call)
-      byFile.set(call.caller_file, list)
+      byFile.set(call.caller_file_path, list)
     }
 
     for (const [callerFile, calls] of byFile) {
@@ -127,8 +132,8 @@ export class TsMorphEnhancer extends Enhancer {
       for (const call of calls) {
         const def = this.resolveCallSite(
           absCallerPath,
-          call.call_line,
-          call.call_column,
+          call.call_line!,
+          call.call_column!,
         )
         if (!def) continue
 
@@ -137,7 +142,19 @@ export class TsMorphEnhancer extends Enhancer {
           relDefFile,
           def.definitionLine,
         )
-        if (!sym) continue
+        if (!sym) {
+          const importedId = await this.getImportedId(
+            store,
+            call.callee_name,
+            callerFile,
+            call.call_text,
+          )
+          if (importedId) {
+            await store.updateImportsId(call.id, importedId)
+            resolved++
+          }
+          continue
+        }
 
         await store.updateCalleeId(call.id, sym.id)
         resolved++
@@ -171,7 +188,7 @@ export class TsMorphEnhancer extends Enhancer {
     return null
   }
 
-  /** "Retrieves or creates the source file for the specified absolute path within the project." */
+  /** Retrieves or creates the source file for the specified absolute path within the project. */
   private getSourceFile(absPath: string) {
     if (!this.project) return null
     return (
@@ -291,5 +308,35 @@ export class TsMorphEnhancer extends Enhancer {
       logDebug('[TsMorphEnhancer] getSymbolSignature failed:', e)
       return null
     }
+  }
+
+  /** Retrieves the ID of an imported symbol based on the callee name and the caller file. */
+  private async getImportedId(
+    store: IndexerDB,
+    calleeName: string,
+    callerFile: string,
+    call_text: string,
+  ): Promise<string | null> {
+    let imports = await store.getImportsByNameAndFile(calleeName, callerFile)
+    if (imports.length === 0) {
+      const extn = callerFile.split('.').pop() || ''
+      const language = this.config.extnToLangMap[extn]
+      if (!language) return null
+      const langConfig = this.config.languages[language]
+      if (!langConfig) return null
+
+      const memberAccessPatterns =
+        langConfig.treesitter.lists.member_access_patterns
+      const members = memberAccessPatterns.map((pattern) =>
+        call_text.match(pattern),
+      )
+
+      if (members.length === 0) return null
+      imports = await store.getImportsByNameAndFile(members[0]![0], callerFile)
+
+      if (imports.length === 0) return null
+    }
+
+    return imports[0]!.id
   }
 }

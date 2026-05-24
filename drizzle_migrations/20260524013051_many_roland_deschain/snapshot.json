@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "41dacd9b-9dc1-41f0-9bd6-ed1707518e1f",
+  "id": "61137479-76d8-489d-916a-533a6e9dc1fc",
   "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
+    "05bd470c-4222-4740-924a-a09752fc9c63"
   ],
   "ddl": [
     {
@@ -154,11 +154,41 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_text",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "docstring",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "callee_id",
+      "entityType": "columns",
+      "table": "symbol_calls"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imports_id",
       "entityType": "columns",
       "table": "symbol_calls"
     },
@@ -389,6 +419,21 @@
     },
     {
       "columns": [
+        "imports_id"
+      ],
+      "tableTo": "imports",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_symbol_calls_imports_id_imports_id_fk",
+      "entityType": "fks",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
         "file_path"
       ],
       "tableTo": "files",
@@ -547,6 +592,20 @@
       "where": null,
       "origin": "manual",
       "name": "idx_symbol_calls_callee_id",
+      "entityType": "indexes",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        {
+          "value": "imports_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_symbol_calls_imports_id",
       "entityType": "indexes",
       "table": "symbol_calls"
     },

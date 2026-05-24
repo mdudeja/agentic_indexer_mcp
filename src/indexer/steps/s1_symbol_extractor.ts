@@ -5,6 +5,7 @@ import {
   type IndexedImport,
   type IndexedSymbolCall,
   type LanguageConfig,
+  DocstringStrategy,
 } from '../../config/types'
 import { randomUUIDv7, hash } from 'bun'
 import { AppStateManager } from 'src/state'
@@ -22,7 +23,7 @@ function isExported(node: Node, config: TreesitterConfig): boolean {
   return parent !== null && config.lists.exported_nodes.includes(parent.type)
 }
 
-/** Retrieves and returns the docstring comment associated with a given syntax tree node. */
+/** Retrieves and returns the docstring comment associated with a given syntax tree node based on configured strategy. If strategy is 'either', it checks before first. */
 function getDocstring(
   node: Node,
   config: TreesitterConfig,
@@ -49,10 +50,25 @@ function getDocstring(
   const nodeInfo = config.nodes_info[node.type]
   if (!nodeInfo || !nodeInfo.docstring) return undefined
 
-  let docStringNode =
-    nodeInfo.docstring === 'comment_before'
-      ? targetNode.previousNamedSibling
-      : targetNode.nextNamedSibling
+  let docStringNode: Node | null = null
+  let strategyUsed = 'previous'
+
+  if (nodeInfo.docstring === DocstringStrategy.either) {
+    docStringNode = targetNode.previousNamedSibling
+    if (!docStringNode || !docStringNode.type.includes('comment')) {
+      docStringNode = targetNode.nextNamedSibling
+      strategyUsed = 'next'
+    }
+  }
+
+  if (nodeInfo.docstring === DocstringStrategy.comment_before) {
+    docStringNode = targetNode.previousNamedSibling
+  }
+
+  if (nodeInfo.docstring === DocstringStrategy.comment_after) {
+    docStringNode = targetNode.nextNamedSibling
+    strategyUsed = 'next'
+  }
 
   if (!docStringNode) return undefined
 
@@ -61,7 +77,7 @@ function getDocstring(
   while (docStringNode && docStringNode.type.includes('comment')) {
     comments.unshift(docStringNode.text.trim())
     docStringNode =
-      nodeInfo.docstring === 'comment_before'
+      strategyUsed === 'previous'
         ? docStringNode.previousNamedSibling
         : docStringNode.nextNamedSibling
   }
@@ -257,10 +273,12 @@ function handleVariableDeclaration(
 
 /** Records a function call by extracting the callee name and logging relevant details such as caller, language, location, and file path. */
 function recordCall(
+  config: TreesitterConfig,
   node: Node,
   currentCallableId: string,
   languageName: string,
   file_path: string,
+  call_text: string,
 ) {
   const funcNode = node.childForFieldName('function')
   if (!funcNode) return
@@ -280,6 +298,8 @@ function recordCall(
       call_line: node.startPosition.row,
       call_column: node.startPosition.column,
       caller_file_path: file_path,
+      call_text,
+      docstring: getDocstring(node, config) ?? null,
     })
   }
 }
@@ -296,11 +316,14 @@ function traverse(
   let nextCallableId = currentCallableId
 
   if (node.type === 'call_expression' && currentCallableId) {
+    const call_text = node.text.trim()
     recordCall(
+      config,
       node,
       currentCallableId,
       config?.language_name ?? 'unknown',
       file_path,
+      call_text,
     )
   }
 

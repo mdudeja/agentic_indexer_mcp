@@ -48,7 +48,7 @@ function buildKindToListMap(config: TreesitterConfig): Map<string, ListName> {
   const { nodes_info, lists } = config
   for (const listName of Object.keys(lists) as ListName[]) {
     for (const nodeType of lists[listName]) {
-      const info: NodeInfo | undefined = nodes_info[nodeType]
+      const info: NodeInfo | undefined = nodes_info[nodeType as string]
       if (!info) continue
       for (const kind of info.kind) {
         if (!map.has(kind)) map.set(kind, listName)
