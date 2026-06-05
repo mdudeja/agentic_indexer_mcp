@@ -12,7 +12,12 @@ import { registerResolveTypeTool } from './resolve_type'
 import { registerTraceDataFlowTool } from './trace_data_flow'
 import { registerFindSimilarPatternsTool } from './find_similar_patterns'
 import { registerGetEntryPointsTool } from './get_entry_points'
-import { registerGetHierarchyTool } from './get_hierarchy'
+import { registerFindDeadCodeTool } from './find_dead_code'
+import { registerGetUntestedSymbolsTool } from './get_untested_symbols'
+import { registerGetSymbolImportanceTool } from './get_symbol_importance'
+import { registerGetDependencyCyclesTool } from './get_dependency_cycles'
+import { registerGetCouplingMetricsTool } from './get_coupling_metrics'
+import { registerAuditAgentConfigTool } from './audit_agent_config'
 
 /** Registers all MCP tools on the server. */
 export function registerTools(server: McpServer) {
@@ -32,9 +37,16 @@ export function registerTools(server: McpServer) {
   registerGetCodebaseMapTool(server)
   registerGetEntryPointsTool(server)
   registerFindRelatedTestsTool(server)
-  registerGetHierarchyTool(server)
 
   // Type and pattern analysis
   registerResolveTypeTool(server)
   registerFindSimilarPatternsTool(server)
+
+  // Analytical / quality tools
+  registerFindDeadCodeTool(server)
+  registerGetUntestedSymbolsTool(server)
+  registerGetSymbolImportanceTool(server)
+  registerGetDependencyCyclesTool(server)
+  registerGetCouplingMetricsTool(server)
+  registerAuditAgentConfigTool(server)
 }

@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, isNull, sql, inArray, notInArray } from 'drizzle-orm'
+import { eq, and, isNull, sql, inArray, notInArray, or, not } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 
 /** Registers a tool to produce a top-down architectural map of the codebase grouped by directory. */
@@ -86,8 +86,18 @@ export function registerGetCodebaseMapTool(server: McpServer) {
             )
             .where(
               and(
-                eq(schema.symbols.exported, true),
-                isNull(schema.symbols.parent_id),
+                or(
+                  eq(schema.symbols.exported, true),
+                  and(
+                    not(isNull(schema.symbols.parent_id)),
+                    sql<boolean>`exists (
+                      select 1
+                      from symbols as parent
+                      where parent.id = ${schema.symbols.parent_id}
+                        and parent.exported = true
+                    )`,
+                  ),
+                ),
                 inArray(schema.symbols.file_path, filePaths),
               ),
             )

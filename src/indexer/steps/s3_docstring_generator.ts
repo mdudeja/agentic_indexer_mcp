@@ -2,7 +2,7 @@ import { join } from 'path'
 import { existsSync } from 'node:fs'
 import type { IndexerDB } from 'src/database/IndexerDB'
 import type { IndexerConfig, IndexedSymbol } from 'src/config/types'
-import { SymbolKind } from 'src/config/types'
+import { DocstringStrategy, SymbolKind } from 'src/config/types'
 import { AppStateManager } from 'src/state'
 import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider, type DocstringProvider } from '../docstrings/providers'
@@ -187,7 +187,13 @@ export class DocstringGenerationStep {
         ...lists.callable_nodes,
       ]) {
         const info = nodes_info[nodeType]
-        if (info?.kind) kinds.add(info.kind)
+        if (
+          info?.kind &&
+          info.docstring &&
+          info.docstring !== DocstringStrategy.none
+        ) {
+          kinds.add(info.kind)
+        }
       }
     }
     return [...kinds]

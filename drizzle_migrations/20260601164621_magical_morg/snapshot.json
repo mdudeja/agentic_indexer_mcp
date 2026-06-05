@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "61137479-76d8-489d-916a-533a6e9dc1fc",
+  "id": "64a212b9-5a84-4ba0-9aeb-cde419acb652",
   "prevIds": [
-    "05bd470c-4222-4740-924a-a09752fc9c63"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -373,6 +373,26 @@
       "table": "symbols"
     },
     {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "inherits_from_names",
+      "entityType": "columns",
+      "table": "symbols"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "inheritence_type",
+      "entityType": "columns",
+      "table": "symbols"
+    },
+    {
       "columns": [
         "file_path"
       ],
@@ -399,6 +419,21 @@
       "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_symbol_calls_caller_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        "caller_file_path"
+      ],
+      "tableTo": "files",
+      "columnsTo": [
+        "path"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_symbol_calls_caller_file_path_files_path_fk",
       "entityType": "fks",
       "table": "symbol_calls"
     },
@@ -606,6 +641,20 @@
       "where": null,
       "origin": "manual",
       "name": "idx_symbol_calls_imports_id",
+      "entityType": "indexes",
+      "table": "symbol_calls"
+    },
+    {
+      "columns": [
+        {
+          "value": "caller_file_path",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_symbol_calls_file",
       "entityType": "indexes",
       "table": "symbol_calls"
     },

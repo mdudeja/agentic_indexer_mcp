@@ -1,4 +1,5 @@
 import { Project, Node, SyntaxKind, type DefinitionInfo } from 'ts-morph'
+import { SymbolKind } from 'src/config/types'
 import { join, relative } from 'path'
 import { existsSync } from 'fs'
 import type { IndexerDB } from '../../database/IndexerDB.ts'
@@ -7,8 +8,9 @@ import { truncate } from 'src/utils/misc.ts'
 import {
   Enhancer,
   type ParamInfo,
-  type ResolvedSignature,
+  type ResolvedCallableTypeInfo,
 } from '../steps/s2_Enhancer.ts'
+import { InheritenceType } from 'src/database/schemas/common.schema.ts'
 
 const CALLABLE_SYNTAX_KINDS = [
   SyntaxKind.FunctionDeclaration,
@@ -16,7 +18,7 @@ const CALLABLE_SYNTAX_KINDS = [
   SyntaxKind.ArrowFunction,
   SyntaxKind.FunctionExpression,
   SyntaxKind.Constructor,
-]
+] as const
 
 const MAX_TYPE_TEXT_LENGTH = 500
 
@@ -64,8 +66,8 @@ export class TsMorphEnhancer extends Enhancer {
     return this.available
   }
 
-  /** Enhances symbol types by resolving and updating their type information from file signatures, improving code analysis capabilities. */
-  override async enhanceSymbolTypes(
+  /** Enhances symbol types for callable kinds by resolving and updating their type information from file signatures, improving code analysis capabilities. */
+  override async enhanceSymbolTypesForCallables(
     store: IndexerDB,
     relPaths: string[],
   ): Promise<void> {
@@ -89,9 +91,13 @@ export class TsMorphEnhancer extends Enhancer {
         ) {
           continue
         }
-        const sig = this.getSymbolSignature(absPath, sym.line, sym.column)
+        const sig = this.getCallableSymbolTypeInfo(
+          absPath,
+          sym.line,
+          sym.column,
+        )
         if (!sig) continue
-        await store.updateSymbolTypeInfo(
+        await store.updateCallableSymbolTypeInfo(
           sym.id,
           JSON.stringify(sig.params),
           sig.returnType,
@@ -103,7 +109,51 @@ export class TsMorphEnhancer extends Enhancer {
     }
 
     logInfo(
-      `[TsMorphEnhancer] Enhanced ${enhanced} symbols with resolved types`,
+      `[TsMorphEnhancer] Enhanced ${enhanced} callable symbols with resolved types`,
+    )
+  }
+
+  /** Enhances symbol types for inherited types and interfaces by analyzing the inheritance relationships and updating type information accordingly, improving the accuracy of type resolution in the indexer database. */
+  override async enhanceSymbolTypesForInheritedTypesAndInterfaces(
+    store: IndexerDB,
+    relPaths: string[],
+  ): Promise<void> {
+    if (!this.available) return
+    let enhanced = 0
+
+    for (const relPath of relPaths) {
+      const absPath = join(this.cwd, relPath)
+
+      const extn = relPath.split('.').pop() || ''
+      const language = this.config.extnToLangMap[extn]
+      if (!language) continue
+
+      const symbols = await store.getSymbolsForFile(relPath)
+
+      for (const sym of symbols) {
+        if (sym.kind !== SymbolKind.interface && sym.kind !== SymbolKind.type) {
+          continue
+        }
+
+        const info = this.getTypeOrInterfaceInheritenceInfo(
+          absPath,
+          sym.line,
+          sym.column,
+        )
+        if (!info) continue
+        await store.updateSymbolInheritance(
+          sym.id,
+          info.inheritsFromNames,
+          info.inheritenceType,
+        )
+        enhanced++
+      }
+
+      this.refreshFile(absPath) // Clear cached SourceFile to free memory
+    }
+
+    logInfo(
+      `[TsMorphEnhancer] Enhanced ${enhanced} type/interface symbols with inheritance info`,
     )
   }
 
@@ -117,6 +167,11 @@ export class TsMorphEnhancer extends Enhancer {
     logInfo(
       `[TsMorphEnhancer] Resolving ${unresolved.length} unresolved call sites`,
     )
+
+    const callableKinds =
+      this.config.languages['typescript']?.treesitter.lists.callable_kinds ??
+      this.config.languages['tsx']?.treesitter.lists.callable_kinds ??
+      []
     let resolved = 0
 
     // Group by caller_file to keep the SourceFile cache hot
@@ -134,21 +189,38 @@ export class TsMorphEnhancer extends Enhancer {
           absCallerPath,
           call.call_line!,
           call.call_column!,
+          call.call_text,
         )
         if (!def) continue
 
         const relDefFile = relative(this.cwd, def.definitionFile)
-        const sym = await store.getSymbolAtLocation(
+        const sym = await store.getCallableSymbolAtLocation(
           relDefFile,
           def.definitionLine,
+          callableKinds,
         )
         if (!sym) {
-          const importedId = await this.getImportedId(
+          let importedId = await this.getImportedId(
             store,
             call.callee_name,
             callerFile,
-            call.call_text,
           )
+
+          // Fallback: resolve the receiver's declared type and look it up in imports.
+          if (!importedId) {
+            const receiverType = this.resolveReceiverTypeName(
+              absCallerPath,
+              call.call_line!,
+              call.call_column!,
+            )
+            if (receiverType) {
+              const imports = await store.getImportsByNameAndFile(
+                receiverType,
+                callerFile,
+              )
+              if (imports.length > 0) importedId = imports[0]!.id
+            }
+          }
           if (importedId) {
             await store.updateImportsId(call.id, importedId)
             resolved++
@@ -202,6 +274,7 @@ export class TsMorphEnhancer extends Enhancer {
     absFilePath: string,
     callLine: number,
     callColumn: number,
+    callText: string,
   ): {
     definitionFile: string
     definitionLine: number
@@ -227,7 +300,13 @@ export class TsMorphEnhancer extends Enhancer {
       }
       if (!callExpr || !Node.isCallExpression(callExpr)) return null
 
-      const callee = callExpr.getExpression()
+      const ancestors = callExpr
+        .getAncestors()
+        .filter((a) => callText.includes(a.getText()))
+      const outerCall = ancestors.filter(Node.isCallExpression).at(-1)
+      const resolvedCallExpr = outerCall ?? callExpr
+
+      const callee = resolvedCallExpr.getExpression()
       let defs: DefinitionInfo[] = []
       if (Node.isIdentifier(callee)) {
         defs = callee.getDefinitions()
@@ -255,12 +334,12 @@ export class TsMorphEnhancer extends Enhancer {
     }
   }
 
-  /** Retrieves the signature information of a symbol located at a specific position in the file, including its parameters and return type. */
-  private getSymbolSignature(
+  /** Retrieves the type information (parameters + return types) of a callable symbol located at a specific position in the file. */
+  private getCallableSymbolTypeInfo(
     absFilePath: string,
     line: number,
     column: number,
-  ): ResolvedSignature | null {
+  ): ResolvedCallableTypeInfo | null {
     if (!this.available) return null
     try {
       const sf = this.getSourceFile(absFilePath)
@@ -310,33 +389,150 @@ export class TsMorphEnhancer extends Enhancer {
     }
   }
 
-  /** Retrieves the ID of an imported symbol based on the callee name and the caller file. */
+  /** Gets the resolved inheritance info (base names + relationship kind) for a type alias or interface declaration at the given source location. Returns null when the symbol has no inheritance relationship or the location cannot be resolved. */
+  private getTypeOrInterfaceInheritenceInfo(
+    absFilePath: string,
+    line: number,
+    column: number,
+  ): { inheritsFromNames: string; inheritenceType: InheritenceType } | null {
+    if (!this.available) return null
+    try {
+      const sf = this.getSourceFile(absFilePath)
+      if (!sf) return null
+
+      const charOffset = sf.compilerNode.getPositionOfLineAndCharacter(
+        line,
+        column,
+      )
+      const nodeAtPos = sf.getDescendantAtPos(charOffset)
+      if (!nodeAtPos) return null
+
+      // --- Interface declaration: interface Foo extends Bar, Baz ---
+      const ifaceDecl = Node.isInterfaceDeclaration(nodeAtPos)
+        ? nodeAtPos
+        : nodeAtPos.getFirstAncestorByKind(SyntaxKind.InterfaceDeclaration)
+      if (ifaceDecl) {
+        const bases = ifaceDecl
+          .getExtends()
+          .map((e) => e.getExpression().getText())
+        if (bases.length === 0) return null
+        return {
+          inheritsFromNames: bases.join(','),
+          inheritenceType: InheritenceType.extends,
+        }
+      }
+
+      // --- Type alias: type Foo = Bar | Baz  or  Bar & Baz ---
+      const typeAlias = Node.isTypeAliasDeclaration(nodeAtPos)
+        ? nodeAtPos
+        : nodeAtPos.getFirstAncestorByKind(SyntaxKind.TypeAliasDeclaration)
+      if (typeAlias) {
+        const typeNode = typeAlias.getTypeNode()
+        if (!typeNode) return null
+
+        if (Node.isUnionTypeNode(typeNode)) {
+          const names = typeNode
+            .getTypeNodes()
+            .map((t) => t.getText())
+            .filter((n) => n !== 'null' && n !== 'undefined')
+          if (names.length === 0) return null
+          return {
+            inheritsFromNames: names.join(','),
+            inheritenceType: InheritenceType.union,
+          }
+        }
+
+        if (Node.isIntersectionTypeNode(typeNode)) {
+          const names = typeNode.getTypeNodes().map((t) => t.getText())
+          if (names.length === 0) return null
+          return {
+            inheritsFromNames: names.join(','),
+            inheritenceType: InheritenceType.intersection,
+          }
+        }
+
+        return null
+      }
+
+      return null
+    } catch (e) {
+      logDebug('[TsMorphEnhancer] getResolvedTypeOrInterface failed:', e)
+      return null
+    }
+  }
+
+  /** Retrieves the ID of an imported symbol based on the callee name and the caller file.
+   * Only handles direct-name imports (e.g. `migrate()`). Method-call-on-typed-receiver
+   * resolution (e.g. `this.sqlite.run()`) is handled by the `resolveReceiverTypeName`
+   * fallback in `resolveAllPendingCalls`.
+   */
   private async getImportedId(
     store: IndexerDB,
     calleeName: string,
     callerFile: string,
-    call_text: string,
   ): Promise<string | null> {
-    let imports = await store.getImportsByNameAndFile(calleeName, callerFile)
-    if (imports.length === 0) {
-      const extn = callerFile.split('.').pop() || ''
-      const language = this.config.extnToLangMap[extn]
-      if (!language) return null
-      const langConfig = this.config.languages[language]
-      if (!langConfig) return null
+    const imports = await store.getImportsByNameAndFile(calleeName, callerFile)
+    return imports.length > 0 ? imports[0]!.id : null
+  }
 
-      const memberAccessPatterns =
-        langConfig.treesitter.lists.member_access_patterns
-      const members = memberAccessPatterns.map((pattern) =>
-        call_text.match(pattern),
+  /** Resolves the declared base type name of the receiver object in a method call.
+   * For `this.sqlite.run(query)` the receiver is `this.sqlite`, whose type is `Database`,
+   * so this returns `"Database"`. Returns null for plain function calls (no receiver).
+   */
+  private resolveReceiverTypeName(
+    absFilePath: string,
+    callLine: number,
+    callColumn: number,
+  ): string | null {
+    if (!this.available) return null
+    try {
+      const sf = this.getSourceFile(absFilePath)
+      if (!sf) return null
+
+      const charOffset = sf.compilerNode.getPositionOfLineAndCharacter(
+        callLine,
+        callColumn,
       )
+      const nodeAtPos = sf.getDescendantAtPos(charOffset)
+      if (!nodeAtPos) return null
 
-      if (members.length === 0) return null
-      imports = await store.getImportsByNameAndFile(members[0]![0], callerFile)
+      let callExpr: Node | undefined
+      if (Node.isCallExpression(nodeAtPos)) {
+        callExpr = nodeAtPos
+      } else {
+        callExpr = nodeAtPos.getFirstAncestorByKind(SyntaxKind.CallExpression)
+      }
+      if (!callExpr || !Node.isCallExpression(callExpr)) return null
 
-      if (imports.length === 0) return null
+      const callee = callExpr.getExpression()
+      if (!Node.isPropertyAccessExpression(callee)) return null
+
+      const receiver = callee.getExpression()
+      const type = receiver.getType().getNonNullableType()
+
+      // Prefer the declared symbol name so generics are stripped automatically
+      // (e.g. `Database<Schema>` → symbol name is just `Database`).
+      const symbol = type.getSymbol() ?? type.getAliasSymbol()
+      if (symbol) return symbol.getName()
+
+      // Last resort: parse the leading identifier from the printed type text
+      // using the per-language member_access_patterns from config.
+      const typeText = type.getText()
+      const extn = absFilePath.split('.').pop() ?? ''
+      const language = this.config.extnToLangMap[extn]
+      const patterns =
+        (language &&
+          this.config.languages[language]?.treesitter.lists
+            .member_access_patterns) ||
+        []
+      for (const pattern of patterns) {
+        const match = typeText.match(pattern)
+        if (match?.[1]) return match[1]
+      }
+      return null
+    } catch (e) {
+      logDebug('[TsMorphEnhancer] resolveReceiverTypeName failed:', e)
+      return null
     }
-
-    return imports[0]!.id
   }
 }

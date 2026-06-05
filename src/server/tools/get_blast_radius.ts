@@ -17,7 +17,9 @@ export function registerGetBlastRadiusTool(server: McpServer) {
         depth: z
           .number()
           .default(1)
-          .describe('How many caller levels to traverse (default 1 = direct callers only)'),
+          .describe(
+            'How many caller levels to traverse (default 1 = direct callers only)',
+          ),
       }),
     },
     async ({ symbol_name, depth }) => {
@@ -28,8 +30,15 @@ export function registerGetBlastRadiusTool(server: McpServer) {
 
         // BFS over inbound call graph
         const visited = new Set<string>()
-        const allCallers: Array<{ callerFile: string; callerName: string; line: number; depth: number }> = []
-        const queue: Array<{ name: string; depth: number }> = [{ name, depth: 0 }]
+        const allCallers: Array<{
+          callerFile: string
+          callerName: string
+          line: number
+          depth: number
+        }> = []
+        const queue: Array<{ name: string; depth: number }> = [
+          { name, depth: 0 },
+        ]
 
         while (queue.length > 0) {
           const current = queue.shift()!
@@ -48,13 +57,17 @@ export function registerGetBlastRadiusTool(server: McpServer) {
         if (allCallers.length === 0) {
           return {
             content: [
-              { type: 'text', text: `No callers found for '${name}'. Safe to change or may be an entry point.` },
+              {
+                type: 'text',
+                text: `No callers found for '${name}'. Safe to change or may be an entry point.`,
+              },
             ],
           }
         }
 
         const lines = allCallers.map(
-          (c) => `  - ${c.callerName} (${c.callerFile}:${c.line + 1})${maxDepth > 1 ? ` [depth ${c.depth}]` : ''}`,
+          (c) =>
+            `  - ${c.callerName} (${c.callerFile}:${c.line + 1})${maxDepth > 1 ? ` [depth ${c.depth}]` : ''}`,
         )
 
         return {
@@ -67,7 +80,9 @@ export function registerGetBlastRadiusTool(server: McpServer) {
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error finding blast radius: ${err}` }],
+          content: [
+            { type: 'text', text: `Error finding blast radius: ${err}` },
+          ],
           isError: true,
         }
       }

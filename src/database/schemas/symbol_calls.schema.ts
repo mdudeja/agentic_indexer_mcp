@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 import { symbols } from './symbols.schema'
 import { imports } from './imports.schema'
+import { files } from './files.schema'
 
 export const symbol_calls = sqliteTable(
   'symbol_calls',
@@ -11,7 +12,9 @@ export const symbol_calls = sqliteTable(
       .references(() => symbols.id, { onDelete: 'cascade' }),
     callee_name: text().notNull(),
     language_name: text().notNull(),
-    caller_file_path: text().notNull(),
+    caller_file_path: text()
+      .notNull()
+      .references(() => files.path, { onDelete: 'cascade' }),
     call_text: text().notNull(),
     docstring: text(),
     // Resolved at upsert time; null when the callee hasn't been indexed yet.
@@ -26,6 +29,7 @@ export const symbol_calls = sqliteTable(
     index('idx_symbol_calls_callee').on(table.callee_name),
     index('idx_symbol_calls_callee_id').on(table.callee_id),
     index('idx_symbol_calls_imports_id').on(table.imports_id),
+    index('idx_symbol_calls_file').on(table.caller_file_path),
   ],
 )
 

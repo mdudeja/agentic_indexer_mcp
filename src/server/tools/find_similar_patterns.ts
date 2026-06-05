@@ -13,11 +13,15 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
       description:
         'Find symbols that follow the same structural pattern as a given symbol, matched on any combination of kind, return type, parameter count, and decorator. Useful for finding systemic bugs or understanding conventions.',
       inputSchema: z.object({
-        symbol_name: z.string().describe('Name of the symbol to find similar patterns for'),
+        symbol_name: z
+          .string()
+          .describe('Name of the symbol to find similar patterns for'),
         file_path: z
           .string()
           .optional()
-          .describe('Optional file path to disambiguate when multiple symbols share the name'),
+          .describe(
+            'Optional file path to disambiguate when multiple symbols share the name',
+          ),
         match_on: z
           .array(z.enum(['kind', 'return_type', 'param_count', 'decorator']))
           .default(['kind', 'return_type', 'param_count', 'decorator'])
@@ -28,7 +32,12 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
       const store = IndexerDB.getInstance()
       try {
         const name = symbol_name as string
-        const matchDims = (match_on as string[]) ?? ['kind', 'return_type', 'param_count', 'decorator']
+        const matchDims = (match_on as string[]) ?? [
+          'kind',
+          'return_type',
+          'param_count',
+          'decorator',
+        ]
         const db = store.getDb()
 
         const candidates = await store.searchSymbols(
@@ -40,7 +49,9 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
 
         if (candidates.length === 0) {
           return {
-            content: [{ type: 'text', text: `Symbol '${name}' not found in index.` }],
+            content: [
+              { type: 'text', text: `Symbol '${name}' not found in index.` },
+            ],
           }
         }
 
@@ -54,7 +65,8 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
         let targetParamCount: number | null = null
         if (target.parameters_json) {
           try {
-            targetParamCount = (JSON.parse(target.parameters_json) as unknown[]).length
+            targetParamCount = (JSON.parse(target.parameters_json) as unknown[])
+              .length
           } catch {
             // ignore
           }
@@ -68,7 +80,9 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
         }
 
         if (matchDims.includes('return_type') && target.return_type) {
-          conditions.push(like(schema.symbols.return_type, `%${target.return_type}%`))
+          conditions.push(
+            like(schema.symbols.return_type, `%${target.return_type}%`),
+          )
         }
 
         if (matchDims.includes('decorator') && target.decorator) {
@@ -86,7 +100,10 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
           results = results.filter((s) => {
             if (!s.parameters_json) return targetParamCount === 0
             try {
-              return (JSON.parse(s.parameters_json) as unknown[]).length === targetParamCount
+              return (
+                (JSON.parse(s.parameters_json) as unknown[]).length ===
+                targetParamCount
+              )
             } catch {
               return false
             }
@@ -110,7 +127,9 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
         const targetDesc = [
           `kind: ${target.kind}`,
           target.return_type ? `returns: ${target.return_type}` : null,
-          targetParamCount !== null ? `${targetParamCount} param${targetParamCount !== 1 ? 's' : ''}` : null,
+          targetParamCount !== null
+            ? `${targetParamCount} param${targetParamCount !== 1 ? 's' : ''}`
+            : null,
           target.decorator ? `@${target.decorator}` : null,
         ]
           .filter(Boolean)
@@ -120,10 +139,14 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
           let paramDesc = ''
           if (s.parameters_json) {
             try {
-              const params = JSON.parse(s.parameters_json) as Array<{ name: string; type?: string }>
-              paramDesc = params.length > 0
-                ? `(${params.map((p) => `${p.name}: ${p.type ?? '?'}`).join(', ')})`
-                : '()'
+              const params = JSON.parse(s.parameters_json) as Array<{
+                name: string
+                type?: string
+              }>
+              paramDesc =
+                params.length > 0
+                  ? `(${params.map((p) => `${p.name}: ${p.type ?? '?'}`).join(', ')})`
+                  : '()'
             } catch {
               paramDesc = ''
             }
@@ -146,7 +169,9 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error finding similar patterns: ${err}` }],
+          content: [
+            { type: 'text', text: `Error finding similar patterns: ${err}` },
+          ],
           isError: true,
         }
       }

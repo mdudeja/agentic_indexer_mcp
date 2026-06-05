@@ -252,7 +252,11 @@ export class IndexPipeline {
     for (const ext in processedFilesByExt) {
       const enhancer = await this.loadEnhancerForFileType(ext)
       if (enhancer) {
-        await enhancer.enhanceSymbolTypes(
+        await enhancer.enhanceSymbolTypesForCallables(
+          this.options.store,
+          processedFilesByExt[ext]!,
+        )
+        await enhancer.enhanceSymbolTypesForInheritedTypesAndInterfaces(
           this.options.store,
           processedFilesByExt[ext]!,
         )

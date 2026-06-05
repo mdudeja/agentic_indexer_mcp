@@ -20,18 +20,15 @@ export function registerFindRelatedTestsTool(server: McpServer) {
       }),
     },
     async ({ target }) => {
-      const TEST_RE = AppStateManager.getInstance()
-        .getItem('config')
-        ?.testFilePatterns.map((p) => {
-          if (p instanceof RegExp) return p
-          if (typeof p === 'string') return new RegExp(p)
-          return null
-        })
-        .filter((p): p is RegExp => p !== null) ?? [
-        /\.(test|spec)\.(ts|tsx|js|jsx)$/,
-        /__tests__\//,
-        /tests\//,
-      ]
+      const TEST_RE =
+        AppStateManager.getInstance()
+          .getItem('config')
+          ?.testFilePatterns.map((p) => {
+            if (p instanceof RegExp) return p
+            if (typeof p === 'string') return new RegExp(p)
+            return null
+          })
+          .filter((p): p is RegExp => p !== null) ?? null
 
       const store = IndexerDB.getInstance()
       try {
@@ -40,7 +37,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
         const allFiles = await store.getAllFiles()
         const testFilePaths = new Set(
           allFiles
-            .filter((f) => TEST_RE.some((re) => re.test(f.path)))
+            .filter((f) => TEST_RE?.some((re) => re.test(f.path)))
             .map((f) => f.path),
         )
 

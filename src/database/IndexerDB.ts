@@ -17,6 +17,7 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { dirname } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 import { SymbolKind } from '../config/types'
+import { InheritenceType } from './schemas/common.schema'
 import type {
   IndexedSymbol,
   IndexedFile,
@@ -124,13 +125,19 @@ export class IndexerDB {
       `INSERT INTO imports (${importCols.join(',')}) VALUES (${importCols.map(() => '?').join(',')})`,
     )
 
+    const insertCallCols = Object.keys(getColumns(schema.symbol_calls))
+    const insertCallPlaceholders = insertCallCols.map(() => '?').join(',')
     this.preparedCallInsert = this.sqlite.prepare(
-      `INSERT INTO symbol_calls (id, caller_id, callee_name, callee_id, language_name, call_line, call_column, caller_file_path, call_text, docstring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO symbol_calls (${insertCallCols.join(',')}) VALUES (${insertCallPlaceholders})`,
     )
 
     this.dbInited = true
     logDebug('Database migrations applied')
   }
+
+  /**===========
+   * File Operations
+   * ===========*/
 
   /** Upserts a file by either inserting it if it doesn't exist or updating it if a conflict occurs based on the file path. */
   async upsertFile(file: IndexedFile['Insert']) {
@@ -158,11 +165,52 @@ export class IndexerDB {
     return result.length > 0 ? result[0]!.hash : null
   }
 
+  /** Get a summary of symbols (e.g., functions, variables) defined in a specific file, ordered by their line numbers. */
+  async getFileSummary(path: string) {
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(eq(schema.symbols.file_path, path))
+      .orderBy(schema.symbols.line)
+  }
+
+  /** Fetches all files from the database, returning an array containing detailed information for each file, including its path, cryptographic hash, indexing timestamp, and associated language if applicable. */
+  async getAllFiles(): Promise<IndexedFile['Select'][]> {
+    return this.db.select().from(schema.files)
+  }
+
+  /** Retrieves a file from the database based on its path if it exists. */
+  async getFileByPath(path: string): Promise<IndexedFile['Select'] | null> {
+    const result = await this.db
+      .select()
+      .from(schema.files)
+      .where(eq(schema.files.path, path))
+      .limit(1)
+
+    return result[0] || null
+  }
+
+  /** Retrieves a file from the database based on a partial file name or path match. */
+  async getFileByPartialNameOrPath(
+    partialNameOrPath: string,
+  ): Promise<IndexedFile['Select'][]> {
+    const pattern = `%${partialNameOrPath.replace(/\*/g, '%')}%`
+    return this.db
+      .select()
+      .from(schema.files)
+      .where(like(schema.files.path, pattern))
+      .orderBy(schema.files.path)
+  }
+
   /** Deletes a file from the database using its path. */
   async deleteFile(path: string) {
     // Cascades to symbols if ON DELETE CASCADE is set up correctly in schema
     return this.db.delete(schema.files).where(eq(schema.files.path, path))
   }
+
+  /**===========
+   * Symbol Operations
+   * ===========*/
 
   /** Inserts or updates symbols in the database based on the provided data. Handles batch operations for efficiency. */
   async upsertSymbols(symbolsData: IndexedSymbol['Insert'][]) {
@@ -191,72 +239,6 @@ export class IndexerDB {
     })()
   }
 
-  /** Upserts call records into the database by processing an array of call data, resolving callee names to their corresponding symbol IDs, and inserting or updating the records as needed. */
-  async upsertCalls(callsData: IndexedSymbolCall['Insert'][]) {
-    if (callsData.length === 0 || !this.preparedCallInsert) return
-
-    // Resolve callee names to callable symbol IDs before inserting.
-    // Querying only callable kinds ensures that when a name has both a 'const'
-    // and an 'arrowFunction' entry, we link to the callable one.
-    const calleeNames = [...new Set(callsData.map((c) => c.callee_name))]
-    const nameToId = new Map<string, string>()
-
-    if (calleeNames.length === 0) {
-      logDebug('No calls to upsert, skipping callee resolution')
-      return
-    }
-
-    const allLanguages = [...new Set(callsData.map((c) => c.language_name))]
-    const relevantLanguageConfig = Object.entries(this.config.languages).filter(
-      ([lang]) => allLanguages.includes(lang),
-    )
-    const CALLABLE_KINDS = relevantLanguageConfig.flatMap(
-      ([, cfg]) => cfg.treesitter.lists.callable_kinds,
-    )
-
-    const calleeSymbols = await this.db
-      .select({ id: schema.symbols.id, name: schema.symbols.name })
-      .from(schema.symbols)
-      .where(
-        and(
-          inArray(schema.symbols.name, calleeNames),
-          inArray(schema.symbols.kind, CALLABLE_KINDS),
-        ),
-      )
-    for (const sym of calleeSymbols) {
-      if (!nameToId.has(sym.name)) nameToId.set(sym.name, sym.id)
-    }
-
-    return this.sqlite.transaction(() => {
-      for (const call of callsData) {
-        const calleeId = nameToId.get(call.callee_name) ?? null
-        this.preparedCallInsert?.run(
-          call.id,
-          call.caller_id,
-          call.callee_name,
-          calleeId,
-          call.language_name,
-          call.call_line ?? null,
-          call.call_column ?? null,
-          call.caller_file_path,
-          call.call_text,
-          call.docstring ?? null,
-        )
-      }
-    })()
-  }
-
-  /** Fetches all symbol calls for the specified caller IDs. */
-  async getCallsForSymbols(
-    callerIds: string[],
-  ): Promise<IndexedSymbolCall['Select'][]> {
-    if (callerIds.length === 0) return []
-    return this.db
-      .select()
-      .from(schema.symbol_calls)
-      .where(inArray(schema.symbol_calls.caller_id, callerIds))
-  }
-
   /** "Retrieves symbols by their unique identifiers, specified by an array of IDs. Returns the details of each symbol." */
   async getSymbolsByIds(ids: string[]): Promise<IndexedSymbol['Select'][]> {
     if (ids.length === 0) return []
@@ -264,25 +246,6 @@ export class IndexerDB {
       .select()
       .from(schema.symbols)
       .where(inArray(schema.symbols.id, ids))
-  }
-
-  /** Maintains accurate import records by updating or inserting multiple import entries based on provided data. Ensures no duplicate imports exist per file path. */
-  async upsertImports(importsData: IndexedImport['Insert'][]) {
-    if (
-      importsData.length === 0 ||
-      !this.preparedImportDelete ||
-      !this.preparedImportInsert
-    )
-      return
-    return this.sqlite.transaction(() => {
-      const uniqueFiles = [...new Set(importsData.map((m) => m.file_path))]
-      uniqueFiles.forEach((f) => this.preparedImportDelete?.run(f))
-      const importCols = Object.keys(getColumns(schema.imports))
-      importsData.forEach((item) => {
-        const args = importCols.map((col) => (item as any)[col] ?? null)
-        this.preparedImportInsert?.run(...args)
-      })
-    })()
   }
 
   /** Searches for symbols matching the given query string, with optional filtering by symbol kind, file pattern, and result limit. */
@@ -313,15 +276,6 @@ export class IndexerDB {
       .limit(limitVal)
   }
 
-  /** Get a summary of symbols (e.g., functions, variables) defined in a specific file, ordered by their line numbers. */
-  async getFileSummary(path: string) {
-    return this.db
-      .select()
-      .from(schema.symbols)
-      .where(eq(schema.symbols.file_path, path))
-      .orderBy(schema.symbols.line)
-  }
-
   /** "Retrieves the definition of a symbol identified by the given ID." */
   async getDefinition(id: string) {
     const result = await this.db
@@ -346,54 +300,6 @@ export class IndexerDB {
     return result[0] || null
   }
 
-  /** Searches for importers whose module paths match the given pattern. */
-  async getImporters(moduleNamePattern: string) {
-    const pattern = moduleNamePattern.replace(/\*/g, '%')
-    logDebug(`Searching for importers with pattern: ${pattern}`)
-    return this.db
-      .select()
-      .from(schema.imports)
-      .where(like(schema.imports.module_path, `%${pattern}%`))
-  }
-
-  /** Retrieves an import record by its ID. */
-  async getImportById(id: string): Promise<IndexedImport['Select'] | null> {
-    const result = await this.db
-      .select()
-      .from(schema.imports)
-      .where(eq(schema.imports.id, id))
-      .limit(1)
-
-    return result[0] || null
-  }
-
-  /** Retrieves all import records where the imported symbol name matches exactly. */
-  async getImportsByName(
-    importedName: string,
-  ): Promise<IndexedImport['Select'][]> {
-    return this.db
-      .select()
-      .from(schema.imports)
-      .where(eq(schema.imports.imported_name, importedName))
-  }
-
-  /** Retrieves import records that match both the imported symbol name and the file path. */
-  async getImportsByNameAndFile(
-    importedName: string,
-    filePath: string,
-  ): Promise<IndexedImport['Select'][]> {
-    return this.db
-      .select()
-      .from(schema.imports)
-      .where(
-        and(
-          eq(schema.imports.imported_name, importedName),
-          eq(schema.imports.file_path, filePath),
-        ),
-      )
-      .orderBy(schema.imports.module_path)
-  }
-
   /** Retrieves all symbols defined within the specified file. */
   async getSymbolsForFile(path: string): Promise<IndexedSymbol['Select'][]> {
     return this.db
@@ -401,42 +307,6 @@ export class IndexerDB {
       .from(schema.symbols)
       .where(eq(schema.symbols.file_path, path))
       .orderBy(schema.symbols.line)
-  }
-
-  /** Retrieves a file from the database based on its path if it exists. */
-  async getFileByPath(path: string): Promise<IndexedFile['Select'] | null> {
-    const result = await this.db
-      .select()
-      .from(schema.files)
-      .where(eq(schema.files.path, path))
-      .limit(1)
-
-    return result[0] || null
-  }
-
-  /** Retrieves a file from the database based on a partial file name or path match. */
-  async getFileByPartialNameOrPath(
-    partialNameOrPath: string,
-  ): Promise<IndexedFile['Select'][]> {
-    const pattern = `%${partialNameOrPath.replace(/\*/g, '%')}%`
-    return this.db
-      .select()
-      .from(schema.files)
-      .where(like(schema.files.path, pattern))
-      .orderBy(schema.files.path)
-  }
-
-  /** Fetches all files from the database, returning an array containing detailed information for each file, including its path, cryptographic hash, indexing timestamp, and associated language if applicable. */
-  async getAllFiles(): Promise<IndexedFile['Select'][]> {
-    return this.db.select().from(schema.files)
-  }
-
-  /** Fetches every import record in the database, ordered by file path then module path. */
-  async getAllImports(): Promise<IndexedImport['Select'][]> {
-    return this.db
-      .select()
-      .from(schema.imports)
-      .orderBy(schema.imports.file_path, schema.imports.module_path)
   }
 
   /** Returns all symbols in the hierarchy under the specified symbol, including nested children, ordered by their line numbers. */
@@ -466,46 +336,12 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
-  /** Retrieves a list of unresolved calls from the database. */
-  async getUnresolvedCalls(): Promise<IndexedSymbolCall['Select'][]> {
-    return this.db
-      .select()
-      .from(schema.symbol_calls)
-      .where(
-        and(
-          isNull(schema.symbol_calls.callee_id),
-          isNull(schema.symbol_calls.imports_id),
-          isNotNull(schema.symbol_calls.call_line),
-        ),
-      )
-      .orderBy(
-        schema.symbol_calls.caller_file_path,
-        schema.symbol_calls.call_line,
-      )
-  }
-
-  /** Updates the callee ID for a specific call. Modifies the associated identifier of the called entity or function in the database record corresponding to the provided call ID. */
-  async updateCalleeId(callId: string, calleeId: string): Promise<void> {
-    await this.db
-      .update(schema.symbol_calls)
-      .set({ callee_id: calleeId })
-      .where(eq(schema.symbol_calls.id, callId))
-  }
-
-  /** Updates the imports ID for a specific call. Modifies the associated identifier of the import record linked to the call in the database based on the provided call ID. */
-  async updateImportsId(callId: string, importsId: string): Promise<void> {
-    await this.db
-      .update(schema.symbol_calls)
-      .set({ imports_id: importsId })
-      .where(eq(schema.symbol_calls.id, callId))
-  }
-
   /** Retrieves the symbol located at the specified line in the given file path. */
   async getSymbolAtLocation(
     filePath: string,
     line: number,
   ): Promise<IndexedSymbol['Select'] | null> {
-    const exact = await this.db
+    const symbol = await this.db
       .select()
       .from(schema.symbols)
       .where(
@@ -515,19 +351,27 @@ export class IndexerDB {
         ),
       )
       .limit(1)
-    if (exact[0]) return exact[0]
+    return symbol.length ? symbol[0]! : null
+  }
 
-    // Fallback: match by line only; return if unambiguous
-    const byLine = await this.db
+  /** Retrieves the symbol located at the specified line in the given file path. */
+  async getCallableSymbolAtLocation(
+    filePath: string,
+    line: number,
+    callableKinds: SymbolKind[],
+  ): Promise<IndexedSymbol['Select'] | null> {
+    const symbol = await this.db
       .select()
       .from(schema.symbols)
       .where(
         and(
           eq(schema.symbols.file_path, filePath),
           eq(schema.symbols.line, line),
+          inArray(schema.symbols.kind, callableKinds),
         ),
       )
-    return byLine.length === 1 ? byLine[0]! : null
+      .limit(1)
+    return symbol.length ? symbol[0]! : null
   }
 
   /** Retrieves symbols that require documentation, specifically those whose docstrings are missing or empty for the specified symbol types (kinds). This helps identify parts of the codebase that lack proper documentation. */
@@ -609,7 +453,7 @@ export class IndexerDB {
   }
 
   /** Updates the symbol type information in the database for the specified symbol using its ID. */
-  async updateSymbolTypeInfo(
+  async updateCallableSymbolTypeInfo(
     symbolId: string,
     parametersJson: string,
     returnType: string,
@@ -618,6 +462,131 @@ export class IndexerDB {
       .update(schema.symbols)
       .set({ parameters_json: parametersJson, return_type: returnType })
       .where(eq(schema.symbols.id, symbolId))
+  }
+
+  /** Updates the inheritance relationship for any symbol — works for interfaces, type aliases, classes, modules, or any other kind. */
+  async updateSymbolInheritance(
+    symbolId: string,
+    inheritsFromNames: string,
+    inheritenceType: InheritenceType,
+  ): Promise<void> {
+    await this.db
+      .update(schema.symbols)
+      .set({
+        inherits_from_names: inheritsFromNames,
+        inheritence_type: inheritenceType,
+      })
+      .where(eq(schema.symbols.id, symbolId))
+  }
+
+  /** Returns all symbols whose inheritance list includes the given base name. Matches comma-separated entries in inherits_from_names. */
+  async getSymbolsInheritingFrom(
+    baseName: string,
+  ): Promise<IndexedSymbol['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        or(
+          eq(schema.symbols.inherits_from_names, baseName),
+          like(schema.symbols.inherits_from_names, `${baseName},%`),
+          like(schema.symbols.inherits_from_names, `%,${baseName}`),
+          like(schema.symbols.inherits_from_names, `%,${baseName},%`),
+        ),
+      )
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
+  /**===========
+   * Symbol Call Operations
+   * ===========*/
+
+  /** "Gets the unique identifier for a given name by checking the current file and any imported symbols." */
+  async getIdFromName(
+    filePathToNameId: Map<string, { name: string; id: string }[]>,
+    call: IndexedSymbolCall['Insert'],
+  ): Promise<string | null> {
+    // first check if call.callee_name exists in the same file
+    const candidates = filePathToNameId
+      .get(call.caller_file_path)
+      ?.filter((entry) => entry.name === call.callee_name)
+    if (candidates && candidates.length > 0) {
+      return candidates[0]!.id
+    }
+
+    // if not found, check for a symbol with that name imported in the caller file
+    const imports = await this.db
+      .select()
+      .from(schema.imports)
+      .where(
+        and(
+          eq(schema.imports.file_path, call.caller_file_path),
+          eq(schema.imports.imported_name, call.callee_name),
+        ),
+      )
+    if (imports.length > 0) {
+      for (let i = 0; i < imports.length; i++) {
+        const impCandidates = filePathToNameId
+          .get(imports[i]!.module_path)
+          ?.filter((entry) => entry.name === call.callee_name)
+        if (impCandidates && impCandidates.length > 0) {
+          return impCandidates[0]!.id
+        }
+      }
+    }
+
+    return null
+  }
+
+  /** Upserts call records into the database by processing an array of call data */
+  async upsertCalls(callsData: IndexedSymbolCall['Insert'][]) {
+    if (callsData.length === 0 || !this.preparedCallInsert) return
+
+    return this.sqlite.transaction(async () => {
+      const callCols = Object.keys(getColumns(schema.symbol_calls))
+      for (const call of callsData) {
+        // const calleeId = await this.getIdFromName(filePathToNameId, call)
+        const args = callCols.map((col) => (call as any)[col] ?? null)
+        this.preparedCallInsert?.run(...args)
+      }
+    })()
+  }
+
+  /** Fetches all symbol calls for the specified caller IDs. */
+  async getCallsForSymbols(
+    callerIds: string[],
+  ): Promise<IndexedSymbolCall['Select'][]> {
+    if (callerIds.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbol_calls)
+      .where(inArray(schema.symbol_calls.caller_id, callerIds))
+  }
+
+  /** Retrieves a list of unresolved calls from the database. */
+  async getUnresolvedCalls(): Promise<IndexedSymbolCall['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.symbol_calls)
+      .where(
+        and(
+          isNull(schema.symbol_calls.callee_id),
+          isNull(schema.symbol_calls.imports_id),
+          isNotNull(schema.symbol_calls.call_line),
+        ),
+      )
+      .orderBy(
+        schema.symbol_calls.caller_file_path,
+        schema.symbol_calls.call_line,
+      )
+  }
+
+  /** Updates the callee ID for a specific call. Modifies the associated identifier of the called entity or function in the database record corresponding to the provided call ID. */
+  async updateCalleeId(callId: string, calleeId: string): Promise<void> {
+    await this.db
+      .update(schema.symbol_calls)
+      .set({ callee_id: calleeId })
+      .where(eq(schema.symbol_calls.id, callId))
   }
 
   /** Get information about all callers of a specified symbol, including their file paths, names, and line numbers. */
@@ -638,7 +607,7 @@ export class IndexerDB {
 
   /** Get all callers of a symbol — direct calls and, if it is a container (class/module/namespace), calls to any of its child symbols.
    *  Returns childName = null for direct callers; the child's name for member callers. */
-  async getCallersAll(symbolName: string): Promise<
+  async getCallersNested(symbolName: string): Promise<
     Array<{
       callerFile: string
       callerName: string
@@ -660,6 +629,97 @@ export class IndexerDB {
       )
       .all(symbolName) as any[]
   }
+
+  /**===========
+   * Import Operations
+   * ===========*/
+
+  /** Maintains accurate import records by updating or inserting multiple import entries based on provided data. Ensures no duplicate imports exist per file path. */
+  async upsertImports(importsData: IndexedImport['Insert'][]) {
+    if (
+      importsData.length === 0 ||
+      !this.preparedImportDelete ||
+      !this.preparedImportInsert
+    )
+      return
+    return this.sqlite.transaction(() => {
+      const uniqueFiles = [...new Set(importsData.map((m) => m.file_path))]
+      uniqueFiles.forEach((f) => this.preparedImportDelete?.run(f))
+      const importCols = Object.keys(getColumns(schema.imports))
+      importsData.forEach((item) => {
+        const args = importCols.map((col) => (item as any)[col] ?? null)
+        this.preparedImportInsert?.run(...args)
+      })
+    })()
+  }
+
+  /** Searches for importers whose module paths match the given pattern. */
+  async getImporters(moduleNamePattern: string) {
+    const pattern = moduleNamePattern.replace(/\*/g, '%')
+    logDebug(`Searching for importers with pattern: ${pattern}`)
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(like(schema.imports.module_path, `%${pattern}%`))
+  }
+
+  /** Retrieves an import record by its ID. */
+  async getImportById(id: string): Promise<IndexedImport['Select'] | null> {
+    const result = await this.db
+      .select()
+      .from(schema.imports)
+      .where(eq(schema.imports.id, id))
+      .limit(1)
+
+    return result[0] || null
+  }
+
+  /** Retrieves all import records where the imported symbol name matches exactly. */
+  async getImportsByName(
+    importedName: string,
+  ): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(eq(schema.imports.imported_name, importedName))
+  }
+
+  /** Retrieves import records that match both the imported symbol name and the file path. */
+  async getImportsByNameAndFile(
+    importedName: string,
+    filePath: string,
+  ): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(
+        and(
+          eq(schema.imports.imported_name, importedName),
+          eq(schema.imports.file_path, filePath),
+        ),
+      )
+      .orderBy(schema.imports.module_path)
+  }
+
+  /** Fetches every import record in the database, ordered by file path then module path. */
+  async getAllImports(): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .orderBy(schema.imports.file_path, schema.imports.module_path)
+  }
+
+  /** Updates the imports ID for a specific call. Modifies the associated identifier of the import record linked to the call in the database based on the provided call ID. */
+  async updateImportsId(callId: string, importsId: string): Promise<void> {
+    await this.db
+      .update(schema.symbol_calls)
+      .set({ imports_id: importsId })
+      .where(eq(schema.symbol_calls.id, callId))
+  }
+
+  /**===========
+   * General
+   * ===========*/
 
   /** Clears all stored data. */
   async clear() {

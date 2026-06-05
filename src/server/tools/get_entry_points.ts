@@ -4,10 +4,16 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { eq, and, isNull, inArray, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import type { SymbolKind } from '../../database/schemas'
+import { AppStateManager } from 'src/state'
 
-const TEST_RE = /\.(test|spec)\.(ts|tsx|js|jsx)$|__tests__\//
-
-const ALL_KINDS = ['function', 'class', 'const', 'arrowFunction', 'interface', 'type'] as const
+const ALL_KINDS = [
+  'function',
+  'class',
+  'const',
+  'arrowFunction',
+  'interface',
+  'type',
+] as const
 
 /** Registers a tool to list all top-level exported symbols, optionally filtered to true external entry points. */
 export function registerGetEntryPointsTool(server: McpServer) {
@@ -21,7 +27,9 @@ export function registerGetEntryPointsTool(server: McpServer) {
         kind: z
           .array(z.enum(ALL_KINDS))
           .optional()
-          .describe('Filter by symbol kinds (default: function, class, const, arrowFunction, interface, type)'),
+          .describe(
+            'Filter by symbol kinds (default: function, class, const, arrowFunction, interface, type)',
+          ),
         exclude_tests: z
           .boolean()
           .default(true)
@@ -53,7 +61,18 @@ export function registerGetEntryPointsTool(server: McpServer) {
           .orderBy(schema.symbols.file_path, schema.symbols.line)
 
         if (exclude_tests) {
-          results = results.filter((s) => !TEST_RE.test(s.file_path))
+          const TEST_RE =
+            AppStateManager.getInstance()
+              .getItem('config')
+              ?.testFilePatterns.map((p) => {
+                if (p instanceof RegExp) return p
+                if (typeof p === 'string') return new RegExp(p)
+                return null
+              })
+              .filter((p): p is RegExp => p !== null) ?? null
+          results = results.filter(
+            (s) => !TEST_RE?.some((re) => re.test(s.file_path)),
+          )
         }
 
         if (only_unreferenced) {
@@ -104,11 +123,15 @@ export function registerGetEntryPointsTool(server: McpServer) {
 
         const header = `Entry Points (${flags})\nTotal: ${results.length} symbol${results.length !== 1 ? 's' : ''} across ${byFile.size} file${byFile.size !== 1 ? 's' : ''}\n`
         return {
-          content: [{ type: 'text', text: header + '\n' + sections.join('\n\n') }],
+          content: [
+            { type: 'text', text: header + '\n' + sections.join('\n\n') },
+          ],
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error getting entry points: ${err}` }],
+          content: [
+            { type: 'text', text: `Error getting entry points: ${err}` },
+          ],
           isError: true,
         }
       }

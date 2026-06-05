@@ -11,6 +11,7 @@ import { randomUUIDv7, hash } from 'bun'
 import { AppStateManager } from 'src/state'
 import { resolveImportedModulePath } from 'src/utils/paths'
 import { getCommentText } from '../docstrings/formatComment'
+import { InheritenceType } from 'src/database/schemas/common.schema'
 
 type TreesitterConfig = LanguageConfig['treesitter']
 
@@ -73,6 +74,12 @@ function getDocstring(
 
   if (!docStringNode) return undefined
 
+  if (
+    Math.abs(docStringNode.endPosition.row - targetNode.startPosition.row) > 1
+  ) {
+    return undefined
+  }
+
   const comments: string[] = []
 
   while (docStringNode && docStringNode.type.includes('comment')) {
@@ -126,6 +133,19 @@ function buildSignature(node: Node, config: TreesitterConfig): string | null {
     : raw
 }
 
+/** Extract the simple type name from a type_identifier or generic_type node (e.g. "Map" from "Map<string,number>"). */
+function extractTypeName(node: Node): string | null {
+  if (node.type === 'type_identifier') return node.text
+  if (node.type === 'identifier') return node.text
+  if (node.type === 'generic_type') {
+    const typeId = node.namedChildren.find(
+      (c) => c?.type === 'type_identifier' || c?.type === 'identifier',
+    )
+    return typeId?.text ?? null
+  }
+  return null
+}
+
 /** Registers a new code symbol in the symbol database. */
 function addSymbol({
   node,
@@ -152,6 +172,38 @@ function addSymbol({
     `${file_path}:${nameNode.text}:${kind}:${node.startPosition.row}:${node.startPosition.column}`,
   )}`
 
+  // Extract inheritance details (extends / implements) when config declares a heritage_node type
+  let inherits_from_names: string | null = null
+  let inheritence_type: InheritenceType | null = null
+  const nodeInfo = config.nodes_info[node.type]
+  if (nodeInfo?.heritage_node) {
+    const heritageNode = node.namedChildren.find(
+      (c) => c?.type === nodeInfo.heritage_node,
+    )
+    if (heritageNode) {
+      const extendsClause = heritageNode.namedChildren.find(
+        (c) => c?.type === 'extends_clause',
+      )
+      if (extendsClause) {
+        const typeNode = extendsClause.namedChildren[0]
+        if (typeNode) {
+          inherits_from_names = extractTypeName(typeNode)
+          inheritence_type = InheritenceType.extends
+        }
+      }
+      const implementsClause = heritageNode.namedChildren.find(
+        (c) => c?.type === 'implements_clause',
+      )
+      if (implementsClause) {
+        const names = implementsClause.namedChildren
+          .map((c) => (c ? extractTypeName(c) : null))
+          .filter((n): n is string => n !== null)
+        if (names.length > 0) inherits_from_names = names.join(',')
+        inheritence_type = InheritenceType.implements
+      }
+    }
+  }
+
   symbols.push({
     id,
     name: nameNode.text,
@@ -166,6 +218,8 @@ function addSymbol({
     return_type: null,
     docstring: getDocstring(node, config) ?? null,
     parent_id: parent_id ?? null,
+    inheritence_type,
+    inherits_from_names,
     exported: isExported(node, config),
     decorator: getDecorators(node),
     language,
@@ -276,7 +330,7 @@ function handleVariableDeclaration(
 function recordCall(
   config: TreesitterConfig,
   node: Node,
-  currentCallableId: string,
+  currentCallerId: string,
   languageName: string,
   file_path: string,
   call_text: string,
@@ -293,7 +347,7 @@ function recordCall(
   if (calleeName) {
     calls.push({
       id: randomUUIDv7(),
-      caller_id: currentCallableId,
+      caller_id: currentCallerId,
       callee_name: calleeName,
       language_name: languageName,
       call_line: node.startPosition.row,
@@ -311,17 +365,17 @@ function traverse(
   file_path: string,
   config: TreesitterConfig,
   currentParentId?: string,
-  currentCallableId?: string,
+  currentCallerId?: string,
 ) {
   let nextParentId = currentParentId
-  let nextCallableId = currentCallableId
+  let nextCallerId = currentCallerId
 
-  if (node.type === 'call_expression' && currentCallableId) {
+  if (node.type === 'call_expression' && currentCallerId) {
     const call_text = node.text.trim()
     recordCall(
       config,
       node,
-      currentCallableId,
+      currentCallerId,
       config?.language_name ?? 'unknown',
       file_path,
       call_text,
@@ -332,19 +386,16 @@ function traverse(
 
   if (nodeInfo) {
     const kind = nodeInfo.kind
-    if (kind === undefined) {
-      // Malformed config entry — skip but still recurse into children
-    } else if (kind === SymbolKind.import) {
+
+    if (kind === SymbolKind.import) {
       handleImport(node, file_path, nodeInfo)
-    } else if (kind === SymbolKind.decorator) {
-      // Decorators are attached to their parent symbol via getDecorators(); skip standalone indexing
     } else if (
       kind === SymbolKind.const ||
       kind === SymbolKind.let ||
       kind === SymbolKind.var
     ) {
       handleVariableDeclaration(node, file_path, config!, currentParentId)
-    } else {
+    } else if (kind && kind !== SymbolKind.decorator) {
       let nameNode = nodeInfo.name_field
         ? node.childForFieldName(nodeInfo.name_field)
         : null
@@ -372,7 +423,7 @@ function traverse(
           nextParentId = newSymbolId
         }
         if (config?.lists?.callable_nodes?.includes(node.type)) {
-          nextCallableId = newSymbolId
+          nextCallerId = newSymbolId
         }
       }
     }
@@ -381,7 +432,7 @@ function traverse(
   if (node?.namedChildren) {
     for (const child of node.namedChildren) {
       if (!child) continue
-      traverse(child, file_path, config, nextParentId, nextCallableId)
+      traverse(child, file_path, config, nextParentId, nextCallerId)
     }
   }
 }
@@ -401,7 +452,34 @@ export function extractSymbols(
   calls.length = 0
 
   if (rootNode) {
-    traverse(rootNode, file_path, config)
+    // Create a synthetic module-level symbol so top-level call expressions
+    // (e.g. `const X = parseLogLevel(...)`) have a valid caller_id.
+    const appConfig = AppStateManager.getInstance().getItem('config')
+    const fileExtn = file_path.split('.').pop() ?? ''
+    const language = appConfig?.extnToLangMap[fileExtn] ?? 'unknown'
+    const moduleName = file_path.split('/').pop() ?? file_path
+    const moduleSymbolId = `${hash(`${file_path}:${moduleName}:module:0:0`)}`
+    symbols.push({
+      id: moduleSymbolId,
+      name: moduleName,
+      kind: SymbolKind.module,
+      file_path,
+      line: 0,
+      column: 0,
+      end_line: rootNode.endPosition.row,
+      end_column: rootNode.endPosition.column,
+      signature: null,
+      parameters_json: null,
+      return_type: null,
+      docstring: null,
+      parent_id: null,
+      inheritence_type: null,
+      inherits_from_names: null,
+      exported: false,
+      decorator: null,
+      language,
+    })
+    traverse(rootNode, file_path, config, undefined, moduleSymbolId)
   }
 
   return {

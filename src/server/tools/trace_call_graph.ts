@@ -77,30 +77,33 @@ export function registerTraceCallGraphTool(server: McpServer) {
 
           if (startSymbols.length === 0) {
             lines.push(`Outbound: symbol '${name}' not found in index.`)
-          } else {
-            const target = startSymbols[0]!
-            if (startSymbols.length > 1 && !file_path_or_file_name) {
-              lines.push(
-                `Note: ${startSymbols.length} symbols named '${name}' found; using first match (${target.file_path}:${target.line + 1}). Provide file_path to disambiguate.\n`,
-              )
+            return {
+              content: [{ type: 'text', text: lines.join('\n') }],
             }
+          }
+
+          const target = startSymbols[0]!
+          if (startSymbols.length > 1 && !file_path_or_file_name) {
             lines.push(
-              `Outbound call graph for: ${name} (${target.file_path}:${target.line + 1})`,
-            )
-            const visitedOut = new Set<string>()
-            await buildOutbound(
-              store,
-              target.id,
-              name,
-              target.file_path,
-              target.line + 1,
-              0,
-              maxDepth,
-              visitedOut,
-              lines,
-              '',
+              `Note: ${startSymbols.length} symbols named '${name}' found; using first match (${target.file_path}:${target.line + 1}). Provide file_path to disambiguate.\n`,
             )
           }
+          lines.push(
+            `Outbound call graph for: ${name} (${target.file_path}:${target.line + 1})`,
+          )
+          const visitedOut = new Set<string>()
+          await buildOutbound(
+            store,
+            target.id,
+            name,
+            target.file_path,
+            target.line + 1,
+            0,
+            maxDepth,
+            visitedOut,
+            lines,
+            '',
+          )
         }
 
         if (dir === 'both') lines.push('')
@@ -182,33 +185,36 @@ async function buildOutbound(
           lines,
           childPrefix,
         )
-      } else {
-        lines.push(
-          `${prefix}${connector} ${call.callee_name} (unresolved) ${docstringNote}`,
-        )
+        continue
       }
-    } else if (call.imports_id) {
-      const imp = await store.getImportsByNameAndFile(
-        call.callee_name,
-        call.caller_file_path,
-      )
-      if (imp.length > 0) {
-        const impRecord = imp[0]!
-        lines.push(
-          `${prefix}${connector} ${call.callee_name} (imported as ${impRecord.imported_name} from ${impRecord.module_path}) ${docstringNote}`,
-        )
-      } else {
-        lines.push(
-          `${prefix}${connector} ${call.callee_name} (unresolved import) ${docstringNote}`,
-        )
-      }
-    } else {
-      const callLine =
-        call.call_line != null ? ` at line ${call.call_line + 1}` : ''
+
       lines.push(
-        `${prefix}${connector} ${call.callee_name} (unresolved${callLine}) ${docstringNote}`,
+        `${prefix}${connector} ${call.callee_name} (broken link) ${docstringNote}`,
       )
+      continue
     }
+
+    if (call.imports_id) {
+      const imp = await store.getImportById(call.imports_id)
+      if (imp) {
+        lines.push(
+          `${prefix}${connector} ${call.callee_name} (${imp.imported_name} from ${imp.module_path}) ${docstringNote}`,
+        )
+
+        continue
+      }
+
+      lines.push(
+        `${prefix}${connector} ${call.callee_name} (unresolved import) ${docstringNote}`,
+      )
+      continue
+    }
+
+    const callLine =
+      call.call_line != null ? ` at line ${call.call_line + 1}` : ''
+    lines.push(
+      `${prefix}${connector} ${call.callee_name} (unresolved or inbuilt command${callLine}) ${docstringNote}`,
+    )
   }
 }
 

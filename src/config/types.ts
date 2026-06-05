@@ -23,6 +23,7 @@ export type NodeInfo = {
   return_type_field?: string
   docstring?: DocstringStrategy
   inherit_name_from_parent?: boolean
+  heritage_node?: string
 }
 
 export type LanguageConfig = {
@@ -41,6 +42,10 @@ export type LanguageConfig = {
       callable_kinds: SymbolKind[]
       additional_nodes: string[]
       member_access_patterns: Array<string | RegExp>
+    }
+    constructor_pattern: {
+      kind: SymbolKind.method
+      name: string
     }
   }
 }
@@ -64,4 +69,5 @@ export type IndexerConfig = {
   testFilePatterns: RegExp[]
   languages: Record<string, LanguageConfig>
   docstring_generation?: DocstringConfig
+  agent_config_candidates: string[]
 }

@@ -12,9 +12,11 @@ export function registerResolveTypeTool(server: McpServer) {
     {
       title: 'Resolve Type',
       description:
-        'Find the definition of a type or interface and all symbols that produce (return) or consume (accept as parameter) it. Useful for understanding type flow when debugging type errors or unfamiliar data shapes.',
+        'Find the definition of a type or interface and all symbols that produce (return), consume (accept as parameter), or inherit from it (extends/implements/union/intersection). Useful for understanding type flow when debugging type errors or unfamiliar data shapes.',
       inputSchema: z.object({
-        type_name: z.string().describe('Name of the type or interface to resolve'),
+        type_name: z
+          .string()
+          .describe('Name of the type or interface to resolve'),
       }),
     },
     async ({ type_name }) => {
@@ -58,6 +60,9 @@ export function registerResolveTypeTool(server: McpServer) {
           .where(like(schema.symbols.parameters_json, `%${name}%`))
           .limit(20)
 
+        // Find symbols that inherit from / extend / union this type
+        const inheritors = await store.getSymbolsInheritingFrom(name)
+
         const sections: string[] = []
 
         // Definitions section
@@ -68,9 +73,13 @@ export function registerResolveTypeTool(server: McpServer) {
             if (d.signature) line += `\n  Signature: ${d.signature}`
             return line
           })
-          sections.push(`Definition (${definitions.length} found):\n${defLines.join('\n')}`)
+          sections.push(
+            `Definition (${definitions.length} found):\n${defLines.join('\n')}`,
+          )
         } else {
-          sections.push(`Definition: not found in index (may be from an external library)`)
+          sections.push(
+            `Definition: not found in index (may be from an external library)`,
+          )
         }
 
         // Producers section
@@ -92,7 +101,10 @@ export function registerResolveTypeTool(server: McpServer) {
             let paramSummary = ''
             if (c.parameters_json) {
               try {
-                const params = JSON.parse(c.parameters_json) as Array<{ name: string; type?: string }>
+                const params = JSON.parse(c.parameters_json) as Array<{
+                  name: string
+                  type?: string
+                }>
                 const matching = params.filter((p) => p.type?.includes(name))
                 if (matching.length > 0) {
                   paramSummary = ` [param: ${matching.map((p) => `${p.name}: ${p.type}`).join(', ')}]`
@@ -108,6 +120,19 @@ export function registerResolveTypeTool(server: McpServer) {
           )
         } else {
           sections.push(`Consumed by: (none found)`)
+        }
+
+        // Inheritors section
+        if (inheritors.length > 0) {
+          const inheritLines = inheritors.map((i) => {
+            const rel = i.inheritence_type ?? 'extends'
+            return `  [${rel.toUpperCase()}] ${i.name} (${i.kind}) in ${i.file_path}:${i.line + 1}`
+          })
+          sections.push(
+            `Inheritors — types/interfaces extending or composing ${name} (${inheritors.length}):\n${inheritLines.join('\n')}`,
+          )
+        } else {
+          sections.push(`Inheritors: (none found)`)
         }
 
         return {

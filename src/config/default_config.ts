@@ -68,6 +68,13 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             class_declaration: {
               kind: SymbolKind.class,
               name_field: 'name',
+              heritage_node: 'class_heritage',
+              docstring: DocstringStrategy.comment_before,
+            },
+            abstract_class_declaration: {
+              kind: SymbolKind.class,
+              name_field: 'name',
+              heritage_node: 'class_heritage',
               docstring: DocstringStrategy.comment_before,
             },
             public_field_definition: {
@@ -111,7 +118,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             module: {
               kind: SymbolKind.module,
               name_field: 'name',
-              docstring: DocstringStrategy.comment_before,
+              docstring: DocstringStrategy.none,
             },
             arrow_function: {
               kind: SymbolKind.arrowFunction,
@@ -137,7 +144,12 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               SymbolKind.method,
               SymbolKind.arrowFunction,
             ],
-            container_nodes: ['class_declaration', 'module', 'internal_module'],
+            container_nodes: [
+              'class_declaration',
+              'abstract_class_declaration',
+              'module',
+              'internal_module',
+            ],
             typedef_nodes: [
               'type_alias_declaration',
               'interface_declaration',
@@ -149,7 +161,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'variable_declaration',
               'lexical_declaration',
             ],
-            member_access_patterns: [/([\w$]+)/g],
+            member_access_patterns: [/^(\w[\w$]*)/],
+          },
+          constructor_pattern: {
+            kind: SymbolKind.method,
+            name: 'constructor',
           },
         },
       },
@@ -182,6 +198,13 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             class_declaration: {
               kind: SymbolKind.class,
               name_field: 'name',
+              heritage_node: 'class_heritage',
+              docstring: DocstringStrategy.comment_before,
+            },
+            abstract_class_declaration: {
+              kind: SymbolKind.class,
+              name_field: 'name',
+              heritage_node: 'class_heritage',
               docstring: DocstringStrategy.comment_before,
             },
             public_field_definition: {
@@ -223,7 +246,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             module: {
               kind: SymbolKind.module,
               name_field: 'name',
-              docstring: DocstringStrategy.comment_before,
+              docstring: DocstringStrategy.none,
             },
             arrow_function: {
               kind: SymbolKind.arrowFunction,
@@ -245,7 +268,12 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               SymbolKind.method,
               SymbolKind.arrowFunction,
             ],
-            container_nodes: ['class_declaration', 'module', 'internal_module'],
+            container_nodes: [
+              'class_declaration',
+              'abstract_class_declaration',
+              'module',
+              'internal_module',
+            ],
             typedef_nodes: [
               'type_alias_declaration',
               'interface_declaration',
@@ -257,7 +285,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'variable_declaration',
               'lexical_declaration',
             ],
-            member_access_patterns: [/([\w$]+)/g],
+            member_access_patterns: [/^(\w[\w$]*)/],
+          },
+          constructor_pattern: {
+            kind: SymbolKind.method,
+            name: 'constructor',
           },
         },
       },
@@ -286,5 +318,15 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         model: 'deepcoder',
       },
     },
+    agent_config_candidates: [
+      '.cursorrules',
+      'CLAUDE.md',
+      'AGENTS.md',
+      'AGENT.md',
+      'copilot-instructions.md',
+      '.github/copilot-instructions.md',
+      '.clinerules',
+      '.windsurfrules',
+    ],
   },
 }

@@ -34,7 +34,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         const sections: string[] = []
 
         if (include_calls) {
-          const allCallers = await store.getCallersAll(name)
+          const allCallers = await store.getCallersNested(name)
           if (allCallers.length > 0) {
             const callLines = allCallers.map(
               (c) =>

@@ -8,11 +8,12 @@ export interface ParamInfo {
   optional: boolean
 }
 
-export interface ResolvedSignature {
+export interface ResolvedCallableTypeInfo {
   params: ParamInfo[]
   returnType: string
 }
 
+/** The Enhancer abstract class provides functionality to enhance and manage symbol type information in a code analysis system. It handles initialization, processing files for improved symbol types, resolving pending operations, and refreshing data when files change. */
 export abstract class Enhancer {
   protected config: IndexerConfig
   protected available = false
@@ -34,12 +35,22 @@ export abstract class Enhancer {
     throw new Error('init() not implemented')
   }
 
-  /** Enhances symbol types for files at specified relative paths in the indexer database. This method processes each file location to improve or refine symbol type information within the system. */
-  async enhanceSymbolTypes(
+  /** Enhances symbol types for callables at specified relative paths in the indexer database. This method processes each file location to improve or refine symbol type information within the system. */
+  async enhanceSymbolTypesForCallables(
     _store: IndexerDB,
     _relPaths: string[],
   ): Promise<void> {
-    throw new Error('enhanceSymbolTypes() not implemented')
+    throw new Error('enhanceSymbolTypesForCallables() not implemented')
+  }
+
+  /** Enhances symbol type information for inherited types and interfaces in the provided store. */
+  async enhanceSymbolTypesForInheritedTypesAndInterfaces(
+    _store: IndexerDB,
+    _relPaths: string[],
+  ): Promise<void> {
+    throw new Error(
+      'enhanceSymbolTypesForInheritedTypesAndInterfaces() not implemented',
+    )
   }
 
   /** Resolve all pending calls that have not yet been processed. This method ensures that any outstanding operations are addressed and cleared from the system. */
@@ -49,6 +60,6 @@ export abstract class Enhancer {
 
   /** Refreshes cached data for a file at the specified absolute path when it has been modified. */
   refreshFile(_absPath: string): void {
-    // Optional method to refresh cached data for a file when it changes
+    throw new Error('refreshFile() not implemented')
   }
 }
