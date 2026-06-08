@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'util'
-import { startMcpServer } from './src/server'
+import { startMcpServer, stopMcpServer } from './src/server'
 import { IndexPipeline } from './src/indexer/IndexPipeline'
 import { IndexerDB } from './src/database/IndexerDB'
 import type { SymbolKind } from './src/config/types'
@@ -64,6 +64,7 @@ Usage: agentic-indexer <command> [options]
 
 Commands:
   serve               Run the MCP server (reads over stdio)
+  stop                Stop the MCP server
   index               Run a one-off index of the workspace
   index-file          Index a single file (provide path via --file option)
   remove-docstrings   Remove all generated docstrings from source files and database
@@ -92,6 +93,11 @@ async function main() {
   switch (command) {
     case 'serve':
       await startMcpServer()
+      break
+
+    case 'stop':
+      await stopMcpServer()
+      process.exit(0)
       break
 
     case 'index': {
@@ -165,6 +171,11 @@ async function main() {
       process.exit(1)
   }
 }
+
+process.on('exit', async (code) => {
+  logWarning(`Process exiting with code ${code}`)
+  await stopMcpServer()
+})
 
 main().catch((err) => {
   console.error(err)

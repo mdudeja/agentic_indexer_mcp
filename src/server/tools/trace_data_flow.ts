@@ -45,11 +45,25 @@ export function registerTraceDataFlowTool(server: McpServer) {
           }
         }
 
+        if (candidates.length > 1 && !file_path) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  `Multiple symbols named '${name}' found. Please provide a file path to disambiguate:\n` +
+                  candidates
+                    .map(
+                      (c) =>
+                        `  - ${c.name} [${c.kind}] (${c.file_path}:${c.line + 1})`,
+                    )
+                    .join('\n'),
+              },
+            ],
+          }
+        }
+
         const target = candidates[0]!
-        const ambiguityNote =
-          candidates.length > 1 && !file_path
-            ? `Note: ${candidates.length} symbols named '${name}' found; using first match (${target.file_path}:${target.line + 1}). Provide file_path to disambiguate.\n\n`
-            : ''
 
         // Parse parameters
         let paramSummary = '(none)'
@@ -177,7 +191,7 @@ export function registerTraceDataFlowTool(server: McpServer) {
           content: [
             {
               type: 'text',
-              text: warning + ambiguityNote + sections.join('\n\n'),
+              text: warning + sections.join('\n\n'),
             },
           ],
         }

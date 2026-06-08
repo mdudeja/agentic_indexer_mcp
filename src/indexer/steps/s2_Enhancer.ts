@@ -27,6 +27,7 @@ export abstract class Enhancer {
       ignore_patterns: [],
       testFilePatterns: [],
       extnToLangMap: {},
+      agent_config_candidates: [],
     }
   }
 

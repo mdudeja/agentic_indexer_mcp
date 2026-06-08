@@ -39,35 +39,37 @@ export function registerTraceCallGraphTool(server: McpServer) {
 
         const lines: string[] = []
 
-        if (dir === 'outbound' || dir === 'both') {
-          let fileRecord: IndexedFile['Select'] | null = null
-          if (file_path_or_file_name) {
-            const files = await store.getFileByPartialNameOrPath(
-              file_path_or_file_name,
-            )
-            if (files.length === 0) {
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: `No file found matching: ${file_path_or_file_name}`,
-                  },
-                ],
-              }
+        // Resolve file record once; shared by both directions
+        let fileRecord: IndexedFile['Select'] | null = null
+        if (file_path_or_file_name) {
+          const files = await store.getFileByPartialNameOrPath(
+            file_path_or_file_name,
+          )
+          if (files.length === 0) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `No file found matching: ${file_path_or_file_name}`,
+                },
+              ],
             }
-            if (files.length > 1) {
-              const fileList = files.map((f) => `  - ${f.path}`).join('\n')
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: `Multiple files found matching '${file_path_or_file_name}':\n${fileList}\nPlease provide a more specific file path or name to disambiguate.`,
-                  },
-                ],
-              }
-            }
-            fileRecord = files[0] ?? null
           }
+          if (files.length > 1) {
+            const fileList = files.map((f) => `  - ${f.path}`).join('\n')
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Multiple files found matching '${file_path_or_file_name}':\n${fileList}\nPlease provide a more specific file path or name to disambiguate.`,
+                },
+              ],
+            }
+          }
+          fileRecord = files[0] ?? null
+        }
+
+        if (dir === 'outbound' || dir === 'both') {
           const startSymbols = await store.searchSymbols(
             name,
             undefined,
@@ -109,9 +111,37 @@ export function registerTraceCallGraphTool(server: McpServer) {
         if (dir === 'both') lines.push('')
 
         if (dir === 'inbound' || dir === 'both') {
-          lines.push(`Inbound call graph for: ${name}`)
-          const visitedIn = new Set<string>()
-          await buildInbound(store, name, 0, maxDepth, visitedIn, lines, '')
+          const inboundSymbols = await store.searchSymbols(
+            name,
+            undefined,
+            fileRecord?.path,
+            5,
+          )
+          if (inboundSymbols.length === 0) {
+            lines.push(`Inbound: symbol '${name}' not found in index.`)
+          } else {
+            const inboundTarget = inboundSymbols[0]!
+            if (inboundSymbols.length > 1 && !file_path_or_file_name) {
+              lines.push(
+                `Note: ${inboundSymbols.length} symbols named '${name}' found; using first match (${inboundTarget.file_path}:${inboundTarget.line + 1}). Provide file_path to disambiguate.\n`,
+              )
+            }
+            lines.push(
+              `Inbound call graph for: ${inboundTarget.name} (${inboundTarget.file_path}:${inboundTarget.line + 1})`,
+            )
+            const visitedIn = new Set<string>()
+            await buildInbound(
+              store,
+              inboundTarget.name,
+              inboundTarget.file_path,
+              inboundTarget.line + 1,
+              0,
+              maxDepth,
+              visitedIn,
+              lines,
+              '',
+            )
+          }
         }
 
         return {
@@ -127,7 +157,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
   )
 }
 
-/** Builds and visualizes the outbound call relationships starting from a given symbol, recursively tracing dependencies while avoiding cycles and respecting depth limits. The visualization uses lines and connectors to represent hierarchical calls. */
+/** Builds and visualizes the outbound call relationships starting from a given symbol, recursively tracing dependencies while avoiding cycles and respecting depth limits. Children of a symbol are rendered as intermediate tree nodes, with their own calls nested beneath them. */
 async function buildOutbound(
   store: IndexerDB,
   symbolId: string,
@@ -140,10 +170,8 @@ async function buildOutbound(
   lines: string[],
   prefix: string,
 ): Promise<void> {
-  const nodeLabel = `${symbolName} (${filePath}:${lineNum})`
-
   if (currentDepth === 0) {
-    lines.push(nodeLabel)
+    lines.push(`${symbolName} (${filePath}:${lineNum})`)
   }
 
   if (visited.has(symbolId)) return
@@ -151,12 +179,26 @@ async function buildOutbound(
 
   if (currentDepth >= maxDepth) return
 
-  const calls = await store.getCallsForSymbols([symbolId])
-  if (calls.length === 0) return
+  const [directCalls, children] = await Promise.all([
+    store.getCallsForSymbols([symbolId]),
+    store.getChildSymbols(symbolId),
+  ])
 
-  for (let i = 0; i < calls.length; i++) {
-    const call = calls[i]!
-    const isLast = i === calls.length - 1
+  // Pre-filter children to only those with outbound calls
+  const childrenWithCalls = await Promise.all(
+    children.map(async (child) => {
+      const childCalls = await store.getCallsForSymbols([child.id])
+      return childCalls.length > 0 ? child : null
+    }),
+  ).then((results) => results.filter((c) => c !== null))
+
+  const totalItems = directCalls.length + childrenWithCalls.length
+  if (totalItems === 0) return
+
+  // Render direct calls made by this symbol
+  for (let i = 0; i < directCalls.length; i++) {
+    const call = directCalls[i]!
+    const isLast = i === totalItems - 1
     const connector = isLast ? '└─' : '├─'
     const childPrefix = prefix + (isLast ? '   ' : '│  ')
     const docstringNote = call.docstring ? ` [${call.docstring}]` : ''
@@ -187,7 +229,6 @@ async function buildOutbound(
         )
         continue
       }
-
       lines.push(
         `${prefix}${connector} ${call.callee_name} (broken link) ${docstringNote}`,
       )
@@ -200,10 +241,8 @@ async function buildOutbound(
         lines.push(
           `${prefix}${connector} ${call.callee_name} (${imp.imported_name} from ${imp.module_path}) ${docstringNote}`,
         )
-
         continue
       }
-
       lines.push(
         `${prefix}${connector} ${call.callee_name} (unresolved import) ${docstringNote}`,
       )
@@ -216,12 +255,39 @@ async function buildOutbound(
       `${prefix}${connector} ${call.callee_name} (unresolved or inbuilt command${callLine}) ${docstringNote}`,
     )
   }
+
+  // Render each child symbol as an intermediate node (pre-filtered to those with outbound calls)
+  for (let i = 0; i < childrenWithCalls.length; i++) {
+    const child = childrenWithCalls[i]!
+    const isLast = directCalls.length + i === totalItems - 1
+    const connector = isLast ? '└─' : '├─'
+    const childPrefix = prefix + (isLast ? '   ' : '│  ')
+
+    lines.push(
+      `${prefix}${connector} ${child.name} (${child.file_path}:${child.line + 1})`,
+    )
+    await buildOutbound(
+      store,
+      child.id,
+      child.name,
+      child.file_path,
+      child.line + 1,
+      currentDepth + 1,
+      maxDepth,
+      visited,
+      lines,
+      childPrefix,
+    )
+  }
 }
 
-/** Builds a hierarchical list of all call sites for a given symbol, exploring caller relationships recursively. Handles cycles and limits traversal depth based on configuration. */
+/** Builds a hierarchical inbound call graph. Direct callers are listed first; then each child symbol
+ * that has callers is rendered as an intermediate node with its callers nested beneath it. */
 async function buildInbound(
   store: IndexerDB,
   symbolName: string,
+  filePath: string,
+  lineNum: number,
   currentDepth: number,
   maxDepth: number,
   visited: Set<string>,
@@ -229,7 +295,7 @@ async function buildInbound(
   prefix: string,
 ): Promise<void> {
   if (currentDepth === 0) {
-    lines.push(symbolName)
+    lines.push(`${symbolName} (${filePath}:${lineNum})`)
   }
 
   if (visited.has(symbolName)) return
@@ -237,21 +303,66 @@ async function buildInbound(
 
   if (currentDepth >= maxDepth) return
 
-  const callers = await store.getCallers(symbolName)
+  const callers = await store.getCallersNested(symbolName)
   if (callers.length === 0) return
 
-  // Deduplicate by callerName+callerFile
-  const seen = new Set<string>()
-  const unique = callers.filter((c) => {
-    const key = `${c.callerName}|${c.callerFile}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  // Separate direct callers (childName == null) from callers-via-children
+  const directCallers: Array<{
+    callerFile: string
+    callerName: string
+    line: number
+  }> = []
+  const childGroups = new Map<
+    string,
+    {
+      childFilePath: string
+      childLine: number
+      callers: Array<{ callerFile: string; callerName: string; line: number }>
+    }
+  >()
+  const seenDirect = new Set<string>()
+  const seenChildCallers = new Map<string, Set<string>>()
 
-  for (let i = 0; i < unique.length; i++) {
-    const caller = unique[i]!
-    const isLast = i === unique.length - 1
+  for (const c of callers) {
+    if (c.childName === null) {
+      const key = `${c.callerName}|${c.callerFile}`
+      if (!seenDirect.has(key)) {
+        seenDirect.add(key)
+        directCallers.push({
+          callerFile: c.callerFile,
+          callerName: c.callerName,
+          line: c.line,
+        })
+      }
+    } else {
+      if (!childGroups.has(c.childName)) {
+        childGroups.set(c.childName, {
+          childFilePath: c.childFilePath!,
+          childLine: c.childLine!,
+          callers: [],
+        })
+        seenChildCallers.set(c.childName, new Set())
+      }
+      const callerKey = `${c.callerName}|${c.callerFile}`
+      if (!seenChildCallers.get(c.childName)!.has(callerKey)) {
+        seenChildCallers.get(c.childName)!.add(callerKey)
+        childGroups
+          .get(c.childName)!
+          .callers.push({
+            callerFile: c.callerFile,
+            callerName: c.callerName,
+            line: c.line,
+          })
+      }
+    }
+  }
+
+  const totalItems = directCallers.length + childGroups.size
+  let itemIndex = 0
+
+  // Render direct callers of this symbol
+  for (const caller of directCallers) {
+    const isLast = itemIndex === totalItems - 1
     const connector = isLast ? '└─' : '├─'
     const childPrefix = prefix + (isLast ? '   ' : '│  ')
 
@@ -259,20 +370,65 @@ async function buildInbound(
       lines.push(
         `${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1}) [cycle]`,
       )
-      continue
+    } else {
+      lines.push(
+        `${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1})`,
+      )
+      await buildInbound(
+        store,
+        caller.callerName,
+        caller.callerFile,
+        caller.line + 1,
+        currentDepth + 1,
+        maxDepth,
+        visited,
+        lines,
+        childPrefix,
+      )
     }
+    itemIndex++
+  }
+
+  // Render each child with callers as an intermediate node
+  for (const [
+    childName,
+    { childFilePath, childLine, callers: childCallers },
+  ] of childGroups) {
+    const isLast = itemIndex === totalItems - 1
+    const connector = isLast ? '└─' : '├─'
+    const childPrefix = prefix + (isLast ? '   ' : '│  ')
 
     lines.push(
-      `${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1})`,
+      `${prefix}${connector} ${childName} (${childFilePath}:${childLine + 1})`,
     )
-    await buildInbound(
-      store,
-      caller.callerName,
-      currentDepth + 1,
-      maxDepth,
-      visited,
-      lines,
-      childPrefix,
-    )
+
+    for (let j = 0; j < childCallers.length; j++) {
+      const caller = childCallers[j]!
+      const isLastCaller = j === childCallers.length - 1
+      const callerConnector = isLastCaller ? '└─' : '├─'
+      const callerPrefix = childPrefix + (isLastCaller ? '   ' : '│  ')
+
+      if (visited.has(caller.callerName)) {
+        lines.push(
+          `${childPrefix}${callerConnector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1}) [cycle]`,
+        )
+      } else {
+        lines.push(
+          `${childPrefix}${callerConnector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1})`,
+        )
+        await buildInbound(
+          store,
+          caller.callerName,
+          caller.callerFile,
+          caller.line + 1,
+          currentDepth + 1,
+          maxDepth,
+          visited,
+          lines,
+          callerPrefix,
+        )
+      }
+    }
+    itemIndex++
   }
 }

@@ -23,17 +23,14 @@ import type {
   IndexedFile,
   IndexedImport,
   IndexedSymbolCall,
-  IndexerConfig,
 } from '../config/types'
 import { resolvePath } from 'src/utils/paths'
 import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
-import { AppStateManager } from 'src/state'
 
 /** Manages an SQLite database for indexing and querying code symbols, files, imports, and call relationships using Drizzle ORM. */
 export class IndexerDB {
   private db: SQLiteBunDatabase<typeof schema>
-  private config: IndexerConfig
 
   private dbInited: boolean = false
   private dbFilePath?: string
@@ -60,14 +57,6 @@ export class IndexerDB {
         logDebug(`Creating database directory at ${dbDir}`)
         mkdirSync(dbDir, { recursive: true })
       }
-    }
-
-    this.config = AppStateManager.getInstance().getItem('config') ?? {
-      enabled: false,
-      languages: {},
-      extnToLangMap: {},
-      testFilePatterns: [],
-      ignore_patterns: [],
     }
 
     this.sqlite = new Database(this.dbFilePath, { create: true, strict: true })
@@ -265,7 +254,10 @@ export class IndexerDB {
     }
 
     if (filePattern) {
-      const fileSqlPattern = filePattern.replace(/\*/g, '%')
+      const fileSqlPattern = `%${filePattern.replace(/\*/g, '%')}%`.replace(
+        /%+/g,
+        '%',
+      ) // Replace multiple % with single %
       conditions.push(like(schema.symbols.file_path, fileSqlPattern))
     }
 
@@ -497,6 +489,15 @@ export class IndexerDB {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves all child symbols for the specified parent symbol ID. */
+  async getChildSymbols(parentId: string): Promise<IndexedSymbol['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(eq(schema.symbols.parent_id, parentId))
+      .orderBy(schema.symbols.line)
+  }
+
   /**===========
    * Symbol Call Operations
    * ===========*/
@@ -613,17 +614,20 @@ export class IndexerDB {
       callerName: string
       line: number
       childName: string | null
+      childFilePath: string | null
+      childLine: number | null
     }>
   > {
     return this.sqlite
       .prepare(
-        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line, child.name AS childName
+        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line,
+                child.name AS childName, child.file_path AS childFilePath, child.line AS childLine
          FROM symbol_calls sc
-         JOIN symbols t ON t.name = ?
+         JOIN symbols t ON t.name = ? COLLATE NOCASE
          JOIN symbols s ON s.id = sc.caller_id
          LEFT JOIN symbols child ON child.parent_id = t.id
-                                 AND (sc.callee_id = child.id OR sc.callee_name = child.name)
-         WHERE (sc.callee_id = t.id OR sc.callee_name = t.name)
+                                 AND (sc.callee_id = child.id OR sc.callee_name = child.name COLLATE NOCASE)
+         WHERE (sc.callee_id = t.id OR sc.callee_name = t.name COLLATE NOCASE)
             OR child.id IS NOT NULL
          ORDER BY s.file_path, s.line`,
       )
@@ -727,5 +731,13 @@ export class IndexerDB {
     await this.db.delete(schema.imports)
     await this.db.delete(schema.files)
     await this.db.delete(schema.symbol_calls)
+  }
+
+  /** Closes the database connection. */
+  close() {
+    this.sqlite.run('PRAGMA journal_mode = DELETE;')
+    this.sqlite.close()
+    this.dbInited = false
+    logDebug('Database connection closed')
   }
 }

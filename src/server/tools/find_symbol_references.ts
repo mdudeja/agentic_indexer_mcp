@@ -17,6 +17,10 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           .describe(
             'Symbol name to find references for, or a file path (containing / or .) to find module importers.',
           ),
+        file_pattern: z
+          .string()
+          .optional()
+          .describe('Filter by file path pattern (supports * wildcard)'),
         include_imports: z
           .boolean()
           .default(true)
@@ -27,18 +31,48 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           .describe('Include call sites where this symbol is invoked'),
       }),
     },
-    async ({ symbol_name, include_imports, include_calls }) => {
+    async ({ symbol_name, file_pattern, include_imports, include_calls }) => {
       const store = IndexerDB.getInstance()
       try {
         const name = symbol_name as string
         const sections: string[] = []
 
+        const symbols = await store.searchSymbols(
+          name,
+          'all',
+          file_pattern as string | undefined,
+        )
+
+        if (symbols.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Symbol '${name}' not found in codebase.`,
+              },
+            ],
+          }
+        }
+
+        if (symbols.length > 1 && !file_pattern) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Multiple symbols found with name '${name}'. Please provide a file_pattern to disambiguate.`,
+              },
+            ],
+          }
+        }
+
+        const symbol = symbols[0]
+
         if (include_calls) {
-          const allCallers = await store.getCallersNested(name)
+          const allCallers = await store.getCallersNested(symbol!.name)
           if (allCallers.length > 0) {
             const callLines = allCallers.map(
               (c) =>
-                `  - ${c.callerName}${c.childName ? ` (${name}.${c.childName})` : ''} in ${c.callerFile}:${c.line + 1}`,
+                `  - ${c.callerName}${c.childName ? ` (${symbol!.name}.${c.childName})` : ''} in ${c.callerFile}:${c.line + 1}`,
             )
             sections.push(
               `Called at (${allCallers.length} location${allCallers.length !== 1 ? 's' : ''}):\n${callLines.join('\n')}`,
@@ -49,7 +83,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         }
 
         if (include_imports) {
-          const importRefs = await store.getImportsByName(name)
+          const importRefs = await store.getImportsByName(symbol!.name)
           if (importRefs.length > 0) {
             const importLines = importRefs.map(
               (i) => `  - ${i.file_path} (from '${i.module_path}')`,
@@ -91,7 +125,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           content: [
             {
               type: 'text',
-              text: `References to: ${name}\n\n${sections.join('\n\n')}`,
+              text: `References to: ${symbol!.name}\n\n${sections.join('\n\n')}`,
             },
           ],
         }

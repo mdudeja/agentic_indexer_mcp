@@ -84,10 +84,15 @@ function getDocstring(
 
   while (docStringNode && docStringNode.type.includes('comment')) {
     comments.unshift(docStringNode.text.trim())
+    const originalLine = docStringNode.startPosition.row
     docStringNode =
       strategyUsed === 'previous'
         ? docStringNode.previousNamedSibling
         : docStringNode.nextNamedSibling
+    const newLine = docStringNode ? docStringNode.startPosition.row : null
+    if (newLine === null || Math.abs(newLine - originalLine) > 1) {
+      break
+    }
   }
 
   return comments.length > 0 ? getCommentText(comments.join('\n')) : undefined

@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { like } from 'drizzle-orm'
+import { like, or } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import type { SymbolKind } from '../../database/schemas'
 
@@ -16,14 +16,23 @@ export function registerResolveTypeTool(server: McpServer) {
       inputSchema: z.object({
         type_name: z
           .string()
-          .describe('Name of the type or interface to resolve'),
+          .describe(
+            'Name of the type or interface to resolve. Supports partial names and wildcards.',
+          ),
+        limit: z
+          .number()
+          .optional()
+          .describe(
+            'Maximum number of producers/consumers to return (default 20)',
+          ),
       }),
     },
-    async ({ type_name }) => {
+    async ({ type_name, limit }) => {
       const store = IndexerDB.getInstance()
       try {
         const name = type_name as string
         const db = store.getDb()
+        const resultLimit = limit ?? 20
 
         // Find type and interface definitions
         const [typeMatches, ifaceMatches] = await Promise.all([
@@ -43,10 +52,14 @@ export function registerResolveTypeTool(server: McpServer) {
             return_type: schema.symbols.return_type,
           })
           .from(schema.symbols)
-          .where(like(schema.symbols.return_type, `%${name}%`))
-          .limit(20)
+          .where(
+            or(
+              like(schema.symbols.return_type, `%${name}%`),
+              like(schema.symbols.signature, `%${name}%`),
+            ),
+          )
+          .limit(resultLimit)
 
-        // Find symbols that consume this type (parameters_json contains the name)
         const consumers = await db
           .select({
             name: schema.symbols.name,
@@ -57,8 +70,13 @@ export function registerResolveTypeTool(server: McpServer) {
             parameters_json: schema.symbols.parameters_json,
           })
           .from(schema.symbols)
-          .where(like(schema.symbols.parameters_json, `%${name}%`))
-          .limit(20)
+          .where(
+            or(
+              like(schema.symbols.parameters_json, `%${name}%`),
+              like(schema.symbols.signature, `%${name}%`),
+            ),
+          )
+          .limit(resultLimit)
 
         // Find symbols that inherit from / extend / union this type
         const inheritors = await store.getSymbolsInheritingFrom(name)

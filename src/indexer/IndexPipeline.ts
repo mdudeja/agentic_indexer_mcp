@@ -36,6 +36,7 @@ export class IndexPipeline {
       ignore_patterns: [],
       testFilePatterns: [],
       extnToLangMap: {},
+      agent_config_candidates: [],
     }
   }
 

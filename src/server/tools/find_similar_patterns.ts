@@ -55,11 +55,18 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
           }
         }
 
+        if (candidates.length > 1 && !file_path) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Multiple symbols named '${name}' found. Please specify a file_path to disambiguate.`,
+              },
+            ],
+          }
+        }
+
         const target = candidates[0]!
-        const ambiguityNote =
-          candidates.length > 1 && !file_path
-            ? `Note: using first match (${target.file_path}:${target.line + 1}). Provide file_path to disambiguate.\n\n`
-            : ''
 
         // Parse target param count
         let targetParamCount: number | null = null
@@ -163,7 +170,7 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
           content: [
             {
               type: 'text',
-              text: `${ambiguityNote}Symbols similar to: ${name} (${targetDesc})\n\nFound ${results.length} similar pattern${results.length !== 1 ? 's' : ''}:\n\n${resultLines.join('\n\n')}`,
+              text: `Symbols similar to: ${name} (${targetDesc})\n\nFound ${results.length} similar pattern${results.length !== 1 ? 's' : ''}:\n\n${resultLines.join('\n\n')}`,
             },
           ],
         }

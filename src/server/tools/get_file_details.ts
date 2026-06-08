@@ -128,21 +128,26 @@ export function registerGetFileDetailsTool(server: McpServer) {
         for (const [kind, syms] of byKind) {
           const lines = syms.map((s) => {
             let line = `  - ${s.name} (line ${s.line + 1})`
-            if (s.exported) line += ' [exported]'
-            if (s.signature) line += `\n    Signature: ${s.signature}`
-            if (s.docstring) line += `\n    Doc: ${s.docstring.split('\n')[0]}`
-            if (s.parameters_json) {
-              try {
-                const params = JSON.parse(s.parameters_json)
-                line += `\n    Parameters: ${params
-                  .map((p: any) => `${p.name}: ${p.type}`)
-                  .join(', ')}`
-              } catch (e) {
-                // Ignore JSON parsing errors
-              }
+            let params, return_type
+            try {
+              params = s.parameters_json ? JSON.parse(s.parameters_json) : null
+              return_type = s.return_type ? s.return_type : null
+            } catch (e) {
+              // Ignore JSON parsing errors
             }
-            if (s.return_type) {
-              line += `\n    Returns: ${s.return_type}`
+
+            if (s.exported) line += ' [exported]'
+            if (s.signature && (!params || params.length === 0)) {
+              line += `\n    Signature: ${s.signature}`
+            }
+            if (s.docstring) line += `\n    Doc: ${s.docstring.split('\n')[0]}`
+            if (params && params.length > 0) {
+              line += `\n    Parameters: ${params
+                .map((p: any) => `${p.name}: ${p.type}`)
+                .join(', ')}`
+            }
+            if (return_type) {
+              line += `\n    Returns: ${return_type}`
             }
             return line
           })

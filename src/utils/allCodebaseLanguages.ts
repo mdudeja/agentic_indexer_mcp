@@ -1,6 +1,7 @@
 import { IndexerDB } from 'src/database/IndexerDB'
 import * as schema from '../database/schemas'
 
+/** Returns all languages present in the codebase. */
 export async function allCodebaseLanguages(): Promise<Set<string>> {
   const store = IndexerDB.getInstance()
   const db = store.getDb()

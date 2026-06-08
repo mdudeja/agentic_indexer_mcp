@@ -14,19 +14,45 @@ export function registerGetBlastRadiusTool(server: McpServer) {
         symbol_name: z
           .string()
           .describe('The exact name of the symbol being modified'),
-        depth: z
-          .number()
-          .default(1)
-          .describe(
-            'How many caller levels to traverse (default 1 = direct callers only)',
-          ),
+        file_pattern: z
+          .string()
+          .optional()
+          .describe('Filter by file path pattern (supports * wildcard)'),
       }),
     },
-    async ({ symbol_name, depth }) => {
+    async ({ symbol_name, file_pattern }) => {
       const store = IndexerDB.getInstance()
       try {
         const name = symbol_name as string
-        const maxDepth = (depth as number) ?? 1
+        const startSymbols = await store.searchSymbols(
+          name,
+          'all',
+          file_pattern as string | undefined,
+        )
+
+        if (startSymbols.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Symbol '${name}' not found in codebase.`,
+              },
+            ],
+          }
+        }
+
+        if (startSymbols.length > 1 && !file_pattern) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Multiple symbols found with name '${name}'. Please provide a file_pattern to disambiguate.`,
+              },
+            ],
+          }
+        }
+
+        const startSymbol = startSymbols[0]
 
         // BFS over inbound call graph
         const visited = new Set<string>()
@@ -34,23 +60,18 @@ export function registerGetBlastRadiusTool(server: McpServer) {
           callerFile: string
           callerName: string
           line: number
-          depth: number
         }> = []
-        const queue: Array<{ name: string; depth: number }> = [
-          { name, depth: 0 },
-        ]
+        const queue: Array<{ name: string }> = [{ name: startSymbol!.name }]
 
         while (queue.length > 0) {
           const current = queue.shift()!
-          if (visited.has(current.name) || current.depth >= maxDepth) continue
+          if (visited.has(current.name)) continue
           visited.add(current.name)
 
-          const callers = await store.getCallers(current.name)
+          const callers = await store.getCallersNested(current.name)
           for (const c of callers) {
-            allCallers.push({ ...c, depth: current.depth + 1 })
-            if (current.depth + 1 < maxDepth) {
-              queue.push({ name: c.callerName, depth: current.depth + 1 })
-            }
+            allCallers.push(c)
+            queue.push({ name: c.callerName })
           }
         }
 
@@ -66,15 +87,14 @@ export function registerGetBlastRadiusTool(server: McpServer) {
         }
 
         const lines = allCallers.map(
-          (c) =>
-            `  - ${c.callerName} (${c.callerFile}:${c.line + 1})${maxDepth > 1 ? ` [depth ${c.depth}]` : ''}`,
+          (c) => `  - ${c.callerName} (${c.callerFile}:${c.line + 1})`,
         )
 
         return {
           content: [
             {
               type: 'text',
-              text: `Blast radius for '${name}' (${allCallers.length} caller${allCallers.length !== 1 ? 's' : ''}, depth=${maxDepth}):\n${lines.join('\n')}\n\nEnsure testing covers these paths. Use trace_call_graph(direction=inbound) for a full traversal tree.`,
+              text: `Blast radius for '${name}' (${allCallers.length} caller${allCallers.length !== 1 ? 's' : ''})\n${lines.join('\n')}\n\nEnsure testing covers these paths. Use trace_call_graph(direction=inbound) for a full traversal tree.`,
             },
           ],
         }
