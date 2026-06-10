@@ -5,6 +5,7 @@ import { eq, and, isNull, inArray, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import type { SymbolKind } from '../../database/schemas'
 import { AppStateManager } from 'src/state'
+import { updateUsage } from 'src/utils/updateUsage'
 
 const ALL_KINDS = [
   'function',
@@ -22,7 +23,20 @@ export function registerGetEntryPointsTool(server: McpServer) {
     {
       title: 'Get Entry Points',
       description:
-        "List all top-level exported symbols in the codebase — the public API surface. Use this to understand a module's external interface or to identify where execution can begin. Set only_unreferenced=true to find symbols not imported by any other indexed file (true external entry points).",
+        'List top-level exported symbols — the public API surface of the codebase. ' +
+        '\n\n' +
+        'TWO MODES: ' +
+        'Default (`only_unreferenced=false`): returns ALL exported top-level symbols — useful for understanding what a module exposes to callers. ' +
+        '`only_unreferenced=true`: filters to exports that no other indexed file imports — these are the true program entry points ' +
+        '(CLI commands, HTTP route handlers, top-level scripts, plugin registrations). This is the mode to use when asked "where does execution start?". ' +
+        '\n\n' +
+        'CAVEAT: Symbols consumed via namespace imports (`import * as X` then `X.foo()`) will appear unreferenced even if they are used. ' +
+        'Treat `only_unreferenced` results as strong candidates, not definitive. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Grouped by file, each symbol shows kind, name, line number, signature, and first line of docstring. ' +
+        '\n\n' +
+        'COMPARE WITH OTHER TOOLS: `get_file_details` shows all symbols in one specific file (not just exports). ' +
+        '`get_codebase_map` shows the same exports but aggregated by directory with dependency-layer context.',
       inputSchema: z.object({
         kind: z
           .array(z.enum(ALL_KINDS))
@@ -122,10 +136,13 @@ export function registerGetEntryPointsTool(server: McpServer) {
           .join(', ')
 
         const header = `Entry Points (${flags})\nTotal: ${results.length} symbol${results.length !== 1 ? 's' : ''} across ${byFile.size} file${byFile.size !== 1 ? 's' : ''}\n`
+
+        const output = header + '\n' + sections.join('\n\n')
+
+        //usage computation
+        await updateUsage('get_entry_points', [], output.length)
         return {
-          content: [
-            { type: 'text', text: header + '\n' + sections.join('\n\n') },
-          ],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {

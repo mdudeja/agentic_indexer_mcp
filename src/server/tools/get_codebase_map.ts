@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { eq, and, isNull, sql, inArray, notInArray, or, not } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to produce a top-down architectural map of the codebase grouped by directory. */
 export function registerGetCodebaseMapTool(server: McpServer) {
@@ -11,7 +12,24 @@ export function registerGetCodebaseMapTool(server: McpServer) {
     {
       title: 'Get Codebase Map',
       description:
-        'Produce a top-down architectural overview of the codebase: files grouped by directory, key exported symbols per group, and cross-group dependency relationships. Use this first when orienting yourself in an unfamiliar codebase.',
+        'Produce a text-based architectural overview of the codebase: files grouped by directory, ' +
+        'a layered dependency topology (entry points → foundation), key exported symbols per module, and cross-module dependency edges. ' +
+        '\n\n' +
+        'USE THIS TOOL WHEN you need a fast, scannable answer to "what modules exist, how are they layered, and what are their main exports?" — ' +
+        'it is the right starting point for orienting in an unfamiliar codebase before diving deeper. ' +
+        '\n\n' +
+        'USE explore_codebase INSTEAD WHEN you need to see actual call edges between individual symbols ' +
+        '(functions/classes calling each other), trace the hot execution path from an entry point, or understand ' +
+        'how a specific subsystem is wired internally. explore_codebase renders a Mermaid graph; this tool returns plain text. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Three sections — (1) Architecture: one row per dependency layer, ordered entry-points → foundation. ' +
+        '(2) Dependency graph: each module → the modules it calls into. ' +
+        '(3) Module details: per-directory block listing the top exported symbols ranked by how often they are called, ' +
+        "with the most-called symbol's docstring shown if available. " +
+        '\n\n' +
+        'TIPS: Increase depth (2 or 3) if the top-level grouping is too coarse. ' +
+        'Increase max_key_symbols to see more exports per module. ' +
+        'Foundation modules (layer 0) have no outgoing cross-module dependencies — they are the building blocks everything else imports.',
       inputSchema: z.object({
         depth: z
           .number()
@@ -236,7 +254,12 @@ export function registerGetCodebaseMapTool(server: McpServer) {
           }
         }
 
-        return { content: [{ type: 'text', text: out.join('\n') }] }
+        const output = out.join('\n')
+
+        //usage computation
+        await updateUsage('get_codebase_map', [], output.length)
+
+        return { content: [{ type: 'text', text: output }] }
       } catch (err) {
         return {
           content: [

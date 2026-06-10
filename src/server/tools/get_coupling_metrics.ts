@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { SymbolKind } from '../../database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 const SORT_OPTIONS = [
   'instability',
@@ -17,13 +18,25 @@ export function registerGetCouplingMetricsTool(server: McpServer) {
     {
       title: 'Get Coupling Metrics',
       description:
-        "Compute Robert C. Martin's package coupling metrics for each indexed file:\n" +
-        '  Ce  — Efferent coupling: number of distinct files this file imports from\n' +
-        '  Ca  — Afferent coupling: number of distinct files that import this file\n' +
-        '  I   — Instability: Ce / (Ce + Ca). 0 = maximally stable, 1 = maximally unstable\n' +
-        '  A   — Abstractness: ratio of interface/type symbols to total symbols\n' +
-        '  D   — Distance from main sequence: |A + I - 1|. Lower is better.\n\n' +
-        'Files far from the main sequence are either overly abstract with no dependents (Zone of Uselessness) or highly coupled and concrete (Zone of Pain).',
+        "Compute Robert C. Martin's package coupling metrics for every indexed file. " +
+        'Use this to identify structural design problems — files that are too tightly coupled or poorly abstracted. ' +
+        '\n\n' +
+        'METRICS EXPLAINED: ' +
+        'Ce (Efferent coupling) — how many distinct files this file imports from; high Ce = depends on many things. ' +
+        'Ca (Afferent coupling) — how many distinct files import this file; high Ca = many things depend on it. ' +
+        'I (Instability) = Ce / (Ce + Ca): 0 = maximally stable (nothing changes this), 1 = maximally unstable (changes ripple out). ' +
+        'A (Abstractness) = ratio of interface/type symbols to total symbols. ' +
+        'D (Distance from main sequence) = |A + I - 1|: lower is better; ideal files are either stable+abstract OR unstable+concrete. ' +
+        '\n\n' +
+        'INTERPRETING D: ' +
+        'High D + high I + low A = Zone of Pain (concrete, widely depended-upon, hard to change — e.g. a utility God-class). ' +
+        'High D + low I + high A = Zone of Uselessness (abstract but nothing uses it — e.g. dead interfaces). ' +
+        '\n\n' +
+        'WHEN TO USE: During architectural review, before a major refactor, or when `get_dependency_cycles` finds cycles. ' +
+        'Sort by `distance` (default) to find the worst offenders. ' +
+        'Sort by `afferent` to find your most critical shared dependencies. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Aligned table of Ce, Ca, I, A, D per file, sorted by chosen metric.',
       inputSchema: z.object({
         sort_by: z
           .enum(SORT_OPTIONS)
@@ -177,8 +190,13 @@ export function registerGetCouplingMetricsTool(server: McpServer) {
           'High D + high I + low A = Zone of Pain (concrete and depended-upon). High D + low I + high A = Zone of Uselessness.',
         ]
 
+        const output = lines.join('\n')
+
+        // Analytics computation
+        updateUsage('get_coupling_metrics', [], output.length)
+
         return {
-          content: [{ type: 'text', text: lines.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {

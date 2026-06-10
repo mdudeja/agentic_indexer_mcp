@@ -10,6 +10,7 @@ async function main() {
     path: 'test.ts',
     hash: 'abc',
     language: 'typescript',
+    estimated_tokens: 10,
   })
   const symbols: IndexedSymbol['Insert'][] = [
     {

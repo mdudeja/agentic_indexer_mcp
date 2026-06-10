@@ -18,6 +18,8 @@ import { registerGetSymbolImportanceTool } from './get_symbol_importance'
 import { registerGetDependencyCyclesTool } from './get_dependency_cycles'
 import { registerGetCouplingMetricsTool } from './get_coupling_metrics'
 import { registerAuditAgentConfigTool } from './audit_agent_config'
+import { registerExploreCodebaseTool } from './explore_codebase'
+import { registerGetTokenSavingsTool } from './get_token_savings'
 
 /** Registers all MCP tools on the server. */
 export function registerTools(server: McpServer) {
@@ -49,4 +51,8 @@ export function registerTools(server: McpServer) {
   registerGetDependencyCyclesTool(server)
   registerGetCouplingMetricsTool(server)
   registerAuditAgentConfigTool(server)
+  registerExploreCodebaseTool(server)
+
+  // Analytics
+  registerGetTokenSavingsTool(server)
 }

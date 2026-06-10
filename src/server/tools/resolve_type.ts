@@ -4,6 +4,7 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { like, or } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import type { SymbolKind } from '../../database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find a type/interface definition and all symbols that produce or consume it. */
 export function registerResolveTypeTool(server: McpServer) {
@@ -12,7 +13,24 @@ export function registerResolveTypeTool(server: McpServer) {
     {
       title: 'Resolve Type',
       description:
-        'Find the definition of a type or interface and all symbols that produce (return), consume (accept as parameter), or inherit from it (extends/implements/union/intersection). Useful for understanding type flow when debugging type errors or unfamiliar data shapes.',
+        'Locate a type or interface definition and map out every symbol that produces, consumes, or extends it. ' +
+        '\n\n' +
+        'FOUR SECTIONS RETURNED: ' +
+        '(1) Definition — where the type/interface is declared and its signature. ' +
+        '(2) Produced by — functions whose return type contains this type name (approximate LIKE match). ' +
+        '(3) Consumed by — functions that accept this type as a parameter (approximate LIKE match). ' +
+        '(4) Inheritors — types/interfaces that extend, implement, or compose this type via union/intersection. ' +
+        '\n\n' +
+        'WHEN TO USE: When you encounter an unfamiliar type and need to know where it comes from, ' +
+        'what creates instances of it, and what functions accept or return it. ' +
+        'Useful for debugging type errors and tracing data shapes through the codebase. ' +
+        '\n\n' +
+        'ACCURACY NOTE: Producer and consumer matching uses SQL LIKE on return_type and parameters_json columns. ' +
+        'Results may be over-inclusive (a type named `Config` will match `UserConfig`, `ConfigMap`, etc.). ' +
+        'Verify against the actual signatures shown in the output. ' +
+        '\n\n' +
+        'If the type is not found in the index (external library type), the definition section says so but ' +
+        'producers, consumers, and inheritors are still searched.',
       inputSchema: z.object({
         type_name: z
           .string()
@@ -153,11 +171,21 @@ export function registerResolveTypeTool(server: McpServer) {
           sections.push(`Inheritors: (none found)`)
         }
 
+        const output = `Type: ${name}\n\n${sections.join('\n\n')}`
+
+        // Analytics computation
+        const filePaths = new Set([
+          ...producers.map((p) => p.file_path),
+          ...consumers.map((c) => c.file_path),
+          ...inheritors.map((i) => i.file_path),
+        ])
+        await updateUsage('resolve_type', Array.from(filePaths), output.length)
+
         return {
           content: [
             {
               type: 'text',
-              text: `Type: ${name}\n\n${sections.join('\n\n')}`,
+              text: output,
             },
           ],
         }

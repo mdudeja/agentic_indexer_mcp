@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "64a212b9-5a84-4ba0-9aeb-cde419acb652",
+  "id": "7a7736d8-187b-49a8-af9e-c8835170b3a0",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -20,6 +20,10 @@
     },
     {
       "name": "symbols",
+      "entityType": "tables"
+    },
+    {
+      "name": "tool_usage",
       "entityType": "tables"
     },
     {
@@ -59,6 +63,16 @@
       "default": null,
       "generated": null,
       "name": "language",
+      "entityType": "columns",
+      "table": "files"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "estimated_tokens",
       "entityType": "columns",
       "table": "files"
     },
@@ -393,6 +407,66 @@
       "table": "symbols"
     },
     {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "tool_usage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tool_name",
+      "entityType": "columns",
+      "table": "tool_usage"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "called_at",
+      "entityType": "columns",
+      "table": "tool_usage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tokens_saved",
+      "entityType": "columns",
+      "table": "tool_usage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_tokens",
+      "entityType": "columns",
+      "table": "tool_usage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "response_tokens",
+      "entityType": "columns",
+      "table": "tool_usage"
+    },
+    {
       "columns": [
         "file_path"
       ],
@@ -516,6 +590,15 @@
       "nameExplicit": false,
       "name": "symbols_pk",
       "table": "symbols",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "tool_usage_pk",
+      "table": "tool_usage",
       "entityType": "pks"
     },
     {
@@ -713,6 +796,34 @@
       "name": "idx_symbols_decorator",
       "entityType": "indexes",
       "table": "symbols"
+    },
+    {
+      "columns": [
+        {
+          "value": "tool_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_tool_usage_tool_name",
+      "entityType": "indexes",
+      "table": "tool_usage"
+    },
+    {
+      "columns": [
+        {
+          "value": "called_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_tool_usage_called_at",
+      "entityType": "indexes",
+      "table": "tool_usage"
     }
   ],
   "renames": []

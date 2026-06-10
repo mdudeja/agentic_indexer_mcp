@@ -36,6 +36,7 @@ export type LanguageConfig = {
     lists: {
       exported_nodes: string[]
       container_nodes: string[]
+      container_kinds: SymbolKind[]
       typedef_nodes: string[]
       decorator_nodes: string[]
       callable_nodes: string[]
@@ -67,6 +68,7 @@ export type IndexerConfig = {
   ignore_patterns: string[]
   extnToLangMap: Record<string, string>
   testFilePatterns: RegExp[]
+  entryPointPatterns: RegExp[]
   languages: Record<string, LanguageConfig>
   docstring_generation?: DocstringConfig
   agent_config_candidates: string[]

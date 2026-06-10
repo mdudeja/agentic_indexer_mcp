@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { eq, and, like, not, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find symbols with structurally similar patterns (kind, return type, parameter count, decorator). */
 export function registerFindSimilarPatternsTool(server: McpServer) {
@@ -11,7 +12,24 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
     {
       title: 'Find Similar Patterns',
       description:
-        'Find symbols that follow the same structural pattern as a given symbol, matched on any combination of kind, return type, parameter count, and decorator. Useful for finding systemic bugs or understanding conventions.',
+        'Find symbols with the same structural shape as a given reference symbol, matching on any combination of ' +
+        'kind (function/class/method/etc.), return type, parameter count, and decorator. ' +
+        '\n\n' +
+        'USE THIS TOOL (not search_symbols) when you care about structure, not name. Examples: ' +
+        '"find all functions that return Promise<void> and take 2 parameters", ' +
+        '"find all @Controller-decorated classes like this one", ' +
+        '"find every function with the same signature shape so I can apply this fix consistently". ' +
+        '\n\n' +
+        'WHEN TO USE: Applying a bug fix or refactor pattern across all structurally similar symbols; ' +
+        'auditing whether a convention is followed consistently; discovering related implementations ' +
+        'when you only have one example. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Each matching symbol shows kind, name, file:line, decorator, return type, ' +
+        'parameter list, and first line of docstring. ' +
+        '\n\n' +
+        'TIPS: Start with `match_on: ["kind", "decorator"]` if you want broad structural matches, ' +
+        'then narrow with `return_type` or `param_count`. ' +
+        'Provide `file_path` if the reference symbol name is ambiguous.',
       inputSchema: z.object({
         symbol_name: z
           .string()
@@ -166,11 +184,21 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
           return line
         })
 
+        const output = `Symbols similar to: ${name} (${targetDesc})\n\nFound ${results.length} similar pattern${results.length !== 1 ? 's' : ''}:\n\n${resultLines.join('\n\n')}`
+
+        // Analytics computation
+        const filePaths = new Set(results.map((s) => s.file_path))
+        await updateUsage(
+          'find_similar_patterns',
+          Array.from(filePaths),
+          output.length,
+        )
+
         return {
           content: [
             {
               type: 'text',
-              text: `Symbols similar to: ${name} (${targetDesc})\n\nFound ${results.length} similar pattern${results.length !== 1 ? 's' : ''}:\n\n${resultLines.join('\n\n')}`,
+              text: output,
             },
           ],
         }

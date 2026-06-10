@@ -6,6 +6,7 @@ import { readFileSync } from 'fs'
 import { AppStateManager } from 'src/state'
 import type { IndexedSymbol } from 'src/database/schemas/symbols.schema'
 import type { IndexedFile } from 'src/database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to retrieve the full source code definition of a symbol, allowing agents to fetch the definition using either a symbol ID or a combination of name and file path. */
 export function registerGetDefinitionTool(server: McpServer) {
@@ -13,7 +14,20 @@ export function registerGetDefinitionTool(server: McpServer) {
     'get_definition',
     {
       title: 'Get Symbol Definition',
-      description: 'Get the full source code definition of a symbol',
+      description:
+        'Fetch the full source code of a symbol — the actual implementation as it appears in the file, ' +
+        'with correct line range and syntax-highlighted language tag. ' +
+        '\n\n' +
+        'HOW TO CALL: ' +
+        'If you have a `symbol_id` (from `search_symbols` or `get_file_details` output), pass it directly — it is the fastest and unambiguous path. ' +
+        'Otherwise, pass `name` + `file_path_or_name` together; `file_path_or_name` supports partial file name or path matches. ' +
+        '\n\n' +
+        'WHEN TO USE: After locating a symbol via `search_symbols` or `get_file_details`, ' +
+        'call this to read the actual implementation body before reasoning about it or modifying it. ' +
+        'Do not guess at implementation details — always read the definition first. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Returns a labeled header ("Definition of X in path/to/file.ts:") followed by ' +
+        'a fenced code block with the language tag and the full source text of the symbol.',
       inputSchema: z.object({
         symbol_id: z
           .string()
@@ -102,6 +116,10 @@ export function registerGetDefinitionTool(server: McpServer) {
         }
 
         const output = `Definition of ${symbol.name} in ${symbol.file_path}:\n\n\`\`\`${symbol.language}\n${defText}\n\`\`\``
+
+        // usage computation
+        const filePaths = [symbol.file_path]
+        await updateUsage('get_definition', filePaths, output.length)
 
         return {
           content: [{ type: 'text', text: output }],

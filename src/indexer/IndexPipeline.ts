@@ -37,6 +37,7 @@ export class IndexPipeline {
       testFilePatterns: [],
       extnToLangMap: {},
       agent_config_candidates: [],
+      entryPointPatterns: [],
     }
   }
 
@@ -141,6 +142,7 @@ export class IndexPipeline {
         path: relPath,
         hash,
         language: this.config.extnToLangMap[ext] || 'unknown',
+        estimated_tokens: Math.ceil(content.length / 4),
       })
       await this.options.store.upsertSymbols(parsed.symbols)
       await this.options.store.upsertCalls(parsed.calls)

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to retrieve all symbols defined in a file, with optional filtering to exported/public symbols only. */
 export function registerGetFileDetailsTool(server: McpServer) {
@@ -9,7 +10,23 @@ export function registerGetFileDetailsTool(server: McpServer) {
     {
       title: 'Get File Details',
       description:
-        'Get all symbols (functions, classes, variables, etc.) defined in a specific file. Use this tool when you want to understand what a file contains and how it is structured.',
+        'List all symbols defined in a specific file — functions, classes, methods, constants, types, and interfaces — ' +
+        'grouped by kind with signatures, parameters, return types, and docstrings. ' +
+        '\n\n' +
+        'WHEN TO USE: When you know the file but not which symbol you need yet. ' +
+        "This gives you a map of the file's contents so you can then call `get_definition` on a specific symbol. " +
+        'It is more targeted than `search_symbols` (which searches by name across all files). ' +
+        '\n\n' +
+        'PARAMETER GUIDANCE: ' +
+        '`include_private=false` — show only exported symbols and public members of exported types. ' +
+        'Use this when you only care about what callers can see (the public contract). ' +
+        '`include_lexical_declarations=true` — also include non-exported constants, variables, and type aliases. ' +
+        'Use this when you need a complete picture of module-level state and types. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Header with file path and exported/total symbol count, ' +
+        'then one `## KIND` section per symbol kind, each symbol showing name, line, exported flag, signature, params, return type, and docstring. ' +
+        '\n\n' +
+        'Supports partial file name or path matching — if multiple files match, the tool asks you to be more specific.',
       inputSchema: z.object({
         file_path_or_file_name: z
           .string()
@@ -155,10 +172,18 @@ export function registerGetFileDetailsTool(server: McpServer) {
         }
 
         const header = `File: ${fileRecord!.path}\nExported: ${exportedCount} / Total: ${totalCount}${!include_private ? ' (showing public interface only)' : ''}\n`
+        const content = header + '\n' + sections.join('\n\n')
+
+        // usage computation
+        const filePaths = new Set(files.map((f) => f.path))
+        await updateUsage(
+          'get_file_details',
+          Array.from(filePaths),
+          content.length,
+        )
+
         return {
-          content: [
-            { type: 'text', text: header + '\n' + sections.join('\n\n') },
-          ],
+          content: [{ type: 'text', text: content }],
         }
       } catch (err) {
         return {

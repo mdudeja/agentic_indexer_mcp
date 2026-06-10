@@ -20,6 +20,7 @@ describe('SymbolStore', () => {
       path: 'src/test.ts',
       hash: 'hash123',
       language: 'typescript',
+      estimated_tokens: 10,
     })
     const hash = await store.getFileHash('src/test.ts')
     expect(hash).toBe('hash123')
@@ -30,6 +31,7 @@ describe('SymbolStore', () => {
       path: 'src/test.ts',
       hash: 'hash456',
       language: 'typescript',
+      estimated_tokens: 10,
     })
     const hash = await store.getFileHash('src/test.ts')
     expect(hash).toBe('hash456')

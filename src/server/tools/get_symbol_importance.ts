@@ -4,6 +4,7 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { isNotNull, inArray } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { AppStateManager } from 'src/state'
+import { updateUsage } from 'src/utils/updateUsage'
 
 const ALL_KINDS = Object.keys(
   schema.SymbolKind,
@@ -19,7 +20,22 @@ export function registerGetSymbolImportanceTool(server: McpServer) {
     {
       title: 'Get Symbol Importance',
       description:
-        'Rank codebase symbols by structural centrality using PageRank on the call graph. Symbols called by many other important symbols score higher. Useful for identifying critical utilities, core services, and high-leverage refactoring targets. Only symbols with resolved call edges (callee_id IS NOT NULL) participate in the ranking.',
+        'Rank symbols by structural importance using PageRank on the call graph. ' +
+        'A symbol scores higher when it is called by many other high-scoring symbols — ' +
+        'capturing not just raw call count but how central it is to the overall execution topology. ' +
+        '\n\n' +
+        'WHEN TO USE: To answer "what are the most critical symbols in this codebase?" before a refactor, ' +
+        'security audit, or performance investigation. High-importance symbols are highest-leverage — ' +
+        'a bug or performance problem there affects the most code paths. ' +
+        '\n\n' +
+        'LIMITATION: Only symbols with at least one resolved call edge participate in ranking. ' +
+        'Entry points (nothing calls them) and symbols reached only via dynamic dispatch may rank low or not appear. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Ranked table with position, PageRank score, kind, symbol name, and file:line. ' +
+        '\n\n' +
+        'FOLLOW-UP: Call `get_definition` on top-ranked symbols to read their implementations. ' +
+        'Cross-reference with `find_dead_code` — symbols with low importance and no callers are deletion candidates. ' +
+        'Use `get_blast_radius` on a top-ranked symbol before modifying it.',
       inputSchema: z.object({
         limit: z
           .number()
@@ -160,8 +176,13 @@ export function registerGetSymbolImportanceTool(server: McpServer) {
           )
         })
 
+        const output = lines.join('\n')
+
+        // Analytics computation
+        updateUsage('get_symbol_importance', [], output.length)
+
         return {
-          content: [{ type: 'text', text: lines.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {

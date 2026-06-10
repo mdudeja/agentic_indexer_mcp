@@ -25,6 +25,7 @@ export class TreeSitterIndexer {
       testFilePatterns: [],
       extnToLangMap: {},
       agent_config_candidates: [],
+      entryPointPatterns: [],
     }
   }
 

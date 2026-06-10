@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find callers of a symbol up to a configurable depth, showing the blast radius of a potential change. */
 export function registerGetBlastRadiusTool(server: McpServer) {
@@ -9,7 +10,20 @@ export function registerGetBlastRadiusTool(server: McpServer) {
     {
       title: 'Get Blast Radius',
       description:
-        'Find callers and dependents that might break if you change a symbol. For deeper traversal use trace_call_graph with direction=inbound.',
+        'Find every caller that might break if you change a symbol — including transitive callers up the full call chain (BFS). ' +
+        'Returns a flat, deduplicated list of all callers with file:line references. ' +
+        '\n\n' +
+        'WHEN TO USE: Before modifying a symbol, to assess risk. ' +
+        'A long list means the change is high-blast-radius and needs careful testing. ' +
+        'An empty result means the symbol is either an entry point or safe to change in isolation. ' +
+        '\n\n' +
+        'COMPARE WITH OTHER TOOLS: ' +
+        '`find_symbol_references` gives a flat 1-hop lookup (direct callers and imports only). ' +
+        '`trace_call_graph(direction=inbound)` gives the same BFS traversal but as an indented tree, ' +
+        'which is better when you need to understand the structure of who calls whom. ' +
+        'Use `get_blast_radius` when you just want the count and list of all affected callers quickly. ' +
+        '\n\n' +
+        'The output ends with a reminder to check test coverage for the affected paths.',
       inputSchema: z.object({
         symbol_name: z
           .string()
@@ -90,11 +104,20 @@ export function registerGetBlastRadiusTool(server: McpServer) {
           (c) => `  - ${c.callerName} (${c.callerFile}:${c.line + 1})`,
         )
 
+        const output = `Blast radius for '${name}' (${allCallers.length} caller${allCallers.length !== 1 ? 's' : ''})\n${lines.join('\n')}\n\nEnsure testing covers these paths. Use trace_call_graph(direction=inbound) for a full traversal tree.`
+
+        // usage computation
+        const filePaths = (
+          await store.getSymbolsByNames(Array.from(visited))
+        ).map((s) => s.file_path)
+        const uniqueFilePaths = Array.from(new Set(filePaths))
+        await updateUsage('get_blast_radius', uniqueFilePaths, output.length)
+
         return {
           content: [
             {
               type: 'text',
-              text: `Blast radius for '${name}' (${allCallers.length} caller${allCallers.length !== 1 ? 's' : ''})\n${lines.join('\n')}\n\nEnsure testing covers these paths. Use trace_call_graph(direction=inbound) for a full traversal tree.`,
+              text: output,
             },
           ],
         }

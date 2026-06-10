@@ -27,6 +27,7 @@ import type {
 import { resolvePath } from 'src/utils/paths'
 import { logDebug } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
+import type { DirectCaller, NestedCaller } from './types'
 
 /** Manages an SQLite database for indexing and querying code symbols, files, imports, and call relationships using Drizzle ORM. */
 export class IndexerDB {
@@ -43,6 +44,7 @@ export class IndexerDB {
   private preparedImportDelete: Statement | null = null
   private preparedImportInsert: Statement | null = null
   private preparedCallInsert: Statement | null = null
+  private preparedToolUsageInsert: Statement | null = null
 
   /** Initializes a new IndexerDB instance, optionally using an in-memory or file-based database based on the provided path. Sets up SQLite configuration and initializes the database schema. */
   private constructor(dbPath?: string) {
@@ -120,6 +122,11 @@ export class IndexerDB {
       `INSERT INTO symbol_calls (${insertCallCols.join(',')}) VALUES (${insertCallPlaceholders})`,
     )
 
+    const toolUsageCols = Object.keys(getColumns(schema.tool_usage))
+    this.preparedToolUsageInsert = this.sqlite.prepare(
+      `INSERT INTO tool_usage (${toolUsageCols.join(',')}) VALUES (${toolUsageCols.map(() => '?').join(',')})`,
+    )
+
     this.dbInited = true
     logDebug('Database migrations applied')
   }
@@ -139,6 +146,7 @@ export class IndexerDB {
           hash: file.hash,
           indexed_at: getNowMillis(),
           language: file.language,
+          estimated_tokens: file.estimated_tokens,
         },
       })
   }
@@ -197,6 +205,22 @@ export class IndexerDB {
     return this.db.delete(schema.files).where(eq(schema.files.path, path))
   }
 
+  /** Retrieves the total estimated tokens for the specified files. If no files are specified, returns the total for all files. */
+  async getEstimatedTokensForFiles(paths: string[]): Promise<number> {
+    const conditions: SQL[] = []
+
+    if (paths.length > 0) {
+      conditions.push(inArray(schema.files.path, paths))
+    }
+
+    const files = await this.db
+      .select({ estimated_tokens: schema.files.estimated_tokens })
+      .from(schema.files)
+      .where(and(...conditions))
+
+    return files.reduce((sum, file) => sum + (file.estimated_tokens || 0), 0)
+  }
+
   /**===========
    * Symbol Operations
    * ===========*/
@@ -228,13 +252,22 @@ export class IndexerDB {
     })()
   }
 
-  /** "Retrieves symbols by their unique identifiers, specified by an array of IDs. Returns the details of each symbol." */
+  /** Retrieves symbols by their unique identifiers, specified by an array of IDs. Returns the details of each symbol. */
   async getSymbolsByIds(ids: string[]): Promise<IndexedSymbol['Select'][]> {
     if (ids.length === 0) return []
     return this.db
       .select()
       .from(schema.symbols)
       .where(inArray(schema.symbols.id, ids))
+  }
+
+  /** Retrieves symbols by their names, specified by an array of names. Returns the details of each symbol. */
+  async getSymbolsByNames(names: string[]): Promise<IndexedSymbol['Select'][]> {
+    if (names.length === 0) return []
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(inArray(schema.symbols.name, names))
   }
 
   /** Searches for symbols matching the given query string, with optional filtering by symbol kind, file pattern, and result limit. */
@@ -591,9 +624,7 @@ export class IndexerDB {
   }
 
   /** Get information about all callers of a specified symbol, including their file paths, names, and line numbers. */
-  async getCallers(
-    symbolName: string,
-  ): Promise<Array<{ callerFile: string; callerName: string; line: number }>> {
+  async getCallers(symbolName: string): Promise<Array<DirectCaller>> {
     return this.sqlite
       .prepare(
         `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line
@@ -608,16 +639,7 @@ export class IndexerDB {
 
   /** Get all callers of a symbol — direct calls and, if it is a container (class/module/namespace), calls to any of its child symbols.
    *  Returns childName = null for direct callers; the child's name for member callers. */
-  async getCallersNested(symbolName: string): Promise<
-    Array<{
-      callerFile: string
-      callerName: string
-      line: number
-      childName: string | null
-      childFilePath: string | null
-      childLine: number | null
-    }>
-  > {
+  async getCallersNested(symbolName: string): Promise<Array<NestedCaller>> {
     return this.sqlite
       .prepare(
         `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line,
@@ -658,7 +680,9 @@ export class IndexerDB {
   }
 
   /** Searches for importers whose module paths match the given pattern. */
-  async getImporters(moduleNamePattern: string) {
+  async getImporters(
+    moduleNamePattern: string,
+  ): Promise<IndexedImport['Select'][]> {
     const pattern = moduleNamePattern.replace(/\*/g, '%')
     logDebug(`Searching for importers with pattern: ${pattern}`)
     return this.db
@@ -722,6 +746,63 @@ export class IndexerDB {
   }
 
   /**===========
+   * Tool Usage
+   * ===========*/
+
+  /** Records a single tool invocation with token savings estimates. Fire-and-forget safe. */
+  async recordToolUsage(data: schema.ToolUsageRecord['Insert']): Promise<void> {
+    const usageCols = Object.keys(getColumns(schema.tool_usage))
+    const args = usageCols.map((col) => (data as any)[col] ?? null)
+    this.preparedToolUsageInsert?.run(...args)
+  }
+
+  /** Returns aggregate token savings stats: totals and a per-tool breakdown. */
+  getTokenSavings(): {
+    total_calls: number
+    total_tokens_saved: number
+    total_source_tokens: number
+    total_response_tokens: number
+    by_tool: Array<{
+      tool_name: string
+      calls: number
+      tokens_saved: number
+      source_tokens: number
+      response_tokens: number
+    }>
+  } {
+    const totals = this.sqlite
+      .prepare(
+        `SELECT COUNT(*) AS total_calls,
+                SUM(tokens_saved) AS total_tokens_saved,
+                SUM(source_tokens) AS total_source_tokens,
+                SUM(response_tokens) AS total_response_tokens
+         FROM tool_usage`,
+      )
+      .get() as any
+
+    const byTool = this.sqlite
+      .prepare(
+        `SELECT tool_name,
+                COUNT(*) AS calls,
+                SUM(tokens_saved) AS tokens_saved,
+                SUM(source_tokens) AS source_tokens,
+                SUM(response_tokens) AS response_tokens
+         FROM tool_usage
+         GROUP BY tool_name
+         ORDER BY tokens_saved DESC`,
+      )
+      .all() as any[]
+
+    return {
+      total_calls: totals.total_calls ?? 0,
+      total_tokens_saved: totals.total_tokens_saved ?? 0,
+      total_source_tokens: totals.total_source_tokens ?? 0,
+      total_response_tokens: totals.total_response_tokens ?? 0,
+      by_tool: byTool,
+    }
+  }
+
+  /**===========
    * General
    * ===========*/
 
@@ -731,6 +812,7 @@ export class IndexerDB {
     await this.db.delete(schema.imports)
     await this.db.delete(schema.files)
     await this.db.delete(schema.symbol_calls)
+    await this.db.delete(schema.tool_usage)
   }
 
   /** Closes the database connection. */

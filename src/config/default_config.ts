@@ -26,6 +26,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       /__tests__\//,
       /tests\//,
     ],
+    entryPointPatterns: [/^index\.[a-z]+/, /^main\.[a-z]+/, /^app\.[a-z]+/],
     languages: {
       typescript: {
         extensions: ['.ts'],
@@ -150,6 +151,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'module',
               'internal_module',
             ],
+            container_kinds: [
+              SymbolKind.class,
+              SymbolKind.module,
+              SymbolKind.namespace,
+            ],
             typedef_nodes: [
               'type_alias_declaration',
               'interface_declaration',
@@ -273,6 +279,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
               'abstract_class_declaration',
               'module',
               'internal_module',
+            ],
+            container_kinds: [
+              SymbolKind.class,
+              SymbolKind.module,
+              SymbolKind.namespace,
             ],
             typedef_nodes: [
               'type_alias_declaration',

@@ -1,7 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { logDebug } from 'src/utils/logger'
+import type { NestedCaller } from 'src/database/types'
+import type { IndexedImport } from 'src/database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find all references to a symbol — both call sites and import locations. Supersedes find_importers with symbol-level precision. */
 export function registerFindSymbolReferencesTool(server: McpServer) {
@@ -10,7 +12,23 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
     {
       title: 'Find Symbol References',
       description:
-        'Find all places in the codebase that reference a symbol — call sites where it is invoked, files that import it by name, and files that import its containing module. Pass a file path (with / or .) to find module-level importers.',
+        'Find every place in the codebase that references a symbol or module. ' +
+        '\n\n' +
+        'THREE REFERENCE TYPES RETURNED: ' +
+        '(1) Call sites — functions that invoke the symbol (with file:line). ' +
+        '(2) Named imports — files that import the symbol by name (`import { foo } from ...`). ' +
+        "(3) Module importers — files that import the symbol's containing module (only when input looks like a path). " +
+        '\n\n' +
+        'HOW TO CALL: Pass a symbol name to find call sites and named imports. ' +
+        'Pass a file path (containing `/` or `.`) to also find module-level importers. ' +
+        'Use `file_pattern` to restrict results to a subsystem. ' +
+        '\n\n' +
+        'WHEN TO USE: Before renaming or deleting a symbol, to find all sites that need updating. ' +
+        'To understand how widely a utility is used. ' +
+        'Compared to `get_blast_radius`: this is a flat 1-hop reference lookup; ' +
+        '`get_blast_radius` does a full BFS up the entire call chain to find transitive dependents. ' +
+        '\n\n' +
+        'If the symbol name is ambiguous, provide `file_pattern` to disambiguate.',
       inputSchema: z.object({
         symbol_name: z
           .string()
@@ -34,6 +52,10 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
     async ({ symbol_name, file_pattern, include_imports, include_calls }) => {
       const store = IndexerDB.getInstance()
       try {
+        let allCallers: NestedCaller[] = [],
+          importRefs: IndexedImport['Select'][] = [],
+          moduleImporters: IndexedImport['Select'][] = []
+
         const name = symbol_name as string
         const sections: string[] = []
 
@@ -68,7 +90,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         const symbol = symbols[0]
 
         if (include_calls) {
-          const allCallers = await store.getCallersNested(symbol!.name)
+          allCallers = await store.getCallersNested(symbol!.name)
           if (allCallers.length > 0) {
             const callLines = allCallers.map(
               (c) =>
@@ -83,7 +105,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         }
 
         if (include_imports) {
-          const importRefs = await store.getImportsByName(symbol!.name)
+          importRefs = await store.getImportsByName(symbol!.name)
           if (importRefs.length > 0) {
             const importLines = importRefs.map(
               (i) => `  - ${i.file_path} (from '${i.module_path}')`,
@@ -99,8 +121,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         // Module-level importers when name looks like a path
         if (name.includes('/') || name.includes('.')) {
           const cleanedName = name.replace(/\//g, '').replace(/\.[\w]+$/g, '')
-          logDebug(`Finding module importers for cleaned name: ${cleanedName}`)
-          const moduleImporters = await store.getImporters(cleanedName)
+          moduleImporters = await store.getImporters(cleanedName)
           if (moduleImporters.length > 0) {
             const modLines = [
               ...new Set(moduleImporters.map((i) => i.file_path)),
@@ -121,11 +142,28 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           }
         }
 
+        const output = `References to: ${symbol!.name}\n\n${sections.join('\n\n')}`
+
+        //usage computation
+        const filePaths = new Set([
+          ...allCallers.map((c) => c.callerFile),
+          ...allCallers
+            .map((c) => c.childFilePath)
+            .filter((p): p is string => p !== null),
+          ...importRefs.map((i) => i.file_path),
+          ...moduleImporters.map((i) => i.file_path),
+        ])
+        await updateUsage(
+          'find_symbol_references',
+          Array.from(filePaths),
+          output.length,
+        )
+
         return {
           content: [
             {
               type: 'text',
-              text: `References to: ${symbol!.name}\n\n${sections.join('\n\n')}`,
+              text: output,
             },
           ],
         }

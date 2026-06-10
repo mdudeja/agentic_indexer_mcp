@@ -4,6 +4,7 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { AppStateManager } from 'src/state'
 import { join } from 'node:path'
 import { resolvePath } from 'src/utils/paths'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /**
  * Extract file-path-like tokens from content.
@@ -54,11 +55,22 @@ export function registerAuditAgentConfigTool(server: McpServer) {
     {
       title: 'Audit Agent Config',
       description:
-        'Scan AI agent/assistant context files (.cursorrules, CLAUDE.md, AGENTS.md, copilot-instructions.md, etc.) for stale references that may be wasting tokens or misleading the AI:\n' +
-        '  • Stale file paths — path-like references that no longer exist in the indexed file set\n' +
-        '  • Stale symbol refs — backtick-wrapped identifiers no longer present in the symbol index\n' +
-        '  • Token estimate — crude char/4 estimate to spot bloated files\n\n' +
-        'Run after renaming files or symbols to catch outdated agent instructions.',
+        'Scan AI agent context files (.cursorrules, CLAUDE.md, AGENTS.md, copilot-instructions.md, etc.) for stale references ' +
+        'that waste tokens or silently mislead agents with wrong information. ' +
+        '\n\n' +
+        'WHAT IT CHECKS: ' +
+        '(1) Stale file paths — path-like strings that no longer exist in the indexed file set (renamed, deleted, or moved). ' +
+        '(2) Stale symbol refs — backtick-wrapped identifiers (e.g. `MyClass`) that are no longer in the symbol index. ' +
+        '(3) Token estimate — crude char/4 approximation per file to spot unusually large context files. ' +
+        '\n\n' +
+        'WHEN TO RUN: After any rename, delete, or restructure of files or symbols. Run proactively if the index has changed significantly and agent behavior seems degraded. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: One block per config file found, listing stale paths and stale symbol names with ✗ markers. ' +
+        'Files with no stale references print ✓. ' +
+        '\n\n' +
+        'LIMITATIONS: Path detection uses a heuristic regex (path-like strings with a slash and file extension). ' +
+        'Symbol detection only catches backtick-wrapped identifiers — inline prose mentions of symbol names are not detected. ' +
+        'Update the stale references manually or regenerate the config file to fix the issues.',
       inputSchema: z.object({
         project_root: z
           .string()
@@ -142,8 +154,13 @@ export function registerAuditAgentConfigTool(server: McpServer) {
           `Index contains ${allFiles.length} files and ${allSymbols.length} symbols.\n`,
         )
 
+        const output = results.join('\n')
+
+        // Analytics computation
+        updateUsage('audit_agent_config', [], output.length)
+
         return {
-          content: [{ type: 'text', text: results.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {

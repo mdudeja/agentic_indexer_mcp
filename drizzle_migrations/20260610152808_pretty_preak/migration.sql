@@ -2,7 +2,8 @@ CREATE TABLE `files` (
 	`path` text PRIMARY KEY,
 	`hash` text NOT NULL,
 	`indexed_at` integer NOT NULL,
-	`language` text
+	`language` text,
+	`estimated_tokens` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `imports` (
@@ -53,6 +54,15 @@ CREATE TABLE `symbols` (
 	CONSTRAINT `fk_symbols_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
 );
 --> statement-breakpoint
+CREATE TABLE `tool_usage` (
+	`id` text PRIMARY KEY,
+	`tool_name` text NOT NULL,
+	`called_at` integer,
+	`tokens_saved` integer NOT NULL,
+	`source_tokens` integer NOT NULL,
+	`response_tokens` integer NOT NULL
+);
+--> statement-breakpoint
 CREATE INDEX `idx_files_path` ON `files` (`path`);--> statement-breakpoint
 CREATE INDEX `idx_files_hash` ON `files` (`hash`);--> statement-breakpoint
 CREATE INDEX `idx_files_indexed_at` ON `files` (`indexed_at`);--> statement-breakpoint
@@ -66,4 +76,6 @@ CREATE INDEX `idx_symbol_calls_file` ON `symbol_calls` (`caller_file_path`);--> 
 CREATE INDEX `idx_symbols_name` ON `symbols` (`name`);--> statement-breakpoint
 CREATE INDEX `idx_symbols_kind` ON `symbols` (`kind`);--> statement-breakpoint
 CREATE INDEX `idx_symbols_file` ON `symbols` (`file_path`);--> statement-breakpoint
-CREATE INDEX `idx_symbols_decorator` ON `symbols` (`decorator`);
+CREATE INDEX `idx_symbols_decorator` ON `symbols` (`decorator`);--> statement-breakpoint
+CREATE INDEX `idx_tool_usage_tool_name` ON `tool_usage` (`tool_name`);--> statement-breakpoint
+CREATE INDEX `idx_tool_usage_called_at` ON `tool_usage` (`called_at`);

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to detect circular import dependencies using Tarjan's SCC algorithm. */
 export function registerGetDependencyCyclesTool(server: McpServer) {
@@ -9,7 +10,23 @@ export function registerGetDependencyCyclesTool(server: McpServer) {
     {
       title: 'Get Dependency Cycles',
       description:
-        "Detect circular import dependencies between files using Tarjan's strongly connected components (SCC) algorithm. Cycles indicate tight coupling that makes code harder to test, refactor, and reason about. Only intra-project imports (files present in the index) are analysed — package imports are excluded.",
+        "Detect circular import dependencies in the project using Tarjan's SCC algorithm. " +
+        'Circular imports cause subtle initialization bugs, prevent clean tree-shaking, and make modules hard to test in isolation. ' +
+        '\n\n' +
+        'SCOPE: Only intra-project imports (both files present in the index) are analysed. ' +
+        'Package/node_modules/external dependencies are excluded. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Cycles sorted by length (longest first — generally most problematic). ' +
+        'Each cycle is shown as a chain of `→ file` lines plus a `↩ (back to X)` line. ' +
+        'If the result is "No circular dependencies found", the import graph is a DAG. ' +
+        '\n\n' +
+        'HOW TO FIX CYCLES: ' +
+        '(1) Extract shared code into a third module that neither circular participant imports. ' +
+        '(2) Use dependency injection to break the compile-time dependency. ' +
+        '(3) Convert one direction to a runtime import (lazy/dynamic). ' +
+        '\n\n' +
+        'FOLLOW-UP TOOLS: Use `get_coupling_metrics` (sort by instability) to measure how much each file in a cycle ' +
+        'is affected by the tight coupling. Use `find_symbol_references` to find which specific symbols are causing the cycle.',
       inputSchema: z.object({
         max_cycles: z
           .number()
@@ -162,8 +179,13 @@ export function registerGetDependencyCyclesTool(server: McpServer) {
           'Tip: use get_coupling_metrics to measure the instability impact. Consider dependency injection or barrel re-exports to break cycles.',
         )
 
+        const output = lines.join('\n')
+
+        // Analytics computation
+        updateUsage('get_dependency_cycles', [], output.length)
+
         return {
-          content: [{ type: 'text', text: lines.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {

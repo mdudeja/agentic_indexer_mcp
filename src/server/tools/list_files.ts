@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { like, eq, and, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool that allows users to list all indexed files in the workspace, optionally filtered by file path pattern or language. */
 export function registerListFilesTool(server: McpServer) {
@@ -11,7 +12,18 @@ export function registerListFilesTool(server: McpServer) {
     {
       title: 'List Indexed Files',
       description:
-        'List all files that have been indexed in the workspace, with optional filtering by path pattern and language',
+        'List files that have been indexed in the workspace, with optional filtering by path pattern and language. ' +
+        '\n\n' +
+        'WHEN TO USE: To confirm a file is in the index before calling other tools on it. ' +
+        'To discover what languages are indexed. ' +
+        'To enumerate files under a specific directory (use `pattern: "src/server/*"`). ' +
+        'To check when a file was last indexed (output includes `indexed_at` timestamp). ' +
+        '\n\n' +
+        'USE OTHER TOOLS INSTEAD WHEN: You want the symbols inside a file — use `get_file_details`. ' +
+        'You want to find files related to a symbol — use `find_symbol_references` or `search_symbols`. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: One line per file — path, language in brackets, and indexed_at timestamp. ' +
+        'Results are capped at the `limit` (default 100); increase it if you expect more files.',
       inputSchema: z.object({
         pattern: z
           .string()
@@ -63,11 +75,17 @@ export function registerListFilesTool(server: McpServer) {
           })
           .join('\n')
 
+        const ouputText = `Found ${results.length} files:\n\n${output}`
+
+        //usage computation
+        const filePaths = results.map((f) => f.path)
+        await updateUsage('list_files', filePaths, output.length, true)
+
         return {
           content: [
             {
               type: 'text',
-              text: `Found ${results.length} files:\n\n${output}`,
+              text: ouputText,
             },
           ],
         }

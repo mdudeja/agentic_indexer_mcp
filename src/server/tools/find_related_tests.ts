@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { AppStateManager } from 'src/state'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find test files that exercise a given symbol or file. */
 export function registerFindRelatedTestsTool(server: McpServer) {
@@ -10,7 +11,20 @@ export function registerFindRelatedTestsTool(server: McpServer) {
     {
       title: 'Find Related Tests',
       description:
-        'Find all test files that exercise a given symbol or module. Pass a file path to find tests importing that module, or a bare symbol name to find tests that call it. Tests encode intended behavior more reliably than documentation.',
+        'Find test files that exercise a given symbol or module. ' +
+        '\n\n' +
+        'HOW TO CALL: Pass a file path (containing `/`) to find test files that import that module. ' +
+        'Pass a bare symbol name (no `/`) to find test files that call or import it by name. ' +
+        '\n\n' +
+        'WHEN TO USE: Before modifying a symbol, run this to know which test files to check or run afterward. ' +
+        'Prefer this over manual grep when you need to understand what behavior is already covered. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Each matching test file is listed with one or more reason lines explaining the match — ' +
+        'e.g. "calls validateInput via parseForm (line 42)" or "imports module src/utils/validate.ts". ' +
+        'These reasons help you distinguish between tests that directly exercise the symbol vs. tests that only import the module. ' +
+        '\n\n' +
+        'LIMITATION: Only test files recognized by the configured testFilePatterns are searched. ' +
+        'If no test files appear, confirm that testFilePatterns is set correctly in the indexer config.',
       inputSchema: z.object({
         target: z
           .string()
@@ -106,11 +120,20 @@ export function registerFindRelatedTestsTool(server: McpServer) {
           return `  - ${file}\n${reasons.map((r) => `      • ${r}`).join('\n')}`
         })
 
+        const output = `Related tests for: ${name}\n\nFound ${found.size} test file${found.size !== 1 ? 's' : ''}:\n${lines.join('\n')}`
+
+        // usage computation
+        await updateUsage(
+          'find_related_tests',
+          Array.from(testFilePaths),
+          output.length,
+        )
+
         return {
           content: [
             {
               type: 'text',
-              text: `Related tests for: ${name}\n\nFound ${found.size} test file${found.size !== 1 ? 's' : ''}:\n${lines.join('\n')}`,
+              text: output,
             },
           ],
         }

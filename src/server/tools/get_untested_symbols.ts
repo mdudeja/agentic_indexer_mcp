@@ -6,6 +6,7 @@ import * as schema from '../../database/schemas'
 import { AppStateManager } from 'src/state'
 import { SymbolKind } from '../../database/schemas'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to identify exported callable symbols that have no evidence of test coverage. */
 export async function registerGetUntestedSymbolsTool(server: McpServer) {
@@ -15,7 +16,21 @@ export async function registerGetUntestedSymbolsTool(server: McpServer) {
     {
       title: 'Get Untested Symbols',
       description:
-        "Find exported callable symbols (functions, classes) that have no test coverage evidence. Coverage is determined by checking whether the symbol's file is imported by any test file (1-hop import analysis). Symbols in files that test files never import directly are considered untested. Note: transitive imports and dynamic requires are not traced — this is a conservative 1-hop heuristic.",
+        'Find exported callable symbols (functions, classes) in files that no test file imports directly. ' +
+        '\n\n' +
+        'IMPORTANT — HOW COVERAGE IS DETERMINED: This is file-level, not symbol-level. ' +
+        'If a test file imports `src/utils/foo.ts`, ALL exported symbols in that file are considered covered, ' +
+        'even if the test only exercises one of them. If no test imports `foo.ts`, all its exports are considered untested. ' +
+        'This is a conservative 1-hop heuristic — transitive imports and dynamic requires are not traced. ' +
+        '\n\n' +
+        'WHEN TO USE: For a quick overview of which modules have zero test coverage. ' +
+        'Do not use it to conclude that a specific symbol is tested — use `find_related_tests` for that. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Symbol count header, then grouped by file with kind, name, and line number per symbol. ' +
+        'Footer shows how many test files cover how many source files directly. ' +
+        '\n\n' +
+        'NEXT STEPS: For each untested file, call `find_related_tests` to double-check (transitive imports may cover it). ' +
+        'Then use `get_definition` to read what the symbols do before writing tests.',
       inputSchema: z.object({
         kind: z
           .array(z.enum(CALLABLE_KINDS))
@@ -141,8 +156,13 @@ export async function registerGetUntestedSymbolsTool(server: McpServer) {
           'Note: 1-hop import analysis only. Transitive imports are not traced.',
         )
 
+        const output = lines.join('\n')
+
+        // Analytics computation
+        updateUsage('get_untested_symbols', [], output.length)
+
         return {
-          content: [{ type: 'text', text: lines.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {

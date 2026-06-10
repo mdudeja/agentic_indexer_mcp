@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import type { IndexedFile } from 'src/database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to traverse the call graph inbound and/or outbound from a symbol, up to a configurable depth. */
 export function registerTraceCallGraphTool(server: McpServer) {
@@ -10,7 +11,24 @@ export function registerTraceCallGraphTool(server: McpServer) {
     {
       title: 'Trace Call Graph',
       description:
-        'Trace the call graph from a symbol — who calls it (inbound), what it calls (outbound), or both. Returns an indented tree with file:line references. Essential for understanding execution flow when debugging a tricky problem.',
+        'Trace the call graph from a named symbol as an indented ASCII tree with file:line references, ' +
+        'up to a configurable depth. ' +
+        '\n\n' +
+        'THREE DIRECTIONS: ' +
+        '`inbound` — who calls this symbol (BFS up the call chain). Use to understand usage and blast radius as a tree. ' +
+        '`outbound` — what this symbol calls (BFS down into its dependencies). Use to understand what an implementation does. ' +
+        '`both` — full picture in one call; outbound tree first, then inbound tree. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: ASCII tree using `├─` / `└─` connectors. Each node shows symbol name and file:line. ' +
+        '`[cycle]` marks a node that was already visited — it is not expanded further to prevent infinite loops. ' +
+        'Unresolved calls (external/builtins) are shown with "(unresolved or inbuilt command at line N)". ' +
+        '\n\n' +
+        'COMPARE WITH OTHER TOOLS: ' +
+        '`get_blast_radius` gives the same inbound BFS as a flat deduplicated list — simpler when you just need the count/names. ' +
+        '`trace_data_flow` focuses on the type signature boundary (what types flow in/out) rather than the call tree structure. ' +
+        '`explore_codebase` renders the same call relationships as a Mermaid diagram across the whole codebase. ' +
+        '\n\n' +
+        'Provide `file_path_or_file_name` when multiple symbols share the same name.',
       inputSchema: z.object({
         symbol_name: z.string().describe('Name of the symbol to start from'),
         direction: z
@@ -36,6 +54,9 @@ export function registerTraceCallGraphTool(server: McpServer) {
         const maxDepth = (depth as number) ?? 3
         const dir = direction as 'inbound' | 'outbound' | 'both'
         const name = symbol_name as string
+
+        const visitedOut = new Set<string>()
+        const visitedIn = new Set<string>()
 
         const lines: string[] = []
 
@@ -93,7 +114,6 @@ export function registerTraceCallGraphTool(server: McpServer) {
           lines.push(
             `Outbound call graph for: ${name} (${target.file_path}:${target.line + 1})`,
           )
-          const visitedOut = new Set<string>()
           await buildOutbound(
             store,
             target.id,
@@ -129,7 +149,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
             lines.push(
               `Inbound call graph for: ${inboundTarget.name} (${inboundTarget.file_path}:${inboundTarget.line + 1})`,
             )
-            const visitedIn = new Set<string>()
+
             await buildInbound(
               store,
               inboundTarget.name,
@@ -144,8 +164,24 @@ export function registerTraceCallGraphTool(server: McpServer) {
           }
         }
 
+        // usage computation
+        const filePathsOut = (
+          await store.getSymbolsByIds(Array.from(visitedOut))
+        ).map((def) => def.file_path)
+        const filePathsIn = (
+          await store.getSymbolsByNames(Array.from(visitedIn))
+        ).map((def) => def.file_path)
+        const uniqueFilePaths = new Set([...filePathsOut, ...filePathsIn])
+
+        const output = lines.join('\n')
+        await updateUsage(
+          'trace_call_graph',
+          Array.from(uniqueFilePaths),
+          output.length,
+        )
+
         return {
-          content: [{ type: 'text', text: lines.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {
@@ -346,13 +382,11 @@ async function buildInbound(
       const callerKey = `${c.callerName}|${c.callerFile}`
       if (!seenChildCallers.get(c.childName)!.has(callerKey)) {
         seenChildCallers.get(c.childName)!.add(callerKey)
-        childGroups
-          .get(c.childName)!
-          .callers.push({
-            callerFile: c.callerFile,
-            callerName: c.callerName,
-            line: c.line,
-          })
+        childGroups.get(c.childName)!.callers.push({
+          callerFile: c.callerFile,
+          callerName: c.callerName,
+          line: c.line,
+        })
       }
     }
   }

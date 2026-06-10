@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { inArray } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
+import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to show call-chain and type-level data flow through a symbol. */
 export function registerTraceDataFlowTool(server: McpServer) {
@@ -11,7 +12,26 @@ export function registerTraceDataFlowTool(server: McpServer) {
     {
       title: 'Trace Data Flow',
       description:
-        'Show how data flows through a function: its parameter types, return type, what calls it (passing data in), and what it calls (passing data out). NOTE: This operates at call-chain and type-signature level only — no variable tracking is available.',
+        'Show the type-level data boundary of a function: what types flow in (parameters), what type flows out (return), ' +
+        'which callers pass data into it, and which callees it passes data out to. ' +
+        '\n\n' +
+        'CRITICAL LIMITATION: This is NOT variable-level data flow. ' +
+        'There is no tracking of how a value moves through assignments or transformations inside a function body. ' +
+        'It shows the structural I/O boundary and the call-chain context around it, nothing more. ' +
+        '\n\n' +
+        'WHEN TO USE: To answer "what produces data for this function?" and "where does its output go?" ' +
+        'when debugging an unexpected value or tracing a data shape through the call chain. ' +
+        'Useful as a quick type-boundary snapshot before reading the full implementation. ' +
+        '\n\n' +
+        'THREE SECTIONS RETURNED: ' +
+        '(1) Symbol header — name, kind, file:line, parameters with types, return type. ' +
+        '(2) Data flows IN — callers with their signatures (who passes data into this function). ' +
+        '(3) Data flows OUT — callees (what this function hands data to). ' +
+        '\n\n' +
+        'COMPARE WITH OTHER TOOLS: ' +
+        '`trace_call_graph(outbound)` gives the same callees as a deep recursive tree. ' +
+        '`resolve_type` maps the type itself — producers and consumers — rather than a specific function. ' +
+        'Use `get_definition` after this to read the actual implementation.',
       inputSchema: z.object({
         symbol_name: z
           .string()
@@ -187,11 +207,25 @@ export function registerTraceDataFlowTool(server: McpServer) {
 
         const warning =
           'NOTE: Call-chain and type-signature level only — no variable tracking available. Callers/callees shown are structural, not runtime paths.\n\n'
+        const output = warning + sections.join('\n\n')
+
+        //usage computation
+        const allFilePaths = new Set([
+          ...candidates.map((c) => c.file_path),
+          ...callerSymbols.map((s) => s.file_path),
+          ...calleeOrImportSymbolsFlattened.map((s) => s.file_path),
+        ])
+        await updateUsage(
+          'trace_data_flow',
+          Array.from(allFilePaths),
+          output.length,
+        )
+
         return {
           content: [
             {
               type: 'text',
-              text: warning + sections.join('\n\n'),
+              text: output,
             },
           ],
         }

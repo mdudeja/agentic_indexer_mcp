@@ -10,6 +10,7 @@ export const files = sqliteTable(
       .notNull()
       .$onUpdate(() => getNowMillis()),
     language: text(),
+    estimated_tokens: integer().notNull(),
   },
   (table) => [
     index('idx_files_path').on(table.path),

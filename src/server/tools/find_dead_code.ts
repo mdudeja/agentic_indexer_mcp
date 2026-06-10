@@ -7,6 +7,7 @@ import { SymbolKind } from '../../database/schemas'
 import { AppStateManager } from 'src/state'
 import { allCodebaseLanguages } from 'src/utils/allCodebaseLanguages'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
+import { updateUsage } from 'src/utils/updateUsage'
 
 const ALL_KINDS = Object.keys(SymbolKind) as (keyof typeof SymbolKind)[]
 
@@ -17,7 +18,20 @@ export function registerFindDeadCodeTool(server: McpServer) {
     {
       title: 'Find Dead Code',
       description:
-        'Identify symbols that appear to be unreachable: (1) exported top-level symbols that are never imported and never called by any other indexed symbol, and (2) non-exported callable symbols that are never called. Best-effort — dynamic calls (obj[method]()) and symbols consumed via namespace imports (import * as X) will not be detected. Run after a full index for accurate results.',
+        'Identify symbols that appear unreachable. Returns two categories: ' +
+        '(1) `[exported, unreferenced]` — top-level exported symbols never imported by name and never called by any indexed symbol. ' +
+        '(2) `[never called]` — non-exported callable symbols (functions, methods, etc.) that have no recorded callers. ' +
+        '\n\n' +
+        'WHEN TO USE: During cleanup passes, pre-refactor audits, or when reducing bundle size. Run on a fully indexed codebase for best accuracy. ' +
+        '\n\n' +
+        'FALSE POSITIVE SOURCES (results that look dead but are not): ' +
+        'Dynamic calls (`obj[method]()`), namespace imports (`import * as X` then `X.foo()`), ' +
+        'reflection-based dispatch, symbols used only in config files outside the index scope, ' +
+        'and overridden interface/class methods called via polymorphism (inheritance coverage is partially handled but not exhaustive). ' +
+        'Treat results as candidates for manual verification, not definitive dead code. ' +
+        '\n\n' +
+        'OUTPUT FORMAT: Grouped by file, each symbol on its own line with kind, name, line number, and category tag. ' +
+        'Use `get_definition` to read the implementation before deleting anything.',
       inputSchema: z.object({
         kind: z
           .array(z.enum(ALL_KINDS))
@@ -175,8 +189,13 @@ export function registerFindDeadCodeTool(server: McpServer) {
           'Note: dynamic calls, namespace imports, and reflection-based usage are not detected.',
         )
 
+        const output = lines.join('\n')
+
+        // Analytics computation
+        await updateUsage('find_dead_code', [], output.length)
+
         return {
-          content: [{ type: 'text', text: lines.join('\n') }],
+          content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {
