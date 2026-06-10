@@ -92,6 +92,14 @@ async function main() {
 
   switch (command) {
     case 'serve':
+      const pipeline = new IndexPipeline({
+        cwd,
+        store,
+        includeGitIgnored: values.includeGitIgnored ?? false,
+      })
+
+      await pipeline.run()
+
       await startMcpServer()
       break
 

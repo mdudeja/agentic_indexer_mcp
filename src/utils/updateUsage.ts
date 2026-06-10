@@ -1,5 +1,6 @@
 import { randomUUIDv7 } from 'bun'
 import { IndexerDB } from 'src/database/IndexerDB'
+import { getNowMillis } from './datetime'
 
 /** Updates the usage statistics for a given tool. */
 export async function updateUsage(
@@ -20,5 +21,6 @@ export async function updateUsage(
     source_tokens: sourceTokens,
     response_tokens: responseTokens,
     tokens_saved: Math.max(0, sourceTokens - responseTokens),
+    called_at: getNowMillis(),
   })
 }

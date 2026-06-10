@@ -9,6 +9,7 @@
     "index-file": "bun run --env-file .env index.ts index-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/utils/logger.ts",
     "remove-docstrings": "bun run --env-file .env index.ts remove-docstrings",
     "query": "bun run --env-file .env index.ts query",
+    "serve": "bun run --env-file .env index.ts serve",
     "inspect": "mcp-inspector bun run --env-file .env index.ts serve",
     "lint": "bun tsc --noEmit",
     "test": "bun test"

@@ -6,7 +6,9 @@ export const tool_usage = sqliteTable(
   {
     id: text().primaryKey(),
     tool_name: text().notNull(),
-    called_at: integer().$default(() => getNowMillis()),
+    called_at: integer()
+      .notNull()
+      .$onUpdate(() => getNowMillis()),
     tokens_saved: integer().notNull(),
     source_tokens: integer().notNull(),
     response_tokens: integer().notNull(),
