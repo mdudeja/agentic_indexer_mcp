@@ -32,6 +32,7 @@ export function registerGetTokenSavingsTool(server: McpServer) {
           }
         }
 
+        /** Estimates the approximate cost based on the number of tokens. */
         const approxCost = (tokens: number) =>
           ((tokens / 1_000_000) * 3.0).toFixed(4)
 

@@ -8,10 +8,12 @@ import { allCallableKinds } from 'src/utils/allCallableKinds'
 import { allContainerKinds } from 'src/utils/allContainerKinds'
 import { updateUsage } from 'src/utils/updateUsage'
 
+/** Transforms an input string into a valid node ID by removing any non-alphanumeric and non-underscore characters, replacing them with underscores. */
 function toNodeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_]/g, '_')
 }
 
+/** Truncate a string if its length exceeds the specified maximum; appends an ellipsis ('…') if truncated. */
 function truncate(s: string, max = 80): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
 }
@@ -194,6 +196,7 @@ export async function registerExploreCodebaseTool(server: McpServer) {
           degreeMap.set(e.callee_id, (degreeMap.get(e.callee_id) ?? 0) + 1)
         }
 
+        /** Calculates a priority score for a node based on its degree, whether it's part of an entry point file, and its reachability from entry points. The score is used to prioritize nodes in processing. */
         const nodeScore = (sym: schema.IndexedSymbol['Select']) =>
           (degreeMap.get(sym.id) ?? 0) +
           (entryPointFiles.has(sym.file_path) ? 1000 : 0) +
@@ -296,6 +299,7 @@ export async function registerExploreCodebaseTool(server: McpServer) {
         const lines: string[] = ['graph LR']
         let sgIdx = 0
 
+        /** Renders a node in a visual representation, formatting its appearance based on whether it's an entry point, exported, or internal symbol. The node is added to the diagram using the specified indentation and shape (parallelogram for entry points, square for exports, rounded for internal). */
         const renderNode = (
           sym: (typeof keptSymbols)[0],
           indent: string,

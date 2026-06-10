@@ -2,6 +2,7 @@ import type { SymbolKind } from 'src/database/schemas'
 import { allCodebaseLanguages } from './allCodebaseLanguages'
 import { AppStateManager } from 'src/state'
 
+/** Collects all unique container kinds defined across all configured languages in the codebase. */
 export async function allContainerKinds(): Promise<SymbolKind[]> {
   const languages = await allCodebaseLanguages()
   const containerKinds = Array.from(languages!).flatMap((lang) => {
