@@ -4,6 +4,8 @@ import {
   type IndexedSymbol,
   type IndexedImport,
   type IndexedSymbolCall,
+  type IndexedException,
+  type IndexedEnvVar,
   type LanguageConfig,
   DocstringStrategy,
 } from '../../config/types'
@@ -18,6 +20,8 @@ type TreesitterConfig = LanguageConfig['treesitter']
 const symbols: IndexedSymbol['Select'][] = []
 const imports: IndexedImport['Select'][] = []
 const calls: IndexedSymbolCall['Insert'][] = []
+const exceptions: IndexedException['Select'][] = []
+const envVars: IndexedEnvVar['Select'][] = []
 
 /** Check if a given node is marked as exported based on its parent's type in the provided configuration. */
 function isExported(node: Node, config: TreesitterConfig): boolean {
@@ -348,6 +352,9 @@ function recordCall(
   } else if (funcNode.type === 'member_expression') {
     const prop = funcNode.childForFieldName('property')
     calleeName = prop?.text ?? null
+  } else if (funcNode.type === 'subscript_expression') {
+    const index = funcNode.childForFieldName('index')
+    calleeName = index?.text?.trim().replace(/['"]/g, '') ?? null
   }
   if (calleeName) {
     calls.push({
@@ -364,6 +371,53 @@ function recordCall(
   }
 }
 
+function extractException(node: Node, file_path: string, currentCallerId?: string) {
+  if (!currentCallerId) {
+    return
+  }
+
+  if (node.type === 'throw_statement') {
+      let excType = 'Error'
+      const newExpr = node.namedChildren.find((c) => c?.type === 'new_expression')
+      if (newExpr) {
+        const constructorNode = newExpr.childForFieldName('constructor')
+        if (constructorNode) excType = constructorNode.text.trim()
+      } else if (node.namedChildren[0]) {
+        excType = node.namedChildren[0].text.trim()
+      }
+      exceptions.push({
+        id: randomUUIDv7(),
+        symbol_id: currentCallerId,
+        file_path,
+        exception_type: excType,
+        line: node.startPosition.row,
+        column: node.startPosition.column,
+      })
+      return
+    }
+  
+    if (node.type === 'raise_statement') {
+      let excType = 'Exception'
+      const child = node.namedChildren[0]
+      if (child) {
+        if (child.type === 'call') {
+          const func = child.childForFieldName('function')
+          if (func) excType = func.text.trim()
+        } else {
+          excType = child.text.trim()
+        }
+      }
+      exceptions.push({
+        id: randomUUIDv7(),
+        symbol_id: currentCallerId,
+        file_path,
+        exception_type: excType,
+        line: node.startPosition.row,
+        column: node.startPosition.column,
+      })
+    }
+}
+
 /** Recursively processes each node in a syntax tree to index symbols, their kinds (e.g., const, function), and call expressions, using configuration settings to determine how to handle different node types. */
 function traverse(
   node: Node,
@@ -375,7 +429,91 @@ function traverse(
   let nextParentId = currentParentId
   let nextCallerId = currentCallerId
 
-  if (node.type === 'call_expression' && currentCallerId) {
+  const langName = config?.language_name
+
+  // --- Exception handling extraction ---
+  extractException(node, file_path, currentCallerId)
+
+  if (currentCallerId) {
+    
+
+    // --- Environment variable extraction ---
+    if (langName === 'typescript' || langName === 'tsx') {
+      if (node.type === 'member_expression') {
+        const obj = node.childForFieldName('object')
+        const prop = node.childForFieldName('property')
+        if (obj && prop && obj.text === 'process.env') {
+          envVars.push({
+            id: randomUUIDv7(),
+            symbol_id: currentCallerId,
+            file_path,
+            name: prop.text.trim(),
+            line: node.startPosition.row,
+            column: node.startPosition.column,
+          })
+        }
+      } else if (node.type === 'subscript_expression') {
+        const obj = node.childForFieldName('object')
+        const index = node.childForFieldName('index')
+        if (obj && index && obj.text === 'process.env') {
+          let varName = index.text.trim()
+          if (varName.startsWith("'") || varName.startsWith('"')) {
+            varName = varName.slice(1, -1)
+          }
+          envVars.push({
+            id: randomUUIDv7(),
+            symbol_id: currentCallerId,
+            file_path,
+            name: varName,
+            line: node.startPosition.row,
+            column: node.startPosition.column,
+          })
+        }
+      }
+    } else if (langName === 'python') {
+      if (node.type === 'subscript') {
+        const obj = node.childForFieldName('value')
+        const subscript = node.childForFieldName('subscript')
+        if (obj && (obj.text === 'os.environ' || obj.text === 'environ')) {
+          if (subscript) {
+            let varName = subscript.text.trim()
+            if (varName.startsWith("'") || varName.startsWith('"')) {
+              varName = varName.slice(1, -1)
+            }
+            envVars.push({
+              id: randomUUIDv7(),
+              symbol_id: currentCallerId,
+              file_path,
+              name: varName,
+              line: node.startPosition.row,
+              column: node.startPosition.column,
+            })
+          }
+        }
+      } else if (node.type === 'call') {
+        const func = node.childForFieldName('function')
+        if (func && (func.text === 'os.getenv' || func.text === 'getenv' || func.text === 'os.environ.get' || func.text === 'environ.get')) {
+          const args = node.childForFieldName('arguments')
+          if (args && args.namedChildren[0]) {
+            let varName = args.namedChildren[0].text.trim()
+            if (varName.startsWith("'") || varName.startsWith('"')) {
+              varName = varName.slice(1, -1)
+            }
+            envVars.push({
+              id: randomUUIDv7(),
+              symbol_id: currentCallerId,
+              file_path,
+              name: varName,
+              line: node.startPosition.row,
+              column: node.startPosition.column,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  if ((node.type === 'call_expression' || node.type === "call") && currentCallerId) {
     const call_text = node.text.trim()
     recordCall(
       config,
@@ -451,10 +589,14 @@ export function extractSymbols(
   symbols: IndexedSymbol['Select'][]
   imports: IndexedImport['Select'][]
   calls: IndexedSymbolCall['Insert'][]
+  exceptions: IndexedException['Select'][]
+  envVars: IndexedEnvVar['Select'][]
 } {
   symbols.length = 0
   imports.length = 0
   calls.length = 0
+  exceptions.length = 0
+  envVars.length = 0
 
   if (rootNode) {
     // Create a synthetic module-level symbol so top-level call expressions
@@ -491,5 +633,7 @@ export function extractSymbols(
     symbols: [...symbols],
     imports: [...imports],
     calls: [...calls],
+    exceptions: [...exceptions],
+    envVars: [...envVars],
   }
 }

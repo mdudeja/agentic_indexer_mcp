@@ -1,5 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerSearchSymbolsTool } from './search_symbols'
+import { registerSemanticSearchSymbolsTool } from './semantic_search_symbols'
+import { registerGetTypeAtLocationTool } from './get_type_at_location'
+import { registerReadFileSnippetTool } from './read_file_snippet'
+import { registerGetSymbolHistoryTool } from './get_symbol_history'
+import { registerTraceErrorFlowTool } from './trace_error_flow'
+import { registerGetRequiredEnvVarsTool } from './get_required_env_vars'
 import { registerGetFileDetailsTool } from './get_file_details'
 import { registerListFilesTool } from './list_files'
 import { registerGetDefinitionTool } from './get_definition'
@@ -25,6 +31,12 @@ import { registerGetTokenSavingsTool } from './get_token_savings'
 export function registerTools(server: McpServer) {
   // Core navigation
   registerSearchSymbolsTool(server)
+  registerSemanticSearchSymbolsTool(server)
+  registerGetTypeAtLocationTool(server)
+  registerReadFileSnippetTool(server)
+  registerGetSymbolHistoryTool(server)
+  registerTraceErrorFlowTool(server)
+  registerGetRequiredEnvVarsTool(server)
   registerGetFileDetailsTool(server)
   registerGetDefinitionTool(server)
   registerListFilesTool(server)

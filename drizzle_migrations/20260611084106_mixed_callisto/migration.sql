@@ -1,3 +1,25 @@
+CREATE TABLE `env_vars` (
+	`id` text PRIMARY KEY,
+	`symbol_id` text NOT NULL,
+	`file_path` text NOT NULL,
+	`name` text NOT NULL,
+	`line` integer NOT NULL,
+	`column` integer NOT NULL,
+	CONSTRAINT `fk_env_vars_symbol_id_symbols_id_fk` FOREIGN KEY (`symbol_id`) REFERENCES `symbols`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_env_vars_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE `exceptions` (
+	`id` text PRIMARY KEY,
+	`symbol_id` text NOT NULL,
+	`file_path` text NOT NULL,
+	`exception_type` text NOT NULL,
+	`line` integer NOT NULL,
+	`column` integer NOT NULL,
+	CONSTRAINT `fk_exceptions_symbol_id_symbols_id_fk` FOREIGN KEY (`symbol_id`) REFERENCES `symbols`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_exceptions_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
+);
+--> statement-breakpoint
 CREATE TABLE `files` (
 	`path` text PRIMARY KEY,
 	`hash` text NOT NULL,
@@ -57,12 +79,16 @@ CREATE TABLE `symbols` (
 CREATE TABLE `tool_usage` (
 	`id` text PRIMARY KEY,
 	`tool_name` text NOT NULL,
-	`called_at` integer,
+	`called_at` integer NOT NULL,
 	`tokens_saved` integer NOT NULL,
 	`source_tokens` integer NOT NULL,
 	`response_tokens` integer NOT NULL
 );
 --> statement-breakpoint
+CREATE INDEX `idx_env_vars_symbol` ON `env_vars` (`symbol_id`);--> statement-breakpoint
+CREATE INDEX `idx_env_vars_file` ON `env_vars` (`file_path`);--> statement-breakpoint
+CREATE INDEX `idx_exceptions_symbol` ON `exceptions` (`symbol_id`);--> statement-breakpoint
+CREATE INDEX `idx_exceptions_file` ON `exceptions` (`file_path`);--> statement-breakpoint
 CREATE INDEX `idx_files_path` ON `files` (`path`);--> statement-breakpoint
 CREATE INDEX `idx_files_hash` ON `files` (`hash`);--> statement-breakpoint
 CREATE INDEX `idx_files_indexed_at` ON `files` (`indexed_at`);--> statement-breakpoint

@@ -64,4 +64,13 @@ export abstract class Enhancer {
   refreshFile(_absPath: string): void {
     throw new Error('refreshFile() not implemented')
   }
+
+  /** Gets the fully-resolved type at the specified file location (line and column). */
+  async getTypeAtLocation(
+    _absPath: string,
+    _line: number,
+    _column: number,
+  ): Promise<string | null> {
+    throw new Error('getTypeAtLocation() not implemented')
+  }
 }

@@ -535,4 +535,33 @@ export class TsMorphEnhancer extends Enhancer {
       return null
     }
   }
+
+  /** Gets the fully-resolved type of a token at a specific line and column using ts-morph. */
+  override async getTypeAtLocation(
+    absPath: string,
+    line: number,
+    column: number,
+  ): Promise<string | null> {
+    if (!this.available) return null
+    try {
+      const sf = this.getSourceFile(absPath)
+      if (!sf) return null
+
+      const charOffset = sf.compilerNode.getPositionOfLineAndCharacter(
+        line,
+        column,
+      )
+      const node = sf.getDescendantAtPos(charOffset)
+      if (!node) return null
+
+      const type = node.getType()
+      if (type) {
+        return type.getText(node)
+      }
+      return null
+    } catch (e) {
+      logDebug('[TsMorphEnhancer] getTypeAtLocation failed:', e)
+      return null
+    }
+  }
 }

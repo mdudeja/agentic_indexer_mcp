@@ -3,6 +3,8 @@ export type {
   IndexedSymbol,
   IndexedImport,
   IndexedSymbolCall,
+  IndexedException,
+  IndexedEnvVar
 } from '../database/schemas'
 export { SymbolKind } from '../database/schemas'
 
@@ -63,6 +65,17 @@ export type DocstringConfig = {
   ollama?: { model: string; base_url?: string }
 }
 
+export type EmbeddingGeneratorName = 'ollama' | 'openai' | 'gemini' | 'anthropic'
+
+export type EmbedderConfig = {
+  enabled: boolean
+  provider: EmbeddingGeneratorName
+  ollama?: { model?: string; base_url?: string; api_key?: string }
+  openai?: { model?: string; base_url?: string; api_key?: string }
+  gemini?: { model?: string; base_url?: string; api_key?: string }
+  anthropic?: { model?: string; base_url?: string; api_key?: string }
+}
+
 export type IndexerConfig = {
   enabled: boolean
   ignore_patterns: string[]
@@ -72,4 +85,5 @@ export type IndexerConfig = {
   languages: Record<string, LanguageConfig>
   docstring_generation?: DocstringConfig
   agent_config_candidates: string[]
+  embedder?: EmbedderConfig
 }

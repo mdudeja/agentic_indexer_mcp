@@ -5,10 +5,12 @@ import type {
   IndexedImport,
   IndexedSymbolCall,
   IndexerConfig,
-} from '../config/types.js'
-import { logError } from 'src/utils/logger.js'
+  IndexedException,
+  IndexedEnvVar,
+} from '../config/types'
+import { logError } from 'src/utils/logger'
 import { AppStateManager } from 'src/state'
-import { extractSymbols } from './steps/s1_symbol_extractor.js'
+import { extractSymbols } from './steps/s1_symbol_extractor'
 
 /** A utility class for managing code parsing and indexing using TreeSitter. It handles initialization of parsers, loading language grammars from WebAssembly modules, and extracting code elements like symbols and imports from source files based on file extensions and configured language settings. */
 export class TreeSitterIndexer {
@@ -57,7 +59,7 @@ export class TreeSitterIndexer {
     }
   }
 
-  /** Parses source code to extract symbols, imports, and calls based on file extension and language configuration. */
+  /** Parses source code to extract symbols, imports, calls, exceptions, and env variables. */
   async parse(
     sourceCode: string,
     ext: string,
@@ -66,6 +68,8 @@ export class TreeSitterIndexer {
     symbols: IndexedSymbol['Select'][]
     imports: IndexedImport['Select'][]
     calls: IndexedSymbolCall['Insert'][]
+    exceptions: IndexedException['Select'][]
+    envVars: IndexedEnvVar['Select'][]
   }> {
     if (!this.parser) {
       await this.init()
@@ -76,27 +80,27 @@ export class TreeSitterIndexer {
 
       if (!langName) {
         logError(`No language mapping found for extension: ${ext}`)
-        return { symbols: [], imports: [], calls: [] }
+        return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
       }
 
       const tree = await this.parseFile(sourceCode, langName)
 
       if (!tree) {
-        return { symbols: [], imports: [], calls: [] }
+        return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
       }
 
       const treesitterConfig = this.config.languages?.[langName]?.treesitter
 
       if (!treesitterConfig) {
         logError(`No Tree-sitter config found for language: ${langName}`)
-        return { symbols: [], imports: [], calls: [] }
+        return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
       }
 
       return extractSymbols(tree.rootNode, filePath, treesitterConfig)
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)
-      return { symbols: [], imports: [], calls: [] }
+      return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
     }
   }
 

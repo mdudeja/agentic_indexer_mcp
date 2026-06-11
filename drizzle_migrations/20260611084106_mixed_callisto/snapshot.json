@@ -1,11 +1,19 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "7a7736d8-187b-49a8-af9e-c8835170b3a0",
+  "id": "164bf3d0-9eea-4102-a366-baa59eefd746",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
+    {
+      "name": "env_vars",
+      "entityType": "tables"
+    },
+    {
+      "name": "exceptions",
+      "entityType": "tables"
+    },
     {
       "name": "files",
       "entityType": "tables"
@@ -25,6 +33,126 @@
     {
       "name": "tool_usage",
       "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "env_vars"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "symbol_id",
+      "entityType": "columns",
+      "table": "env_vars"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "file_path",
+      "entityType": "columns",
+      "table": "env_vars"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "env_vars"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "line",
+      "entityType": "columns",
+      "table": "env_vars"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "column",
+      "entityType": "columns",
+      "table": "env_vars"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "exceptions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "symbol_id",
+      "entityType": "columns",
+      "table": "exceptions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "file_path",
+      "entityType": "columns",
+      "table": "exceptions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exception_type",
+      "entityType": "columns",
+      "table": "exceptions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "line",
+      "entityType": "columns",
+      "table": "exceptions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "column",
+      "entityType": "columns",
+      "table": "exceptions"
     },
     {
       "type": "text",
@@ -428,7 +556,7 @@
     },
     {
       "type": "integer",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -465,6 +593,66 @@
       "name": "response_tokens",
       "entityType": "columns",
       "table": "tool_usage"
+    },
+    {
+      "columns": [
+        "symbol_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_env_vars_symbol_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "env_vars"
+    },
+    {
+      "columns": [
+        "file_path"
+      ],
+      "tableTo": "files",
+      "columnsTo": [
+        "path"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_env_vars_file_path_files_path_fk",
+      "entityType": "fks",
+      "table": "env_vars"
+    },
+    {
+      "columns": [
+        "symbol_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_exceptions_symbol_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "exceptions"
+    },
+    {
+      "columns": [
+        "file_path"
+      ],
+      "tableTo": "files",
+      "columnsTo": [
+        "path"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_exceptions_file_path_files_path_fk",
+      "entityType": "fks",
+      "table": "exceptions"
     },
     {
       "columns": [
@@ -558,6 +746,24 @@
     },
     {
       "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "env_vars_pk",
+      "table": "env_vars",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "exceptions_pk",
+      "table": "exceptions",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "path"
       ],
       "nameExplicit": false,
@@ -600,6 +806,62 @@
       "name": "tool_usage_pk",
       "table": "tool_usage",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "symbol_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_env_vars_symbol",
+      "entityType": "indexes",
+      "table": "env_vars"
+    },
+    {
+      "columns": [
+        {
+          "value": "file_path",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_env_vars_file",
+      "entityType": "indexes",
+      "table": "env_vars"
+    },
+    {
+      "columns": [
+        {
+          "value": "symbol_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_exceptions_symbol",
+      "entityType": "indexes",
+      "table": "exceptions"
+    },
+    {
+      "columns": [
+        {
+          "value": "file_path",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_exceptions_file",
+      "entityType": "indexes",
+      "table": "exceptions"
     },
     {
       "columns": [

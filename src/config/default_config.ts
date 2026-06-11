@@ -313,15 +313,15 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       provider: 'ollama',
       write_to_file: true,
       claude: {
-        api_key: Bun.env.CLAUDE_API_KEY || '',
+        api_key: process.env.CLAUDE_API_KEY || '',
         model: 'claude-haiku-4-5',
       },
       gemini: {
-        api_key: Bun.env.GEMINI_API_KEY || '',
+        api_key: process.env.GEMINI_API_KEY || '',
         model: 'gemini-3-flash-preview',
       },
       openai: {
-        api_key: Bun.env.OPENAI_API_KEY || '',
+        api_key: process.env.OPENAI_API_KEY || '',
         model: 'gpt-4o-mini',
       },
       ollama: {
@@ -339,5 +339,13 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       '.clinerules',
       '.windsurfrules',
     ],
+    embedder: {
+      enabled: true,
+      provider: 'ollama',
+      ollama: {
+        base_url: 'http://localhost:11434',
+        model: 'nomic-embed-text',
+      },
+    },
   },
 }

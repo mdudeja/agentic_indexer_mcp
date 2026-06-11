@@ -1,6 +1,6 @@
 # Agentic Indexer MCP
 
-A powerful Model Context Protocol (MCP) server that provides structured, symbol-level code retrieval for AI agents. Built with Bun, Tree-sitter, and SQLite, it allows AI models to efficiently explore, search, and parse codebases without wasting context window tokens by reading entire files.
+A powerful Model Context Protocol (MCP) server that provides structured, symbol-level code retrieval and codebase analysis for AI agents. Built with Bun, Tree-sitter, Drizzle ORM, and SQLite, it allows AI models to efficiently explore, search, and parse codebases without wasting context window tokens by reading entire files.
 
 *Inspired by projects like [jCodeMunch MCP](https://github.com/jgravelle/jcodemunch-mcp).*
 
@@ -14,33 +14,89 @@ A powerful Model Context Protocol (MCP) server that provides structured, symbol-
 
 ## What the Project Does
 
-Agentic Indexer indexes your local codebase using native AST parsing (via [web-tree-sitter](https://github.com/tree-sitter/tree-sitter)). It extracts symbols—such as functions, classes, methods, and variables—and stores their structured metadata (signatures, docstrings, and byte offsets) into a local SQLite database along with file hashes. 
+Agentic Indexer indexes your local codebase using native AST parsing (via [web-tree-sitter](https://github.com/tree-sitter/tree-sitter)). It extracts symbols—such as functions, classes, methods, and variables—and stores their structured metadata (signatures, docstrings, parameters, return types, and byte offsets) into a local SQLite database along with file hashes.
 
-When an AI agent (like Claude or a local LLM via Cursor etc.) needs context, it can use this MCP server to:
-- **Search for symbols globally.**
-- **Fetch specific details (signature, exact file line constraints).**
-- **Read file outlines.**
-- **Avoid loading unnecessary thousands of lines into the context.**
+For TypeScript projects, a post-extraction enhancement step leverages `ts-morph` to resolve parameter types, return types, inheritance, and exact call-graph links. It also features an AI-based docstring generation step to automatically document undocumented symbols using Claude, Gemini, OpenAI, or Ollama.
 
-Doing so massively reduces token waste and improves your model's reasoning capabilities by feeding it exact components rather than a dumped codebase string.
+When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context, it can use this MCP server to query, navigate, and analyze the codebase at symbol-level resolution instead of loading thousands of lines into the context window.
 
 ---
 
 ## Architecture
 
-1. **Parser Layer (Tree-Sitter):** 
-   - Uses `web-tree-sitter` and compiled `.wasm` grammars to parse source files precisely.
-   - Converts the AST nodes into domain-specific symbols and metadata (currently heavily optimized for TS/JS files).
-2. **Database Layer (Drizzle + Bun SQLite):**
-   - Employs a local SQLite instance to persist file path tracking, state timestamps, and Symbol entities.
-   - `Drizzle ORM` is used for strongly typed schema configurations and migrations.
-   - Hashes file contents before re-parsing to optimize subsequent runs.
-3. **MCP Server Exporter:**
-   - Registers standard `MCP` protocol tools (`@modelcontextprotocol/sdk`) over `stdio`. 
-   - `search_symbols`: Searches by wildcard, name, and kind.
-   - `get_definition`: Returns exact details for a specific symbol ID or name.
-   - `list_files`: Outlines indexed files within your codebase directory.
-   - `get_file_summary`: Provides an overview of the symbols belonging to a specific file.
+The system operates across three distinct layers:
+1. **Parser & Extractor Layer (Tree-Sitter):** Uses `web-tree-sitter` and compiled `.wasm` grammars to parse source files, identifying symbol kinds, imports, and call sites.
+2. **Enhancement Layer (ts-morph):** Resolves full type information, interfaces/type inheritance, and connects call sites to their concrete definitions.
+3. **Database Layer (Drizzle + Bun SQLite):** Persists metadata, signatures, dependencies, and file hashes to optimize subsequent runs.
+
+---
+
+## MCP Server Tools
+
+The server registers 28 specialized tools over `stdio`. They are grouped logically below:
+
+### 1. Codebase Navigation & Search
+- `list_files`: Lists all indexed files in the workspace, with optional path pattern and language filtering.
+- `get_file_details`: Lists all symbols (functions, classes, variables, types, interfaces) defined in a specific file.
+- `search_symbols`: Searches for symbols globally by name or wildcard pattern.
+- `semantic_search_symbols`: Conceptually searches for symbols globally using natural language (via Ollama vector embeddings + RRF).
+- `get_definition`: Fetches the exact source code block implementing a given symbol.
+- `get_type_at_location`: Returns the fully-resolved compiler/LSP type of an identifier at a specific line and column.
+- `read_file_snippet`: Reads a specific range of lines from a file.
+
+### 2. Dependency & Call Graph Traversal
+- `trace_call_graph`: Generates an indented ASCII tree of inbound (who calls X) or outbound (what X calls) call chains up to a configured depth.
+- `get_blast_radius`: Finds all transitive callers (BFS) affected by modifying a symbol, helping assess refactoring risks.
+- `find_symbol_references`: Returns direct call sites, named imports, and module-level importers for a symbol.
+- `trace_data_flow`: Maps out the I/O boundary of a function/method (parameters, returns, caller inputs, and callee outputs).
+- `trace_error_flow`: Recursively traces and lists all exceptions that can bubble up from a symbol.
+- `get_required_env_vars`: Traces environment variables accessed downstream inside the call tree of a symbol.
+
+### 3. Structure & Pattern Discovery
+- `get_codebase_map`: Generates a topological overview of files grouped by directory, sorting them from entry-points down to foundation layers.
+- `get_entry_points`: Lists top-level exported symbols representing the public API surface.
+- `explore_codebase`: Renders a comprehensive Mermaid call-graph highlighting entry-point paths, subgraphs for files/containers, and reachability.
+- `find_similar_patterns`: Searches for symbols sharing a reference symbol's structural shape (matching on kind, return type, param count, or decorators).
+
+### 4. Quality & Analytics Metrics
+- `find_dead_code`: Detects unreachable code (exported unreferenced symbols and internal callables with no callers).
+- `get_untested_symbols`: Lists exported symbols inside files that are not imported by any test file.
+- `find_related_tests`: Locates test files exercising a specific symbol or module.
+- `get_symbol_importance`: Ranks symbols using PageRank on the call graph to find critical central components.
+- `get_dependency_cycles`: Detects circular import dependencies using Tarjan's SCC algorithm.
+- `get_coupling_metrics`: Computes efferent/afferent coupling, instability, abstractness, and distance from the main sequence for all files.
+- `get_symbol_history`: Fetches the git commit history and changes for a specific symbol using line-bound git log queries.
+
+### 5. Auditing & Diagnostics
+- `audit_agent_config`: Audits AI agent configuration rules (`.cursorrules`, `CLAUDE.md`, etc.) for stale paths and symbol references.
+- `get_token_savings`: Reports context tokens saved by using MCP tools instead of loading raw source files.
+
+---
+
+## Configuration
+
+Custom configuration can be specified in `.agentic/config.json` at the root of your workspace:
+
+```json
+{
+  "indexer": {
+    "enabled": true,
+    "ignore_patterns": [
+      ".git",
+      "node_modules",
+      "dist",
+      "*.lock"
+    ],
+    "docstring_generation": {
+      "enabled": false,
+      "provider": "openai",
+      "write_to_file": false
+    }
+  }
+}
+```
+
+Refer to [src/config/default_config.ts](file:///home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/config/default_config.ts) for default settings, including supported language extensions, ignore paths, test file regexes, and entry point patterns.
 
 ---
 
@@ -67,28 +123,33 @@ The core commands leverage `index.ts` to manage your environment:
    bun run index --cwd /path/to/your/project
    ```
 
-2. **Query the Index locally:**
-   Search for symbols via the CLI without starting the server, useful for testing that data was successfully parsed.
+2. **Index a Single File:**
+   Re-index only a specific file.
+   ```bash
+   bun run index-file --cwd /path/to/your/project --file /path/to/your/file.ts
+   ```
+
+3. **Remove Generated Docstrings:**
+   Delete all generated docstrings from source files and database.
+   ```bash
+   bun run remove-docstrings --cwd /path/to/your/project
+   ```
+
+4. **Query the Index locally:**
+   Search for symbols via the CLI.
    ```bash
    bun run query --cwd /path/to/your/project -q "auth*" -k "function"
    ```
 
-3. **Start the MCP Server:**
-   This reads commands via `stdio`, acting as the backend engine for agents adhering to the MCP spec.
-   *(Configure your MCP consumer—like Cursor, Claude Desktop, or your custom agent—to execute this start command as a plugin/server payload.)*
+5. **Start the MCP Server:**
+   Start the stdio MCP server for agent integration.
    ```bash
-   bun run start --cwd /path/to/your/project
+   bun run serve --cwd /path/to/your/project
    ```
 
----
+6. **Inspect the MCP Server:**
+   Launch the MCP Inspector to debug tools.
+   ```bash
+   bun run inspect
+   ```
 
-## Features Still to be Developed
-
-Agentic Indexer is under active development. Below are planned features to make it a globally aware architectural reasoning tool for AI:
-
-- **Broader Language Support**: Expanding from `ts/js/tsx/jsx` into Go, Python, Rust, and others using dynamic WASM or native binding `tree-sitter` fallback loading strategies.
-- **Deep Impact Analysis (Blast Radius & Importers)**: Computing and traversing the abstract import graphs to inform agents exactly what files/functions depend on a target symbol.
-- **Symbol Coarser Context & Snippet Stitching**: Returning contiguous grouped snippets instead of line-separated data if symbols are logically combined.
-- **Refactoring Planner Support**: Feeding context to the server so it returns structural edits instead of relying purely on the LLM's inline capabilities.
-- **Live Watch & Real-time Re-indexing**: Running a daemon watch strategy alongside `serve` to instantly reconcile database state when a file modify event is emitted on the disk.
-- **Testing Metric & Call Hierarchies**: Determining dead code, untested functions, or generating multi-depth call stacks automatically.

@@ -11,6 +11,10 @@ export type AppState = {
   kindToListMap?: Map<string, Map<string, ListName>> // language → (kind → list)
   server?: McpServer
   watcher?: Watcher
+  tsMorphEnhancer?: any
+  pyLspEnhancer?: any
+  luaLspEnhancer?: any
+  goLspEnhancer?: any
 }
 
 export interface IStateManager {

@@ -10,7 +10,7 @@ async function main() {
 
   await db
     .insert(schema.files)
-    .values({ path: 'test.ts', hash: 'abc', indexed_at: 123, language: 'ts' })
+    .values({ path: 'test.ts', hash: 'abc', indexed_at: 123, language: 'ts', estimated_tokens: 100 })
 
   await db.insert(schema.symbols).values({
     id: 'sym1',

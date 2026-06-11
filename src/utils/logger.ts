@@ -9,7 +9,7 @@ enum LogLevel {
   NONE = 4,
 }
 
-const CURRENT_LOG_LEVEL = parseLogLevel(Bun.env.LOG_LEVEL)
+const CURRENT_LOG_LEVEL = parseLogLevel(process.env.LOG_LEVEL)
 const log_types = ['log', 'error', 'warn', 'info'] as const
 export type LogType = (typeof log_types)[number]
 

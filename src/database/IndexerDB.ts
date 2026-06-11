@@ -25,8 +25,9 @@ import type {
   IndexedSymbolCall,
 } from '../config/types'
 import { resolvePath } from 'src/utils/paths'
-import { logDebug } from 'src/utils/logger'
+import { logDebug, logError } from 'src/utils/logger'
 import { getNowMillis } from 'src/utils/datetime'
+import * as sqliteVec from 'sqlite-vec'
 import type { DirectCaller, NestedCaller } from './types'
 
 /** Manages an SQLite database for indexing and querying code symbols, files, imports, and call relationships using Drizzle ORM. */
@@ -45,6 +46,12 @@ export class IndexerDB {
   private preparedImportInsert: Statement | null = null
   private preparedCallInsert: Statement | null = null
   private preparedToolUsageInsert: Statement | null = null
+  private preparedExceptionDelete: Statement | null = null
+  private preparedExceptionInsert: Statement | null = null
+  private preparedEnvVarDelete: Statement | null = null
+  private preparedEnvVarInsert: Statement | null = null
+  private preparedVectorSymbolsInsert: Statement | null = null
+  private preparedVectorSymbolsDelete: Statement | null = null
 
   /** Initializes a new IndexerDB instance, optionally using an in-memory or file-based database based on the provided path. Sets up SQLite configuration and initializes the database schema. */
   private constructor(dbPath?: string) {
@@ -62,6 +69,14 @@ export class IndexerDB {
     }
 
     this.sqlite = new Database(this.dbFilePath, { create: true, strict: true })
+
+    // Load sqlite-vec extension
+    try {
+      sqliteVec.load(this.sqlite)
+      logDebug('sqlite-vec extension loaded successfully')
+    } catch (err) {
+      logError('Failed to load sqlite-vec extension:', err)
+    }
 
     this.sqlite.run('PRAGMA foreign_keys = ON;')
     this.sqlite.run('PRAGMA journal_mode = WAL;')
@@ -126,6 +141,39 @@ export class IndexerDB {
     this.preparedToolUsageInsert = this.sqlite.prepare(
       `INSERT INTO tool_usage (${toolUsageCols.join(',')}) VALUES (${toolUsageCols.map(() => '?').join(',')})`,
     )
+
+    // Prepared statements for exceptions and env vars
+    this.preparedExceptionDelete = this.sqlite.prepare(
+      `DELETE FROM exceptions WHERE file_path = ?`,
+    )
+    const excCols = Object.keys(getColumns(schema.exceptions))
+    this.preparedExceptionInsert = this.sqlite.prepare(
+      `INSERT INTO exceptions (${excCols.join(',')}) VALUES (${excCols.map(() => '?').join(',')})`,
+    )
+
+    this.preparedEnvVarDelete = this.sqlite.prepare(
+      `DELETE FROM env_vars WHERE file_path = ?`,
+    )
+    const envCols = Object.keys(getColumns(schema.env_vars))
+    this.preparedEnvVarInsert = this.sqlite.prepare(
+      `INSERT INTO env_vars (${envCols.join(',')}) VALUES (${envCols.map(() => '?').join(',')})`,
+    )
+
+    // Create sqlite-vec virtual table
+    try {
+      this.sqlite.run(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS vec_symbols USING vec0(
+          symbol_id TEXT PRIMARY KEY,
+          embedding float[768]
+        );
+      `)
+      logDebug('sqlite-vec virtual table initialized')
+    } catch (err) {
+      logError('Failed to create sqlite-vec virtual table:', err)
+    }
+
+    this.preparedVectorSymbolsInsert = this.sqlite.prepare(`INSERT INTO vec_symbols (symbol_id, embedding) VALUES (?, ?)`)
+    this.preparedVectorSymbolsDelete = this.sqlite.prepare(`DELETE FROM vec_symbols WHERE symbol_id = ?`)
 
     this.dbInited = true
     logDebug('Database migrations applied')
@@ -237,7 +285,16 @@ export class IndexerDB {
 
     return this.sqlite.transaction(() => {
       const uniqueFiles = [...new Set(symbolsData.map((s) => s.file_path))]
-      uniqueFiles.forEach((f) => this.preparedSymbolDelete?.run(f))
+      uniqueFiles.forEach((f) => {
+        try {
+          this.sqlite.prepare(
+            `DELETE FROM vec_symbols WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = ?)`
+          ).run(f)
+        } catch (err) {
+          // sqlite-vec not loaded or table not created yet
+        }
+        this.preparedSymbolDelete?.run(f)
+      })
 
       const withExported = symbolsData.map((s) => ({
         ...s,
@@ -803,6 +860,242 @@ export class IndexerDB {
   }
 
   /**===========
+   * Vector Embedding Operations
+   * ===========*/
+
+  /** Upserts an embedding for a symbol into the sqlite-vec virtual table. */
+  async upsertSymbolEmbedding(symbolId: string, embedding: number[]): Promise<void> {
+    const float32Embedding = new Float32Array(embedding)
+    const buffer = Buffer.from(float32Embedding.buffer)
+    try {
+      this.sqlite.transaction(() => {
+        this.preparedVectorSymbolsDelete?.run(symbolId)
+        this.preparedVectorSymbolsInsert?.run(symbolId, buffer)
+      })()
+    } catch (err) {
+      logError(`Failed to upsert embedding for symbol ${symbolId}:`, err)
+    }
+  }
+
+  /** Retrieves symbols that do not have an embedding in the vec_symbols table. */
+  async getSymbolsNeedingEmbeddings(): Promise<IndexedSymbol['Select'][]> {
+    try {
+      const rows = this.sqlite.prepare(`
+        SELECT s.* FROM symbols s
+        LEFT JOIN vec_symbols v ON s.id = v.symbol_id
+        WHERE v.symbol_id IS NULL
+      `).all() as IndexedSymbol['Select'][]
+
+      return rows.map((row) => ({
+        ...row,
+        exported: Boolean(row.exported),
+      }))
+    } catch (err) {
+      logError('Failed to query symbols needing embeddings:', err)
+      return []
+    }
+  }
+
+  /** Searches for symbols using hybrid search (FTS name match + semantic similarity). */
+  async searchSymbolsHybrid(
+    queryStr: string,
+    queryEmbedding: number[] | null,
+    kind?: SymbolKind | 'all',
+    filePattern?: string,
+    limitVal: number = 20
+  ): Promise<Array<{ symbol: IndexedSymbol['Select']; score: number }>> {
+    // 1. Text-based search
+    const textMatches = await this.searchSymbols(queryStr, kind, filePattern, limitVal * 2)
+
+    // 2. Semantic search (if embedding is available)
+    let semanticMatches: Array<{ symbol_id: string; distance: number }> = []
+    if (queryEmbedding) {
+      try {
+        const float32Embedding = new Float32Array(queryEmbedding)
+        const buffer = Buffer.from(float32Embedding.buffer)
+        semanticMatches = this.sqlite.prepare(
+          `SELECT symbol_id, distance 
+           FROM vec_symbols 
+           WHERE embedding MATCH ? 
+           ORDER BY distance 
+           LIMIT ?`
+        ).all(buffer, limitVal * 2) as Array<{ symbol_id: string; distance: number }>
+      } catch (err) {
+        logError('Error running semantic query on vec_symbols:', err)
+      }
+    }
+
+    // Combine results using Reciprocal Rank Fusion (RRF)
+    const scores = new Map<string, { symbol: IndexedSymbol['Select']; textRank: number; semanticRank: number }>()
+
+    const getRecord = (id: string, sym: IndexedSymbol['Select']) => {
+      if (!scores.has(id)) {
+        scores.set(id, { symbol: sym, textRank: Infinity, semanticRank: Infinity })
+      }
+      return scores.get(id)!
+    }
+
+    textMatches.forEach((sym, index) => {
+      const rec = getRecord(sym.id, sym)
+      rec.textRank = index + 1
+    })
+
+    if (semanticMatches.length > 0) {
+      const semanticIds = semanticMatches.map((m) => m.symbol_id)
+      const semanticSymbols = await this.getSymbolsByIds(semanticIds)
+      const symMap = new Map(semanticSymbols.map((s) => [s.id, s]))
+
+      semanticMatches.forEach((match, index) => {
+        const sym = symMap.get(match.symbol_id)
+        if (sym) {
+          // Check filters for semantic match
+          if (kind && kind !== 'all' && sym.kind !== kind) return
+          if (filePattern) {
+            const fileSqlPattern = filePattern.replace(/\*/g, '')
+            if (!sym.file_path.includes(fileSqlPattern)) return
+          }
+
+          const rec = getRecord(sym.id, sym)
+          rec.semanticRank = index + 1
+        }
+      })
+    }
+
+    const K = 60
+    const sorted = Array.from(scores.values())
+      .map((rec) => {
+        const textScore = rec.textRank === Infinity ? 0 : 1 / (K + rec.textRank)
+        const semanticScore = rec.semanticRank === Infinity ? 0 : 1 / (K + rec.semanticRank)
+        return {
+          symbol: rec.symbol,
+          score: textScore + semanticScore,
+        }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limitVal)
+
+    return sorted
+  }
+
+  /**===========
+   * Exceptions & Env Vars Operations
+   * ===========*/
+
+  /** Upserts exceptions into the database. */
+  async upsertExceptions(exceptionsData: Array<typeof schema.exceptions.$inferInsert>) {
+    if (
+      exceptionsData.length === 0 ||
+      !this.preparedExceptionDelete ||
+      !this.preparedExceptionInsert
+    ) {
+      return
+    }
+
+    return this.sqlite.transaction(() => {
+      const uniqueFiles = [...new Set(exceptionsData.map((e) => e.file_path))]
+      uniqueFiles.forEach((f) => this.preparedExceptionDelete?.run(f))
+
+      const excCols = Object.keys(getColumns(schema.exceptions))
+      exceptionsData.forEach((item) => {
+        const args = excCols.map((col) => (item as any)[col] ?? null)
+        this.preparedExceptionInsert?.run(...args)
+      })
+    })()
+  }
+
+  /** Upserts environment variables into the database. */
+  async upsertEnvVars(envVarsData: Array<typeof schema.env_vars.$inferInsert>) {
+    if (
+      envVarsData.length === 0 ||
+      !this.preparedEnvVarDelete ||
+      !this.preparedEnvVarInsert
+    ) {
+      return
+    }
+
+    return this.sqlite.transaction(() => {
+      const uniqueFiles = [...new Set(envVarsData.map((e) => e.file_path))]
+      uniqueFiles.forEach((f) => this.preparedEnvVarDelete?.run(f))
+
+      const envCols = Object.keys(getColumns(schema.env_vars))
+      envVarsData.forEach((item) => {
+        const args = envCols.map((col) => (item as any)[col] ?? null)
+        this.preparedEnvVarInsert?.run(...args)
+      })
+    })()
+  }
+
+  /** Traverses the call graph downstream from a symbol and collects all exceptions thrown along the path. */
+  async getExceptionsBubbleUp(symbolName: string): Promise<Array<{ symbol_name: string; file_path: string; line: number; exception_type: string }>> {
+    const startSymbols = await this.getSymbolsByNames([symbolName])
+    if (startSymbols.length === 0) return []
+
+    const visited = new Set<string>()
+    const queue = startSymbols.map((s) => s.id)
+    const allSymbolIds = [...queue]
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      if (visited.has(currentId)) continue
+      visited.add(currentId)
+
+      const outboundCalls = await this.getCallsForSymbols([currentId])
+      for (const call of outboundCalls) {
+        if (call.callee_id && !visited.has(call.callee_id)) {
+          queue.push(call.callee_id)
+          allSymbolIds.push(call.callee_id)
+        }
+      }
+    }
+
+    const placeholders = allSymbolIds.map(() => '?').join(',')
+    const rows = this.sqlite.prepare(`
+      SELECT s.name AS symbol_name, e.file_path, e.line, e.exception_type
+      FROM exceptions e
+      JOIN symbols s ON e.symbol_id = s.id
+      WHERE e.symbol_id IN (${placeholders})
+      ORDER BY e.file_path, e.line
+    `).all(...allSymbolIds) as Array<{ symbol_name: string; file_path: string; line: number; exception_type: string }>
+
+    return rows
+  }
+
+  /** Traverses the call graph downstream from a symbol and collects all environment variables accessed along the path. */
+  async getEnvVarsBubbleUp(symbolName: string): Promise<Array<{ symbol_name: string; file_path: string; line: number; env_var_name: string }>> {
+    const startSymbols = await this.getSymbolsByNames([symbolName])
+    if (startSymbols.length === 0) return []
+
+    const visited = new Set<string>()
+    const queue = startSymbols.map((s) => s.id)
+    const allSymbolIds = [...queue]
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      if (visited.has(currentId)) continue
+      visited.add(currentId)
+
+      const outboundCalls = await this.getCallsForSymbols([currentId])
+      for (const call of outboundCalls) {
+        if (call.callee_id && !visited.has(call.callee_id)) {
+          queue.push(call.callee_id)
+          allSymbolIds.push(call.callee_id)
+        }
+      }
+    }
+
+    const placeholders = allSymbolIds.map(() => '?').join(',')
+    const rows = this.sqlite.prepare(`
+      SELECT s.name AS symbol_name, ev.file_path, ev.line, ev.name AS env_var_name
+      FROM env_vars ev
+      JOIN symbols s ON ev.symbol_id = s.id
+      WHERE ev.symbol_id IN (${placeholders})
+      ORDER BY ev.file_path, ev.line
+    `).all(...allSymbolIds) as Array<{ symbol_name: string; file_path: string; line: number; env_var_name: string }>
+
+    return rows
+  }
+
+  /**===========
    * General
    * ===========*/
 
@@ -813,6 +1106,8 @@ export class IndexerDB {
     await this.db.delete(schema.files)
     await this.db.delete(schema.symbol_calls)
     await this.db.delete(schema.tool_usage)
+    await this.db.delete(schema.exceptions)
+    await this.db.delete(schema.env_vars)
   }
 
   /** Closes the database connection. */
