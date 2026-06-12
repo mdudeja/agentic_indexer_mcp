@@ -1,21 +1,17 @@
-import { Parser, Language } from 'web-tree-sitter'
-
-import type {
-  IndexedSymbol,
-  IndexedImport,
-  IndexedSymbolCall,
-  IndexerConfig,
-  IndexedException,
-  IndexedEnvVar,
-} from '../config/types'
+import { Parser, Language, Query } from 'web-tree-sitter'
+import * as fs from 'fs'
+import * as path from 'path'
 import { logError } from 'src/utils/logger'
 import { AppStateManager } from 'src/state'
 import { extractSymbols } from './steps/s1_symbol_extractor'
+import type { ExtractionResult } from './adapters/LanguageAdapter'
+import type { IndexerConfig } from 'src/config/types'
 
 /** A utility class for managing code parsing and indexing using TreeSitter. It handles initialization of parsers, loading language grammars from WebAssembly modules, and extracting code elements like symbols and imports from source files based on file extensions and configured language settings. */
 export class TreeSitterIndexer {
   private parser: Parser | null = null
   private languages: Map<string, any> = new Map()
+  private queries: Map<string, Query> = new Map()
   private config: IndexerConfig
 
   /** Initializes the configuration using values from AppStateManager or default settings. */
@@ -51,6 +47,18 @@ export class TreeSitterIndexer {
       )
       const lang = await Language.load(wasmPath)
       this.languages.set(langName, lang)
+
+      try {
+        const queryPath = path.resolve(__dirname, `queries/${langName}/tags.scm`)
+        if (fs.existsSync(queryPath)) {
+          const queryString = fs.readFileSync(queryPath, 'utf-8')
+          const query = new Query(lang, queryString )
+          this.queries.set(langName, query)
+        }
+      } catch (qErr) {
+        logError(`Failed to load query for ${langName}`, qErr)
+      }
+
       return lang
     } catch (err) {
       logError(`Failed to load WASM grammar for ${langName}`)
@@ -64,13 +72,7 @@ export class TreeSitterIndexer {
     sourceCode: string,
     ext: string,
     filePath: string,
-  ): Promise<{
-    symbols: IndexedSymbol['Select'][]
-    imports: IndexedImport['Select'][]
-    calls: IndexedSymbolCall['Insert'][]
-    exceptions: IndexedException['Select'][]
-    envVars: IndexedEnvVar['Select'][]
-  }> {
+  ): Promise<ExtractionResult> {
     if (!this.parser) {
       await this.init()
     }
@@ -96,7 +98,9 @@ export class TreeSitterIndexer {
         return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
       }
 
-      return extractSymbols(tree.rootNode, filePath, treesitterConfig)
+      const query = this.queries.get(langName)
+
+      return extractSymbols(tree.rootNode, filePath, langName, query)
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)

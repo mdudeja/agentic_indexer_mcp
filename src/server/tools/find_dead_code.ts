@@ -5,7 +5,6 @@ import { eq, and, isNull, isNotNull, inArray } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { SymbolKind } from '../../database/schemas'
 import { AppStateManager } from 'src/state'
-import { allCodebaseLanguages } from 'src/utils/allCodebaseLanguages'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
 import { updateUsage } from 'src/utils/updateUsage'
 
@@ -147,18 +146,14 @@ export function registerFindDeadCodeTool(server: McpServer) {
         }
 
         // remove constructors from the list (they are technically callable but often not directly called and can be misleading in dead code results)
-        const languages = await allCodebaseLanguages()
-        const constructorPatterns = Array.from(languages!).flatMap((lang) => {
-          return (
-            AppStateManager.getInstance().getItem('config')?.languages?.[lang]
-              ?.treesitter?.constructor_pattern ?? []
-          )
-        })
         const filteredDead = allDead.filter((s) => {
-          for (const pattern of constructorPatterns) {
-            if (s.kind === pattern.kind && s.name === pattern.name) {
-              return false
-            }
+          if (
+            s.kind === SymbolKind.method &&
+            (s.name === 'constructor' ||
+              s.name === '__init__' ||
+              s.name === 'new')
+          ) {
+            return false
           }
           return true
         })

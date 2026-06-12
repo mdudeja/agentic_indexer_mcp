@@ -6,18 +6,14 @@ import type { IndexerConfig } from 'src/config/types.ts'
 import { AppStateManager } from 'src/state/index.ts'
 import { logError, logInfo } from 'src/utils/logger.ts'
 import type { Enhancer } from './steps/s2_Enhancer.ts'
-import { TsMorphEnhancer } from './enhancers/TsMorphEnhancer.ts'
+import { GenericLspEnhancer } from './enhancers/GenericLspEnhancer.ts'
 import { DocstringGenerationStep } from './steps/s3_docstring_generator.ts'
 import type { EmbeddingGenerator } from './steps/s4_EmbeddingGenerator.ts'
-import { OllamaEmbeddor } from './embeddors/OllamaEmbeddor.ts'
+import { OllamaEmbeddingGenerator } from './embedders/OllamaEmbeddingGenerator.ts'
+import { hashFileContent } from 'src/utils/hashers.ts'
 
-const fileTypeToEnhancerMap: Record<string, new (cwd: string) => Enhancer> = {
-  ts: TsMorphEnhancer,
-  tsx: TsMorphEnhancer,
-}
-
-const embeddorNameToClass: Record<string, new () => EmbeddingGenerator> = {
-  'ollama': OllamaEmbeddor
+const embedderNameToClass: Record<string, new () => EmbeddingGenerator> = {
+  ollama: OllamaEmbeddingGenerator,
 }
 
 export interface IndexPipelineOptions {
@@ -32,7 +28,7 @@ export class IndexPipeline {
   private config: IndexerConfig
   private ignoreRegexPatterns: Set<RegExp> = new Set()
   private enhancers: Record<string, Enhancer> = {}
-  private embeddors: Record<string, EmbeddingGenerator> = {}
+  private embedders: Record<string, EmbeddingGenerator> = {}
 
   /** Constructs a new IndexPipeline instance using provided configuration options. Initializes necessary components for indexing operations. */
   constructor(private options: IndexPipelineOptions) {
@@ -123,22 +119,21 @@ export class IndexPipeline {
 
     await this.runEnhancementStep(processedFiles)
     await this.runDocstringStep()
-    await this.runEmbeddingStep()
+    await this.runEmbeddingStep(processedFiles)
   }
 
   /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
   async runOnFile(absPath: string): Promise<string | null> {
     const relPath = relative(this.options.cwd, absPath)
-    if (this.config.ignore_patterns.some((p) => relPath.includes(p)))
+    if (this.config.ignore_patterns.some((p) => relPath.includes(p))) {
       return null
+    }
 
     const ext = absPath.split('.').pop() || ''
 
     try {
       const content = await Bun.file(absPath).text()
-      const hasher = new Bun.CryptoHasher('sha256')
-      hasher.update(content)
-      const hash = hasher.digest('hex')
+      const hash = hashFileContent(content)
 
       const currentHash = await this.options.store.getFileHash(relPath)
       if (currentHash === hash) return null
@@ -228,36 +223,45 @@ export class IndexPipeline {
       return this.enhancers[ext]
     }
 
-    const EnhancerClass = fileTypeToEnhancerMap[ext]
-    if (!EnhancerClass) {
+    const language = this.config.extnToLangMap[ext]
+    if (!language) return null
+
+    const lspCommand = this.config.languages[language]?.lsp_command
+    if (!lspCommand || lspCommand.length === 0) {
       return null
     }
 
-    const enhancer = new EnhancerClass(this.options.cwd)
+    const enhancer = new GenericLspEnhancer(
+      this.options.cwd,
+      lspCommand,
+      language,
+    )
     const initialized = await enhancer.init()
     if (initialized) {
       this.enhancers[ext] = enhancer
-      logInfo(`[Indexer] Loaded enhancer for .${ext} files.`)
+      logInfo(`[Indexer] Loaded GenericLspEnhancer for .${ext} files.`)
       return enhancer
     } else {
       logError(
-        `[Indexer] Failed to initialize enhancer for .${ext} files. It will be skipped.`,
+        `[Indexer] Failed to initialize GenericLspEnhancer for .${ext} files. It will be skipped.`,
       )
       return null
     }
   }
 
-  private async loadEmbeddor(): Promise<EmbeddingGenerator | null> {
+  private async loadEmbedder(): Promise<EmbeddingGenerator | null> {
     if (!this.config.embedder?.enabled || !this.config.embedder?.provider) {
-      logError('[Indexer] Embedder is not enabled or provider is not configured. Skipping embedding generation.')
+      logError(
+        '[Indexer] Embedder is not enabled or provider is not configured. Skipping embedding generation.',
+      )
       return null
     }
 
-    if (this.embeddors[this.config.embedder.provider]) {
-      return this.embeddors[this.config.embedder.provider]!
+    if (this.embedders[this.config.embedder.provider]) {
+      return this.embedders[this.config.embedder.provider]!
     }
 
-    const EmbedderClass = embeddorNameToClass[this.config.embedder.provider]
+    const EmbedderClass = embedderNameToClass[this.config.embedder.provider]
     if (!EmbedderClass) {
       logError('[Indexer] Embedder not found. Skipping embedding generation.')
       return null
@@ -266,11 +270,13 @@ export class IndexPipeline {
     const embeddor = new EmbedderClass()
     const initialized = await embeddor.init()
     if (!initialized) {
-      logError('[Indexer] Failed to initialize embeddor. Skipping embedding generation.')
+      logError(
+        '[Indexer] Failed to initialize embeddor. Skipping embedding generation.',
+      )
       return null
     }
 
-    this.embeddors[this.config.embedder.provider] = embeddor
+    this.embedders[this.config.embedder.provider] = embeddor
     logInfo('[Indexer] Loaded embeddor.')
     return embeddor
   }
@@ -293,15 +299,14 @@ export class IndexPipeline {
     for (const ext in processedFilesByExt) {
       const enhancer = await this.loadEnhancerForFileType(ext)
       if (enhancer) {
-        await enhancer.enhanceSymbolTypesForCallables(
-          this.options.store,
-          processedFilesByExt[ext]!,
-        )
-        await enhancer.enhanceSymbolTypesForInheritedTypesAndInterfaces(
-          this.options.store,
-          processedFilesByExt[ext]!,
-        )
-        await enhancer.resolveAllPendingCalls(this.options.store)
+        // Notify LSP of any file content changes before querying it
+        for (const relPath of processedFilesByExt[ext]!) {
+          enhancer.refreshFile(join(this.options.cwd, relPath))
+        }
+        await enhancer.resolveAllPendingCalls(processedFilesByExt[ext]!)
+        await enhancer.enhanceSymbolTypesForCallables(processedFilesByExt[ext]!)
+        await enhancer.enhanceInterfaceInheritence(processedFilesByExt[ext]!)
+        await enhancer.enhanceTypeInheritence(processedFilesByExt[ext]!)
       }
     }
 
@@ -319,16 +324,19 @@ export class IndexPipeline {
   }
 
   /** Runs the embedding generation step, processing all symbols that do not have an embedding. */
-  async runEmbeddingStep(): Promise<void> {
+  async runEmbeddingStep(processedFiles: string[]): Promise<void> {
     logInfo('[Indexer] Running Step 4: Generating embeddings for symbols...')
-    const embeddor = await this.loadEmbeddor()
+    const embedder = await this.loadEmbedder()
 
-    if (!embeddor) {
-      logError('[Indexer] Embeddor is not loaded. Skipping embedding generation.')
+    if (!embedder) {
+      logError(
+        '[Indexer] Embedder is not loaded. Skipping embedding generation.',
+      )
       return
     }
 
-    const symbols = await this.options.store.getSymbolsNeedingEmbeddings()
+    const symbols =
+      await this.options.store.getSymbolsNeedingEmbeddings(processedFiles)
     if (symbols.length === 0) {
       logInfo('[Indexer] No symbols need embeddings. Step 4 complete.')
       return
@@ -341,7 +349,9 @@ export class IndexPipeline {
     for (const symbol of symbols) {
       count++
       if (count % 50 === 0) {
-        logInfo(`[Indexer] Processing embeddings: ${count}/${symbols.length}...`)
+        logInfo(
+          `[Indexer] Processing embeddings: ${count}/${symbols.length}...`,
+        )
       }
 
       // Construct textual context for embedding
@@ -353,13 +363,15 @@ export class IndexPipeline {
         textToEmbed += `\nDocumentation: ${symbol.docstring}`
       }
 
-      const vector = await embeddor.getEmbedding(textToEmbed)
+      const vector = await embedder.getEmbedding(textToEmbed)
       if (vector) {
         await this.options.store.upsertSymbolEmbedding(symbol.id, vector)
         successCount++
       }
     }
 
-    logInfo(`[Indexer] Step 4 complete. Successfully generated ${successCount}/${symbols.length} embeddings.`)
+    logInfo(
+      `[Indexer] Step 4 complete. Successfully generated ${successCount}/${symbols.length} embeddings.`,
+    )
   }
 }

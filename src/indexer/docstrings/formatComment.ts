@@ -6,7 +6,7 @@ const commentSyntax = [
   /^"""/,
   /^'''/,
   /^--+/,
-  /```\s?(typescript|tsx|javascript|js|json|python)?/,
+  /```\s?(typescript|tsx|javascript|js|json|python|lua|bash|html|css)?/,
   /```\s?/,
   /"""\s?$/,
   /'''\s?$/,

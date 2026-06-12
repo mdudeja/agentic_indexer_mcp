@@ -2,11 +2,12 @@ import { join } from 'path'
 import { existsSync } from 'node:fs'
 import type { IndexerDB } from 'src/database/IndexerDB'
 import type { IndexerConfig, IndexedSymbol } from 'src/config/types'
-import { DocstringStrategy, SymbolKind } from 'src/config/types'
+import { SymbolKind } from 'src/config/types'
 import { AppStateManager } from 'src/state'
 import { logDebug, logInfo, logWarning } from 'src/utils/logger'
-import { createProvider, type DocstringProvider } from '../docstrings/providers'
+import { createProvider } from '../docstrings/providers'
 import { formatComment, getCommentText } from '../docstrings/formatComment'
+import type { DocstringProvider } from '../docstrings/providers/DocStringProvider'
 
 /** Generates and manages docstrings for code symbols based on configured settings, including generation of new docstrings and removal of existing ones. */
 export class DocstringGenerationStep {
@@ -26,7 +27,7 @@ export class DocstringGenerationStep {
 
     logInfo('[Indexer] Running Step 3: Docstring Generation...')
 
-    const targetKinds = this.collectTargetKinds()
+    const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
     const symbols = await store.getSymbolsNeedingDocstrings(targetKinds)
@@ -76,7 +77,7 @@ export class DocstringGenerationStep {
     const docCfg = this.config.docstring_generation
     if (!docCfg?.enabled) return
 
-    const targetKinds = this.collectTargetKinds()
+    const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
     const fileSymbols = await store.getSymbolsNeedingDocstringsForFile(
@@ -109,7 +110,7 @@ export class DocstringGenerationStep {
 
   /** Removes all docstrings from the database and optionally from source files if configured. */
   async removeAllDocstrings(store: IndexerDB): Promise<void> {
-    const targetKinds = this.collectTargetKinds()
+    const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
     const symbols = await store.getSymbolsWithDocstrings(targetKinds)
@@ -177,26 +178,12 @@ export class DocstringGenerationStep {
     )
   }
 
-  /** Collects all unique symbol kinds defined in the tree-sitter configurations for different programming languages. */
-  private collectTargetKinds(): SymbolKind[] {
-    const kinds = new Set<SymbolKind>()
-    for (const langCfg of Object.values(this.config.languages)) {
-      const { nodes_info, lists } = langCfg.treesitter
-      for (const nodeType of [
-        ...lists.container_nodes,
-        ...lists.callable_nodes,
-      ]) {
-        const info = nodes_info[nodeType]
-        if (
-          info?.kind &&
-          info.docstring &&
-          info.docstring !== DocstringStrategy.none
-        ) {
-          kinds.add(info.kind)
-        }
-      }
-    }
-    return [...kinds]
+  private async collectTargetKinds(): Promise<SymbolKind[]> {
+    const { allCallableKinds } = await import('../../utils/allCallableKinds')
+    const { allContainerKinds } = await import('../../utils/allContainerKinds')
+    const callables = await allCallableKinds()
+    const containers = await allContainerKinds()
+    return Array.from(new Set([...callables, ...containers]))
   }
 
   /** Constructs a detailed prompt for generating a concise docstring by compiling relevant information about a symbol and its context. */

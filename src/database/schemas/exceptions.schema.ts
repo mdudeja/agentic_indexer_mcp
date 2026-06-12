@@ -19,10 +19,11 @@ export const exceptions = sqliteTable(
   (table) => [
     index('idx_exceptions_symbol').on(table.symbol_id),
     index('idx_exceptions_file').on(table.file_path),
-  ]
+  ],
 )
 
 export type IndexedException = {
   Insert: typeof exceptions.$inferInsert
   Select: typeof exceptions.$inferSelect
+  Update: Partial<typeof exceptions.$inferSelect>
 }

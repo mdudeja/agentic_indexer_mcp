@@ -1,9 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { join } from 'path'
-import { homedir } from 'os'
 import { AppStateManager } from 'src/state/index.ts'
-import { TsMorphEnhancer } from '../../indexer/enhancers/TsMorphEnhancer.ts'
 import { GenericLspEnhancer } from '../../indexer/enhancers/GenericLspEnhancer.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
 import type { Enhancer } from '../../indexer/steps/s2_Enhancer.ts'
@@ -35,48 +33,25 @@ export function registerGetTypeAtLocationTool(server: McpServer) {
       const ext = (file_path as string).split('.').pop() || ''
 
       try {
-        let enhancer: Enhancer | null = null
+        let enhancerMap = AppStateManager.getInstance().getItem('lspEnhancers')
+        if (!enhancerMap) {
+          enhancerMap = new Map()
+          AppStateManager.getInstance().setItem('lspEnhancers', enhancerMap)
+        }
 
-        if (ext === 'ts' || ext === 'tsx') {
-          enhancer = AppStateManager.getInstance().getItem('tsMorphEnhancer') as TsMorphEnhancer | undefined ?? null
-          if (!enhancer) {
-            const tsEnhancer = new TsMorphEnhancer(cwd)
-            const initialized = await tsEnhancer.init()
+        let enhancer = enhancerMap.get(ext) as Enhancer | undefined
+
+        if (!enhancer) {
+          const config = AppStateManager.getInstance().getItem('config')
+          const language = config?.extnToLangMap[ext]
+          const lspCommand = language ? config?.languages[language]?.lsp_command : null
+
+          if (lspCommand && lspCommand.length > 0) {
+            const lspEnhancer = new GenericLspEnhancer(cwd, lspCommand, language!)
+            const initialized = await lspEnhancer.init()
             if (initialized) {
-              enhancer = tsEnhancer
-              AppStateManager.getInstance().setItem('tsMorphEnhancer', tsEnhancer)
-            }
-          }
-        } else {
-          // Check for configured or default LSPs for other languages
-          const lspConfigs: Record<string, { cmd: string; langId: string; stateKey: any }> = {
-            py: {
-              cmd: process.env.LSP_PYTHON_PATH || `${homedir()}/.local/share/nvim/mason/bin/pyright-langserver`,
-              langId: 'python',
-              stateKey: 'pyLspEnhancer',
-            },
-            lua: {
-              cmd: process.env.LSP_LUA_PATH || `${homedir()}/.local/share/nvim/mason/bin/lua-language-server`,
-              langId: 'lua',
-              stateKey: 'luaLspEnhancer',
-            },
-            go: {
-              cmd: process.env.LSP_GO_PATH || 'gopls',
-              langId: 'go',
-              stateKey: 'goLspEnhancer',
-            },
-          }
-
-          const config = lspConfigs[ext]
-          if (config) {
-            enhancer = AppStateManager.getInstance().getItem(config.stateKey) as GenericLspEnhancer | undefined ?? null
-            if (!enhancer) {
-              const lspEnhancer = new GenericLspEnhancer(cwd, config.cmd, config.langId)
-              const initialized = await lspEnhancer.init()
-              if (initialized) {
-                enhancer = lspEnhancer
-                AppStateManager.getInstance().setItem(config.stateKey, lspEnhancer)
-              }
+              enhancer = lspEnhancer
+              enhancerMap.set(ext, lspEnhancer)
             }
           }
         }

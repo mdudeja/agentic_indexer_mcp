@@ -3,18 +3,13 @@ import type { IndexerConfig, LanguageConfig } from 'src/config/types'
 import type { Watcher } from 'src/watcher/Watcher'
 
 export type TreesitterConfig = LanguageConfig['treesitter']
-export type ListName = keyof TreesitterConfig['lists']
 
 export type AppState = {
   root?: string
   config?: IndexerConfig
-  kindToListMap?: Map<string, Map<string, ListName>> // language → (kind → list)
   server?: McpServer
   watcher?: Watcher
-  tsMorphEnhancer?: any
-  pyLspEnhancer?: any
-  luaLspEnhancer?: any
-  goLspEnhancer?: any
+  lspEnhancers?: Map<string, any>
 }
 
 export interface IStateManager {

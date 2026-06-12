@@ -19,10 +19,11 @@ export const env_vars = sqliteTable(
   (table) => [
     index('idx_env_vars_symbol').on(table.symbol_id),
     index('idx_env_vars_file').on(table.file_path),
-  ]
+  ],
 )
 
 export type IndexedEnvVar = {
   Insert: typeof env_vars.$inferInsert
   Select: typeof env_vars.$inferSelect
+  Update: Partial<typeof env_vars.$inferSelect>
 }

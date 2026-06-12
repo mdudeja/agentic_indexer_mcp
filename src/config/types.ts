@@ -30,26 +30,10 @@ export type NodeInfo = {
 
 export type LanguageConfig = {
   extensions: string[]
+  lsp_command?: string[]
   treesitter: {
     language_name: string
-    block_init_marker: string
-    signature_max_length: number
-    nodes_info: Record<string, NodeInfo>
-    lists: {
-      exported_nodes: string[]
-      container_nodes: string[]
-      container_kinds: SymbolKind[]
-      typedef_nodes: string[]
-      decorator_nodes: string[]
-      callable_nodes: string[]
-      callable_kinds: SymbolKind[]
-      additional_nodes: string[]
-      member_access_patterns: Array<string | RegExp>
-    }
-    constructor_pattern: {
-      kind: SymbolKind.method
-      name: string
-    }
+    signature_max_length?: number
   }
 }
 

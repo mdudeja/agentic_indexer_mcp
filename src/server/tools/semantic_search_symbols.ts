@@ -2,8 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB.ts'
 import type { SymbolKind } from '../../config/types.ts'
-import { OllamaEmbeddings } from 'src/utils/embeddings.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
+import { OllamaEmbeddingGenerator } from 'src/indexer/embedders/OllamaEmbeddingGenerator.ts'
 
 /** Registers a tool to enable semantic and hybrid searching for symbols across the codebase. */
 export function registerSemanticSearchSymbolsTool(server: McpServer) {
@@ -19,7 +19,11 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
         '\n\n' +
         'TIPS: Use descriptive natural language queries. You can also filter by `kind` or `file_pattern` to narrow down results.',
       inputSchema: z.object({
-        query: z.string().describe('The semantic or natural language query (e.g. "password hashing")'),
+        query: z
+          .string()
+          .describe(
+            'The semantic or natural language query (e.g. "password hashing")',
+          ),
         kind: z
           .string()
           .optional()
@@ -38,13 +42,15 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
     },
     async ({ query, kind, file_pattern, limit }) => {
       const store = IndexerDB.getInstance()
-      const embedder = new OllamaEmbeddings()
+      const embedder = new OllamaEmbeddingGenerator()
 
       try {
         // Generate query embedding (gracefully falls back to text-only if Ollama is down)
         const embedding = await embedder.getEmbedding(query)
         if (!embedding) {
-          console.warn('[Semantic Search] Ollama embedding generation failed. Falling back to text-only search.');
+          console.warn(
+            '[Semantic Search] Ollama embedding generation failed. Falling back to text-only search.',
+          )
         }
 
         const results = await store.searchSymbolsHybrid(
@@ -104,7 +110,9 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error running semantic search: ${err}` }],
+          content: [
+            { type: 'text', text: `Error running semantic search: ${err}` },
+          ],
           isError: true,
         }
       }

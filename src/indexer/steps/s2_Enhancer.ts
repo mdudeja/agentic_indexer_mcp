@@ -1,7 +1,3 @@
-import type { IndexerConfig } from 'src/config/types'
-import type { IndexerDB } from 'src/database/IndexerDB'
-import { AppStateManager } from 'src/state'
-
 export interface ParamInfo {
   name: string
   type: string
@@ -13,64 +9,17 @@ export interface ResolvedCallableTypeInfo {
   returnType: string
 }
 
-/** The Enhancer abstract class provides functionality to enhance and manage symbol type information in a code analysis system. It handles initialization, processing files for improved symbol types, resolving pending operations, and refreshing data when files change. */
-export abstract class Enhancer {
-  protected config: IndexerConfig
-  protected available = false
-  protected initialized = false
-
-  /** Initializes the Enhancer with configuration data from storage or default values. */
-  constructor(protected cwd: string) {
-    this.config = AppStateManager.getInstance().getItem('config') ?? {
-      enabled: false,
-      languages: {},
-      ignore_patterns: [],
-      testFilePatterns: [],
-      extnToLangMap: {},
-      agent_config_candidates: [],
-      entryPointPatterns: [],
-    }
-  }
-
-  /** Initialize resources required for the application to function properly. Returns a boolean indicating whether the initialization succeeded. */
-  async init(): Promise<boolean> {
-    throw new Error('init() not implemented')
-  }
-
-  /** Enhances symbol types for callables at specified relative paths in the indexer database. This method processes each file location to improve or refine symbol type information within the system. */
-  async enhanceSymbolTypesForCallables(
-    _store: IndexerDB,
-    _relPaths: string[],
-  ): Promise<void> {
-    throw new Error('enhanceSymbolTypesForCallables() not implemented')
-  }
-
-  /** Enhances symbol type information for inherited types and interfaces in the provided store. */
-  async enhanceSymbolTypesForInheritedTypesAndInterfaces(
-    _store: IndexerDB,
-    _relPaths: string[],
-  ): Promise<void> {
-    throw new Error(
-      'enhanceSymbolTypesForInheritedTypesAndInterfaces() not implemented',
-    )
-  }
-
-  /** Resolve all pending calls that have not yet been processed. This method ensures that any outstanding operations are addressed and cleared from the system. */
-  async resolveAllPendingCalls(_store: IndexerDB): Promise<void> {
-    throw new Error('resolveAllPendingCalls() not implemented')
-  }
-
-  /** Refreshes cached data for a file at the specified absolute path when it has been modified. */
-  refreshFile(_absPath: string): void {
-    throw new Error('refreshFile() not implemented')
-  }
-
-  /** Gets the fully-resolved type at the specified file location (line and column). */
-  async getTypeAtLocation(
-    _absPath: string,
-    _line: number,
-    _column: number,
-  ): Promise<string | null> {
-    throw new Error('getTypeAtLocation() not implemented')
-  }
+export interface Enhancer {
+  init(): Promise<boolean>
+  enhanceSymbolTypesForCallables(relPaths: string[]): Promise<void>
+  enhanceInterfaceInheritence(relPaths: string[]): Promise<void>
+  enhanceTypeInheritence(relPaths: string[]): Promise<void>
+  resolveAllPendingCalls(relPaths: string[]): Promise<void>
+  refreshFile(absPath: string): void
+  getTypeAtLocation(
+    absPath: string,
+    line: number,
+    column: number,
+  ): Promise<string | null>
+  dispose(): Promise<void>
 }

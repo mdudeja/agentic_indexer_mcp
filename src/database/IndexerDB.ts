@@ -40,8 +40,8 @@ export class IndexerDB {
   private isMemory: boolean = false
   private sqlite: Database
 
-  private preparedSymbolDelete: Statement | null = null
   private preparedSymbolInsert: Statement | null = null
+  private preparedSymbolDeleteById: Statement | null = null
   private preparedImportDelete: Statement | null = null
   private preparedImportInsert: Statement | null = null
   private preparedCallInsert: Statement | null = null
@@ -52,6 +52,7 @@ export class IndexerDB {
   private preparedEnvVarInsert: Statement | null = null
   private preparedVectorSymbolsInsert: Statement | null = null
   private preparedVectorSymbolsDelete: Statement | null = null
+  private preparedVectorDeleteByFile: Statement | null = null
 
   /** Initializes a new IndexerDB instance, optionally using an in-memory or file-based database based on the provided path. Sets up SQLite configuration and initializes the database schema. */
   private constructor(dbPath?: string) {
@@ -114,9 +115,6 @@ export class IndexerDB {
     )
     migrate(this.db, { migrationsFolder: migrationsDir })
 
-    this.preparedSymbolDelete = this.sqlite.prepare(
-      `DELETE FROM symbols WHERE file_path = ?`,
-    )
     const columnNames = Object.keys(getColumns(schema.symbols))
     const insertPlaceholders = columnNames.map(() => '?').join(',')
     this.preparedSymbolInsert = this.sqlite.prepare(
@@ -172,8 +170,18 @@ export class IndexerDB {
       logError('Failed to create sqlite-vec virtual table:', err)
     }
 
-    this.preparedVectorSymbolsInsert = this.sqlite.prepare(`INSERT INTO vec_symbols (symbol_id, embedding) VALUES (?, ?)`)
-    this.preparedVectorSymbolsDelete = this.sqlite.prepare(`DELETE FROM vec_symbols WHERE symbol_id = ?`)
+    this.preparedVectorSymbolsInsert = this.sqlite.prepare(
+      `INSERT INTO vec_symbols (symbol_id, embedding) VALUES (?, ?)`,
+    )
+    this.preparedVectorSymbolsDelete = this.sqlite.prepare(
+      `DELETE FROM vec_symbols WHERE symbol_id = ?`,
+    )
+    this.preparedSymbolDeleteById = this.sqlite.prepare(
+      `DELETE FROM symbols WHERE id = ?`,
+    )
+    this.preparedVectorDeleteByFile = this.sqlite.prepare(
+      `DELETE FROM vec_symbols WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = ?)`,
+    )
 
     this.dbInited = true
     logDebug('Database migrations applied')
@@ -249,7 +257,11 @@ export class IndexerDB {
 
   /** Deletes a file from the database using its path. */
   async deleteFile(path: string) {
-    // Cascades to symbols if ON DELETE CASCADE is set up correctly in schema
+    try {
+      this.preparedVectorDeleteByFile?.run(path)
+    } catch (err) {
+      logError(`Failed to delete embeddings for file ${path}:`, err)
+    }
     return this.db.delete(schema.files).where(eq(schema.files.path, path))
   }
 
@@ -273,39 +285,48 @@ export class IndexerDB {
    * Symbol Operations
    * ===========*/
 
-  /** Inserts or updates symbols in the database based on the provided data. Handles batch operations for efficiency. */
+  /** Inserts or updates symbols in the database based on the provided data. Diffs by symbol ID (hash) so unchanged symbols and their embeddings are left untouched. */
   async upsertSymbols(symbolsData: IndexedSymbol['Insert'][]) {
-    if (
-      symbolsData.length === 0 ||
-      !this.preparedSymbolDelete ||
-      !this.preparedSymbolInsert
-    ) {
+    if (symbolsData.length === 0 || !this.preparedSymbolInsert || !this.preparedSymbolDeleteById) {
       return
     }
 
     return this.sqlite.transaction(() => {
-      const uniqueFiles = [...new Set(symbolsData.map((s) => s.file_path))]
-      uniqueFiles.forEach((f) => {
-        try {
-          this.sqlite.prepare(
-            `DELETE FROM vec_symbols WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = ?)`
-          ).run(f)
-        } catch (err) {
-          // sqlite-vec not loaded or table not created yet
-        }
-        this.preparedSymbolDelete?.run(f)
-      })
-
-      const withExported = symbolsData.map((s) => ({
-        ...s,
-        exported: s.exported ? true : false,
-      }))
+      const byFile = new Map<string, IndexedSymbol['Insert'][]>()
+      for (const s of symbolsData) {
+        const arr = byFile.get(s.file_path) ?? []
+        arr.push(s)
+        byFile.set(s.file_path, arr)
+      }
 
       const symbolCols = Object.keys(getColumns(schema.symbols))
-      withExported.forEach((item) => {
-        const args = symbolCols.map((col) => (item as any)[col] ?? null)
-        this.preparedSymbolInsert?.run(...args)
-      })
+
+      for (const [filePath, newSymbols] of byFile) {
+        const oldIds = (
+          this.sqlite.prepare(`SELECT id FROM symbols WHERE file_path = ?`).all(filePath) as { id: string }[]
+        ).map((r) => r.id)
+        const oldIdSet = new Set(oldIds)
+        const newIdSet = new Set(newSymbols.map((s) => s.id))
+
+        for (const id of oldIds) {
+          if (!newIdSet.has(id)) {
+            try {
+              this.preparedVectorSymbolsDelete?.run(id)
+            } catch (err) {
+              logError(`Failed to delete embedding for removed symbol ${id}:`, err)
+            }
+            this.preparedSymbolDeleteById?.run(id)
+          }
+        }
+
+        for (const item of newSymbols) {
+          if (!oldIdSet.has(item.id)) {
+            const s = { ...item, exported: Boolean(item.exported) }
+            const args = symbolCols.map((col) => (s as any)[col] ?? null)
+            this.preparedSymbolInsert?.run(...args)
+          }
+        }
+      }
     })()
   }
 
@@ -864,7 +885,10 @@ export class IndexerDB {
    * ===========*/
 
   /** Upserts an embedding for a symbol into the sqlite-vec virtual table. */
-  async upsertSymbolEmbedding(symbolId: string, embedding: number[]): Promise<void> {
+  async upsertSymbolEmbedding(
+    symbolId: string,
+    embedding: number[],
+  ): Promise<void> {
     const float32Embedding = new Float32Array(embedding)
     const buffer = Buffer.from(float32Embedding.buffer)
     try {
@@ -878,13 +902,19 @@ export class IndexerDB {
   }
 
   /** Retrieves symbols that do not have an embedding in the vec_symbols table. */
-  async getSymbolsNeedingEmbeddings(): Promise<IndexedSymbol['Select'][]> {
+  async getSymbolsNeedingEmbeddings(
+    filePaths: string[],
+  ): Promise<IndexedSymbol['Select'][]> {
     try {
-      const rows = this.sqlite.prepare(`
+      const rows = this.sqlite
+        .prepare(
+          `
         SELECT s.* FROM symbols s
         LEFT JOIN vec_symbols v ON s.id = v.symbol_id
-        WHERE v.symbol_id IS NULL
-      `).all() as IndexedSymbol['Select'][]
+        WHERE v.symbol_id IS NULL AND s.file_path IN (${filePaths.map(() => '?').join(',')})
+      `,
+        )
+        .all(...filePaths) as IndexedSymbol['Select'][]
 
       return rows.map((row) => ({
         ...row,
@@ -902,10 +932,15 @@ export class IndexerDB {
     queryEmbedding: number[] | null,
     kind?: SymbolKind | 'all',
     filePattern?: string,
-    limitVal: number = 20
+    limitVal: number = 20,
   ): Promise<Array<{ symbol: IndexedSymbol['Select']; score: number }>> {
     // 1. Text-based search
-    const textMatches = await this.searchSymbols(queryStr, kind, filePattern, limitVal * 2)
+    const textMatches = await this.searchSymbols(
+      queryStr,
+      kind,
+      filePattern,
+      limitVal * 2,
+    )
 
     // 2. Semantic search (if embedding is available)
     let semanticMatches: Array<{ symbol_id: string; distance: number }> = []
@@ -913,24 +948,40 @@ export class IndexerDB {
       try {
         const float32Embedding = new Float32Array(queryEmbedding)
         const buffer = Buffer.from(float32Embedding.buffer)
-        semanticMatches = this.sqlite.prepare(
-          `SELECT symbol_id, distance 
+        semanticMatches = this.sqlite
+          .prepare(
+            `SELECT symbol_id, distance 
            FROM vec_symbols 
            WHERE embedding MATCH ? 
            ORDER BY distance 
-           LIMIT ?`
-        ).all(buffer, limitVal * 2) as Array<{ symbol_id: string; distance: number }>
+           LIMIT ?`,
+          )
+          .all(buffer, limitVal * 2) as Array<{
+          symbol_id: string
+          distance: number
+        }>
       } catch (err) {
         logError('Error running semantic query on vec_symbols:', err)
       }
     }
 
     // Combine results using Reciprocal Rank Fusion (RRF)
-    const scores = new Map<string, { symbol: IndexedSymbol['Select']; textRank: number; semanticRank: number }>()
+    const scores = new Map<
+      string,
+      {
+        symbol: IndexedSymbol['Select']
+        textRank: number
+        semanticRank: number
+      }
+    >()
 
     const getRecord = (id: string, sym: IndexedSymbol['Select']) => {
       if (!scores.has(id)) {
-        scores.set(id, { symbol: sym, textRank: Infinity, semanticRank: Infinity })
+        scores.set(id, {
+          symbol: sym,
+          textRank: Infinity,
+          semanticRank: Infinity,
+        })
       }
       return scores.get(id)!
     }
@@ -965,7 +1016,8 @@ export class IndexerDB {
     const sorted = Array.from(scores.values())
       .map((rec) => {
         const textScore = rec.textRank === Infinity ? 0 : 1 / (K + rec.textRank)
-        const semanticScore = rec.semanticRank === Infinity ? 0 : 1 / (K + rec.semanticRank)
+        const semanticScore =
+          rec.semanticRank === Infinity ? 0 : 1 / (K + rec.semanticRank)
         return {
           symbol: rec.symbol,
           score: textScore + semanticScore,
@@ -977,12 +1029,23 @@ export class IndexerDB {
     return sorted
   }
 
+  /** Deletes the embedding for a symbol from the vec_symbols table. */
+  async deleteSymbolEmbedding(symbolId: string): Promise<void> {
+    try {
+      this.preparedVectorSymbolsDelete?.run(symbolId)
+    } catch (err) {
+      logError(`Failed to delete embedding for symbol ${symbolId}:`, err)
+    }
+  }
+
   /**===========
    * Exceptions & Env Vars Operations
    * ===========*/
 
   /** Upserts exceptions into the database. */
-  async upsertExceptions(exceptionsData: Array<typeof schema.exceptions.$inferInsert>) {
+  async upsertExceptions(
+    exceptionsData: Array<typeof schema.exceptions.$inferInsert>,
+  ) {
     if (
       exceptionsData.length === 0 ||
       !this.preparedExceptionDelete ||
@@ -1026,7 +1089,14 @@ export class IndexerDB {
   }
 
   /** Traverses the call graph downstream from a symbol and collects all exceptions thrown along the path. */
-  async getExceptionsBubbleUp(symbolName: string): Promise<Array<{ symbol_name: string; file_path: string; line: number; exception_type: string }>> {
+  async getExceptionsBubbleUp(symbolName: string): Promise<
+    Array<{
+      symbol_name: string
+      file_path: string
+      line: number
+      exception_type: string
+    }>
+  > {
     const startSymbols = await this.getSymbolsByNames([symbolName])
     if (startSymbols.length === 0) return []
 
@@ -1049,19 +1119,35 @@ export class IndexerDB {
     }
 
     const placeholders = allSymbolIds.map(() => '?').join(',')
-    const rows = this.sqlite.prepare(`
+    const rows = this.sqlite
+      .prepare(
+        `
       SELECT s.name AS symbol_name, e.file_path, e.line, e.exception_type
       FROM exceptions e
       JOIN symbols s ON e.symbol_id = s.id
       WHERE e.symbol_id IN (${placeholders})
       ORDER BY e.file_path, e.line
-    `).all(...allSymbolIds) as Array<{ symbol_name: string; file_path: string; line: number; exception_type: string }>
+    `,
+      )
+      .all(...allSymbolIds) as Array<{
+      symbol_name: string
+      file_path: string
+      line: number
+      exception_type: string
+    }>
 
     return rows
   }
 
   /** Traverses the call graph downstream from a symbol and collects all environment variables accessed along the path. */
-  async getEnvVarsBubbleUp(symbolName: string): Promise<Array<{ symbol_name: string; file_path: string; line: number; env_var_name: string }>> {
+  async getEnvVarsBubbleUp(symbolName: string): Promise<
+    Array<{
+      symbol_name: string
+      file_path: string
+      line: number
+      env_var_name: string
+    }>
+  > {
     const startSymbols = await this.getSymbolsByNames([symbolName])
     if (startSymbols.length === 0) return []
 
@@ -1084,13 +1170,22 @@ export class IndexerDB {
     }
 
     const placeholders = allSymbolIds.map(() => '?').join(',')
-    const rows = this.sqlite.prepare(`
+    const rows = this.sqlite
+      .prepare(
+        `
       SELECT s.name AS symbol_name, ev.file_path, ev.line, ev.name AS env_var_name
       FROM env_vars ev
       JOIN symbols s ON ev.symbol_id = s.id
       WHERE ev.symbol_id IN (${placeholders})
       ORDER BY ev.file_path, ev.line
-    `).all(...allSymbolIds) as Array<{ symbol_name: string; file_path: string; line: number; env_var_name: string }>
+    `,
+      )
+      .all(...allSymbolIds) as Array<{
+      symbol_name: string
+      file_path: string
+      line: number
+      env_var_name: string
+    }>
 
     return rows
   }
