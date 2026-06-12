@@ -48,7 +48,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
       try {
         const name = target as string
 
-        const allFiles = await store.getAllFiles()
+        const allFiles = await store.files.getAll()
         const testFilePaths = new Set(
           allFiles
             .filter((f) => TEST_RE?.some((re) => re.test(f.path)))
@@ -70,7 +70,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
 
         // Module importers (when target looks like a file path)
         if (name.includes('/')) {
-          const importers = await store.getImporters(name)
+          const importers = await store.imports.getImporters(name)
           const testFileImporters = importers.filter((imp) =>
             testFilePaths.has(imp.file_path),
           )
@@ -83,7 +83,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
 
         // Call-level references (when target looks like a symbol name)
         if (!name.includes('/')) {
-          const callers = await store.getCallers(name)
+          const callers = await store.calls.getCallers(name)
           for (const c of callers) {
             if (testFilePaths.has(c.callerFile)) {
               const reasons = found.get(c.callerFile) ?? []
@@ -95,7 +95,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
           }
 
           // Also try as imported name
-          const importRefs = await store.getImportsByName(name)
+          const importRefs = await store.imports.getByName(name)
           for (const imp of importRefs) {
             if (testFilePaths.has(imp.file_path)) {
               const reasons = found.get(imp.file_path) ?? []

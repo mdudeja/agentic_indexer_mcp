@@ -54,7 +54,7 @@ export function registerGetFileDetailsTool(server: McpServer) {
     }) => {
       const store = IndexerDB.getInstance()
       try {
-        const files = await store.getFileByPartialNameOrPath(
+        const files = await store.files.getByPartialNameOrPath(
           file_path_or_file_name,
         )
         if (files.length === 0) {
@@ -82,7 +82,7 @@ export function registerGetFileDetailsTool(server: McpServer) {
 
         const fileRecord = files[0]
 
-        const allSymbols = await store.getSymbolsForFile(fileRecord!.path)
+        const allSymbols = await store.symbols.getForFile(fileRecord!.path)
 
         if (allSymbols.length === 0) {
           return {

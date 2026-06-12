@@ -47,7 +47,7 @@ export function registerSearchSymbolsTool(server: McpServer) {
     async ({ query, kind, file_pattern, limit }) => {
       const store = IndexerDB.getInstance()
       try {
-        const results = await store.searchSymbols(
+        const results = await store.symbols.search(
           query as string,
           kind as SymbolKind | 'all',
           file_pattern as string | undefined,

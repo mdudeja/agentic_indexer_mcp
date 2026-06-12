@@ -5,8 +5,8 @@ import {
   type ExtractionResult,
   extractCallDocstring,
 } from './LanguageAdapter'
-import { randomUUIDv7, hash } from 'bun'
-import { hashSymbol } from 'src/utils/misc'
+import { randomUUIDv7 } from 'bun'
+import { hashSymbol } from 'src/utils/hashers'
 
 export class LuaAdapter implements LanguageAdapter {
   extract(matches: QueryMatch[], file_path: string): ExtractionResult {

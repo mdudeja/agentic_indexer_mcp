@@ -63,7 +63,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
         // Resolve file record once; shared by both directions
         let fileRecord: IndexedFile['Select'] | null = null
         if (file_path_or_file_name) {
-          const files = await store.getFileByPartialNameOrPath(
+          const files = await store.files.getByPartialNameOrPath(
             file_path_or_file_name,
           )
           if (files.length === 0) {
@@ -91,7 +91,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
         }
 
         if (dir === 'outbound' || dir === 'both') {
-          const startSymbols = await store.searchSymbols(
+          const startSymbols = await store.symbols.search(
             name,
             undefined,
             fileRecord?.path,
@@ -131,7 +131,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
         if (dir === 'both') lines.push('')
 
         if (dir === 'inbound' || dir === 'both') {
-          const inboundSymbols = await store.searchSymbols(
+          const inboundSymbols = await store.symbols.search(
             name,
             undefined,
             fileRecord?.path,
@@ -166,10 +166,10 @@ export function registerTraceCallGraphTool(server: McpServer) {
 
         // usage computation
         const filePathsOut = (
-          await store.getSymbolsByIds(Array.from(visitedOut))
+          await store.symbols.getSymbolsByIds(Array.from(visitedOut))
         ).map((def) => def.file_path)
         const filePathsIn = (
-          await store.getSymbolsByNames(Array.from(visitedIn))
+          await store.symbols.getSymbolsByNames(Array.from(visitedIn))
         ).map((def) => def.file_path)
         const uniqueFilePaths = new Set([...filePathsOut, ...filePathsIn])
 
@@ -216,14 +216,14 @@ async function buildOutbound(
   if (currentDepth >= maxDepth) return
 
   const [directCalls, children] = await Promise.all([
-    store.getCallsForSymbols([symbolId]),
-    store.getChildSymbols(symbolId),
+    store.calls.getForSymbols([symbolId]),
+    store.symbols.getChildSymbols(symbolId),
   ])
 
   // Pre-filter children to only those with outbound calls
   const childrenWithCalls = await Promise.all(
     children.map(async (child) => {
-      const childCalls = await store.getCallsForSymbols([child.id])
+      const childCalls = await store.calls.getForSymbols([child.id])
       return childCalls.length > 0 ? child : null
     }),
   ).then((results) => results.filter((c) => c !== null))
@@ -246,7 +246,7 @@ async function buildOutbound(
         )
         continue
       }
-      const callee = await store.getDefinition(call.callee_id)
+      const callee = await store.symbols.getDefinition(call.callee_id)
       if (callee) {
         lines.push(
           `${prefix}${connector} ${callee.name} (${callee.file_path}:${callee.line + 1}) ${docstringNote}`,
@@ -272,7 +272,7 @@ async function buildOutbound(
     }
 
     if (call.imports_id) {
-      const imp = await store.getImportById(call.imports_id)
+      const imp = await store.imports.getById(call.imports_id)
       if (imp) {
         lines.push(
           `${prefix}${connector} ${call.callee_name} (${imp.imported_name} from ${imp.module_path}) ${docstringNote}`,
@@ -339,7 +339,7 @@ async function buildInbound(
 
   if (currentDepth >= maxDepth) return
 
-  const callers = await store.getCallersNested(symbolName)
+  const callers = await store.calls.getCallersNested(symbolName)
   if (callers.length === 0) return
 
   // Separate direct callers (childName == null) from callers-via-children

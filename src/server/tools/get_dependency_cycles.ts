@@ -42,10 +42,10 @@ export function registerGetDependencyCyclesTool(server: McpServer) {
         const maxCycles = (max_cycles as number) ?? 20
 
         // Build the file-level import graph restricted to indexed files
-        const allFiles = await store.getAllFiles()
+        const allFiles = await store.files.getAll()
         const filePathSet = new Set(allFiles.map((f) => f.path))
 
-        const allImports = await store.getAllImports()
+        const allImports = await store.imports.getAll()
 
         // adjacency: from → Set<to> (both must be indexed files)
         const adj = new Map<string, Set<string>>()

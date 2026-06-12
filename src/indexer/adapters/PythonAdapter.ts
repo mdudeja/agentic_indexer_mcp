@@ -5,7 +5,7 @@ import {
   type ExtractionResult,
   extractCallDocstring,
 } from './LanguageAdapter'
-import { randomUUIDv7, hash } from 'bun'
+import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
 
 export class PythonAdapter implements LanguageAdapter {

@@ -64,10 +64,10 @@ export function registerGetCouplingMetricsTool(server: McpServer) {
         const minSymbols = (min_symbols as number) ?? 1
 
         // Get all indexed files and imports
-        const allFiles = await store.getAllFiles()
+        const allFiles = await store.files.getAll()
         const filePathSet = new Set(allFiles.map((f) => f.path))
-        const allImports = await store.getAllImports()
-        const allSymbols = await store.getAllSymbols()
+        const allImports = await store.imports.getAll()
+        const allSymbols = await store.symbols.getAll()
 
         // Build Ce (efferent) and Ca (afferent) maps — only intra-project edges
         const ceMap = new Map<string, Set<string>>() // file → set of files it imports

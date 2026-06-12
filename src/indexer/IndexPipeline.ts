@@ -135,23 +135,23 @@ export class IndexPipeline {
       const content = await Bun.file(absPath).text()
       const hash = hashFileContent(content)
 
-      const currentHash = await this.options.store.getFileHash(relPath)
+      const currentHash = await this.options.store.files.getHash(relPath)
       if (currentHash === hash) return null
 
       const parsed = await this.indexer.parse(content, ext, relPath)
       if (!parsed) return null
 
-      await this.options.store.upsertFile({
+      await this.options.store.files.upsert({
         path: relPath,
         hash,
         language: this.config.extnToLangMap[ext] || 'unknown',
         estimated_tokens: Math.ceil(content.length / 4),
       })
-      await this.options.store.upsertSymbols(parsed.symbols)
-      await this.options.store.upsertCalls(parsed.calls)
-      await this.options.store.upsertImports(parsed.imports)
-      await this.options.store.upsertExceptions(parsed.exceptions)
-      await this.options.store.upsertEnvVars(parsed.envVars)
+      await this.options.store.symbols.upsert(parsed.symbols)
+      await this.options.store.calls.upsert(parsed.calls)
+      await this.options.store.imports.upsert(parsed.imports)
+      await this.options.store.analysis.upsertExceptions(parsed.exceptions)
+      await this.options.store.analysis.upsertEnvVars(parsed.envVars)
       logInfo(
         `[Indexer] Indexed ${relPath} with ${parsed.symbols.length} symbols, ${parsed.imports.length} imports, ${parsed.calls.length} calls, ${parsed.exceptions.length} exceptions, and ${parsed.envVars.length} env vars.`,
       )
@@ -336,7 +336,9 @@ export class IndexPipeline {
     }
 
     const symbols =
-      await this.options.store.getSymbolsNeedingEmbeddings(processedFiles)
+      await this.options.store.embeddings.getSymbolsNeedingEmbeddings(
+        processedFiles,
+      )
     if (symbols.length === 0) {
       logInfo('[Indexer] No symbols need embeddings. Step 4 complete.')
       return
@@ -365,7 +367,7 @@ export class IndexPipeline {
 
       const vector = await embedder.getEmbedding(textToEmbed)
       if (vector) {
-        await this.options.store.upsertSymbolEmbedding(symbol.id, vector)
+        await this.options.store.embeddings.upsert(symbol.id, vector)
         successCount++
       }
     }

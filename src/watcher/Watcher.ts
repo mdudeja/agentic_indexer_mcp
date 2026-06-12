@@ -43,7 +43,7 @@ export class Watcher {
       })
       .on('unlink', async (path) => {
         const relPath = relative(this.cwd, path)
-        await db.deleteFile(relPath)
+        await db.files.delete(relPath)
         logInfo(`[watcher] Unlinked file: ${relPath}`)
       })
       .on('error', (error) => logError(`[watcher] Error: ${error}`))

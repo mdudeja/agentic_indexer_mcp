@@ -93,10 +93,10 @@ export function registerAuditAgentConfigTool(server: McpServer) {
           process.cwd()
 
         // Load indexed paths and symbol names for reference lookup
-        const allFiles = await store.getAllFiles()
+        const allFiles = await store.files.getAll()
         const filePathSet = new Set(allFiles.map((f) => f.path))
 
-        const allSymbols = await store.getAllSymbols()
+        const allSymbols = await store.symbols.getAll()
         const symbolNameSet = new Set(allSymbols.map((s) => s.name))
 
         const results: string[] = []

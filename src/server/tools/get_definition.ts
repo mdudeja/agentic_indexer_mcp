@@ -54,9 +54,9 @@ export function registerGetDefinitionTool(server: McpServer) {
         let symbol: IndexedSymbol['Select'] | null = null
 
         if (symbol_id) {
-          symbol = await store.getDefinition(symbol_id as string)
+          symbol = await store.symbols.getDefinition(symbol_id as string)
         } else if (name && file_path_or_name) {
-          const files = await store.getFileByPartialNameOrPath(
+          const files = await store.files.getByPartialNameOrPath(
             file_path_or_name ?? '',
           )
           if (files.length === 0) {
@@ -81,7 +81,7 @@ export function registerGetDefinitionTool(server: McpServer) {
             }
           }
           fileRecord = files[0] ?? null
-          symbol = await store.getDefinitionByName(
+          symbol = await store.symbols.getDefinitionByName(
             name as string,
             fileRecord!.path,
           )

@@ -38,7 +38,7 @@ export function registerGetBlastRadiusTool(server: McpServer) {
       const store = IndexerDB.getInstance()
       try {
         const name = symbol_name as string
-        const startSymbols = await store.searchSymbols(
+        const startSymbols = await store.symbols.search(
           name,
           'all',
           file_pattern as string | undefined,
@@ -82,7 +82,7 @@ export function registerGetBlastRadiusTool(server: McpServer) {
           if (visited.has(current.name)) continue
           visited.add(current.name)
 
-          const callers = await store.getCallersNested(current.name)
+          const callers = await store.calls.getCallersNested(current.name)
           for (const c of callers) {
             allCallers.push(c)
             queue.push({ name: c.callerName })
@@ -108,7 +108,7 @@ export function registerGetBlastRadiusTool(server: McpServer) {
 
         // usage computation
         const filePaths = (
-          await store.getSymbolsByNames(Array.from(visited))
+          await store.symbols.getSymbolsByNames(Array.from(visited))
         ).map((s) => s.file_path)
         const uniqueFilePaths = Array.from(new Set(filePaths))
         await updateUsage('get_blast_radius', uniqueFilePaths, output.length)

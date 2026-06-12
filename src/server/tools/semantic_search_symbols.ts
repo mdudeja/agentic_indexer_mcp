@@ -53,7 +53,7 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
           )
         }
 
-        const results = await store.searchSymbolsHybrid(
+        const results = await store.symbols.searchSymbolsHybrid(
           query as string,
           embedding,
           kind as SymbolKind | 'all',

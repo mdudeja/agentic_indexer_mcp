@@ -19,7 +19,7 @@ export function registerGetTokenSavingsTool(server: McpServer) {
     () => {
       const store = IndexerDB.getInstance()
       try {
-        const stats = store.getTokenSavings()
+        const stats = store.toolUsage.getTokenSavings()
 
         if (stats.total_calls === 0) {
           return {
@@ -62,7 +62,10 @@ export function registerGetTokenSavingsTool(server: McpServer) {
       } catch (err) {
         return {
           content: [
-            { type: 'text' as const, text: `Error fetching token savings: ${err}` },
+            {
+              type: 'text' as const,
+              text: `Error fetching token savings: ${err}`,
+            },
           ],
           isError: true,
         }

@@ -30,7 +30,7 @@ export class DocstringGenerationStep {
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
-    const symbols = await store.getSymbolsNeedingDocstrings(targetKinds)
+    const symbols = await store.symbols.getSymbolsNeedingDocstrings(targetKinds)
     if (symbols.length === 0) {
       logInfo('[Indexer] No symbols need docstrings. Step 3 complete.')
       return
@@ -80,7 +80,7 @@ export class DocstringGenerationStep {
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
-    const fileSymbols = await store.getSymbolsNeedingDocstringsForFile(
+    const fileSymbols = await store.symbols.getSymbolsNeedingDocstringsForFile(
       relativePath,
       targetKinds,
     )
@@ -113,14 +113,14 @@ export class DocstringGenerationStep {
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
-    const symbols = await store.getSymbolsWithDocstrings(targetKinds)
+    const symbols = await store.symbols.getSymbolsWithDocstrings(targetKinds)
     if (symbols.length === 0) {
       logInfo('[Indexer] No symbols have docstrings to remove.')
       return
     }
 
     for (const sym of symbols) {
-      await store.deleteSymbolDocstring(sym.id)
+      await store.symbols.deleteDocstring(sym.id)
     }
 
     logInfo(
@@ -272,7 +272,7 @@ export class DocstringGenerationStep {
         continue
       }
 
-      await store.updateSymbolDocstring(
+      await store.symbols.updateDocstring(
         sym.id,
         getCommentText(cleanedDocstring),
       )

@@ -101,8 +101,8 @@ export async function registerExploreCodebaseTool(server: McpServer) {
 
         // --- 1. Fetch candidate symbols and all files ---
         const [allSymbols, allFiles] = await Promise.all([
-          store.getAllSymbols(),
-          store.getAllFiles(),
+          store.symbols.getAll(),
+          store.files.getAll(),
         ])
 
         const entryPointFiles = new Set(

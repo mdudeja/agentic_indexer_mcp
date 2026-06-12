@@ -50,7 +50,7 @@ export function registerTraceDataFlowTool(server: McpServer) {
         const name = symbol_name as string
         const db = store.getDb()
 
-        const candidates = await store.searchSymbols(
+        const candidates = await store.symbols.search(
           name,
           undefined,
           file_path as string | undefined,
@@ -111,7 +111,7 @@ export function registerTraceDataFlowTool(server: McpServer) {
         const returnSummary = target.return_type ?? 'unknown'
 
         // Producers: who calls this, passing data in
-        const callers = await store.getCallers(name)
+        const callers = await store.calls.getCallers(name)
         let callerSymbols: Array<typeof schema.symbols.$inferSelect> = []
         if (callers.length > 0) {
           const callerNames = [...new Set(callers.map((c) => c.callerName))]
@@ -123,7 +123,7 @@ export function registerTraceDataFlowTool(server: McpServer) {
         const callerMap = new Map(callerSymbols.map((s) => [s.name, s]))
 
         // Consumers: what this calls, passing data out
-        const outboundCalls = await store.getCallsForSymbols([target.id])
+        const outboundCalls = await store.calls.getForSymbols([target.id])
         const calleeOrImportIds = outboundCalls
           .filter((c) => c.callee_id != null || c.imports_id != null)
           .map((c) => ({
@@ -132,10 +132,10 @@ export function registerTraceDataFlowTool(server: McpServer) {
           }))
         const calleeOrImportSymbols = calleeOrImportIds.map(async (entry) => {
           if (entry.type === 'callee') {
-            return await store.getSymbolsByIds([entry.id!])
+            return await store.symbols.getSymbolsByIds([entry.id!])
           } else {
             // For imports, we can create a synthetic symbol record with the module path as the name
-            const importRecord = await store.getImportById(entry.id!)
+            const importRecord = await store.imports.getById(entry.id!)
             if (importRecord) {
               return [
                 {

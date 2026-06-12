@@ -63,7 +63,7 @@ export async function registerGetUntestedSymbolsTool(server: McpServer) {
             .filter((p): p is RegExp => p !== null) ?? null
 
         // Get all indexed files
-        const allFiles = await store.getAllFiles()
+        const allFiles = await store.files.getAll()
         const testFilePaths = new Set(
           allFiles
             .filter((f) => TEST_RE?.some((re) => re.test(f.path)))

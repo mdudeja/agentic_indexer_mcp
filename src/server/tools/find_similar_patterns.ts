@@ -58,7 +58,7 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
         ]
         const db = store.getDb()
 
-        const candidates = await store.searchSymbols(
+        const candidates = await store.symbols.search(
           name,
           undefined,
           file_path as string | undefined,

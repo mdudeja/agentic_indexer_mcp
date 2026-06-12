@@ -16,24 +16,24 @@ describe('SymbolStore', () => {
   })
 
   it('should upsert a file and retrieve its hash', async () => {
-    await store.upsertFile({
+    await store.files.upsert({
       path: 'src/test.ts',
       hash: 'hash123',
       language: 'typescript',
       estimated_tokens: 10,
     })
-    const hash = await store.getFileHash('src/test.ts')
+    const hash = await store.files.getHash('src/test.ts')
     expect(hash).toBe('hash123')
   })
 
   it('should update file hash on upsert', async () => {
-    await store.upsertFile({
+    await store.files.upsert({
       path: 'src/test.ts',
       hash: 'hash456',
       language: 'typescript',
       estimated_tokens: 10,
     })
-    const hash = await store.getFileHash('src/test.ts')
+    const hash = await store.files.getHash('src/test.ts')
     expect(hash).toBe('hash456')
   })
 
@@ -55,8 +55,8 @@ describe('SymbolStore', () => {
       },
     ]
 
-    await store.upsertSymbols(symbols)
-    const result = await store.getDefinition(symbolId)
+    await store.symbols.upsert(symbols)
+    const result = await store.symbols.getDefinition(symbolId)
 
     expect(result).toBeDefined()
     expect(result?.name).toBe('testFunction')
@@ -64,26 +64,26 @@ describe('SymbolStore', () => {
   })
 
   it('should search symbols by name pattern', async () => {
-    const results = await store.searchSymbols('test*')
+    const results = await store.symbols.search('test*')
     expect(results.length).toBeGreaterThan(0)
     expect(results[0]!.name).toBe('testFunction')
   })
 
   it('should get a file summary', async () => {
-    const summary = await store.getFileSummary('src/test.ts')
+    const summary = await store.files.getSummary('src/test.ts')
     expect(summary.length).toBe(1)
     expect(summary[0]!.name).toBe('testFunction')
   })
 
   it('should delete a file and cascade delete symbols', async () => {
-    await store.deleteFile('src/test.ts')
+    await store.files.delete('src/test.ts')
 
     // File should be gone
-    const hash = await store.getFileHash('src/test.ts')
+    const hash = await store.files.getHash('src/test.ts')
     expect(hash).toBeNull()
 
     // Symbols should be gone
-    const summary = await store.getFileSummary('src/test.ts')
+    const summary = await store.files.getSummary('src/test.ts')
     expect(summary.length).toBe(0)
   })
 })

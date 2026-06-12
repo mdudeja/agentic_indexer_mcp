@@ -59,7 +59,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         const name = symbol_name as string
         const sections: string[] = []
 
-        const symbols = await store.searchSymbols(
+        const symbols = await store.symbols.search(
           name,
           'all',
           file_pattern as string | undefined,
@@ -90,7 +90,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         const symbol = symbols[0]
 
         if (include_calls) {
-          allCallers = await store.getCallersNested(symbol!.name)
+          allCallers = await store.calls.getCallersNested(symbol!.name)
           if (allCallers.length > 0) {
             const callLines = allCallers.map(
               (c) =>
@@ -105,7 +105,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         }
 
         if (include_imports) {
-          importRefs = await store.getImportsByName(symbol!.name)
+          importRefs = await store.imports.getByName(symbol!.name)
           if (importRefs.length > 0) {
             const importLines = importRefs.map(
               (i) => `  - ${i.file_path} (from '${i.module_path}')`,
@@ -121,7 +121,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
         // Module-level importers when name looks like a path
         if (name.includes('/') || name.includes('.')) {
           const cleanedName = name.replace(/\//g, '').replace(/\.[\w]+$/g, '')
-          moduleImporters = await store.getImporters(cleanedName)
+          moduleImporters = await store.imports.getImporters(cleanedName)
           if (moduleImporters.length > 0) {
             const modLines = [
               ...new Set(moduleImporters.map((i) => i.file_path)),

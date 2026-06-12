@@ -54,8 +54,8 @@ export function registerResolveTypeTool(server: McpServer) {
 
         // Find type and interface definitions
         const [typeMatches, ifaceMatches] = await Promise.all([
-          store.searchSymbols(name, 'type' as SymbolKind, undefined, 10),
-          store.searchSymbols(name, 'interface' as SymbolKind, undefined, 10),
+          store.symbols.search(name, 'type' as SymbolKind, undefined, 10),
+          store.symbols.search(name, 'interface' as SymbolKind, undefined, 10),
         ])
         const definitions = [...typeMatches, ...ifaceMatches]
 
@@ -97,7 +97,7 @@ export function registerResolveTypeTool(server: McpServer) {
           .limit(resultLimit)
 
         // Find symbols that inherit from / extend / union this type
-        const inheritors = await store.getSymbolsInheritingFrom(name)
+        const inheritors = await store.symbols.getSymbolsInheritingFrom(name)
 
         const sections: string[] = []
 

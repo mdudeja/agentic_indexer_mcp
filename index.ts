@@ -155,7 +155,7 @@ async function main() {
       }
 
       logWarning(`Searching for "${values.query}" in ${cwd}...`)
-      const results = await store.searchSymbols(
+      const results = await store.symbols.search(
         values.query,
         values.kind as SymbolKind | 'all',
         undefined,

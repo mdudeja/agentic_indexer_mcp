@@ -6,7 +6,7 @@ import { SymbolKind, type IndexedSymbol } from '../src/config/types'
 async function main() {
   const store = IndexerDB.getInstance(':memory:')
   await store.init()
-  await store.upsertFile({
+  await store.files.upsert({
     path: 'test.ts',
     hash: 'abc',
     language: 'typescript',
@@ -27,8 +27,8 @@ async function main() {
       language: 'typescript',
     },
   ]
-  await store.upsertSymbols(symbols)
-  const results = await store.searchSymbols('myVar')
+  await store.symbols.upsert(symbols)
+  const results = await store.symbols.search('myVar')
   logInfo('Results:', results)
 }
 main().catch(console.error)

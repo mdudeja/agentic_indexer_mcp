@@ -50,7 +50,7 @@ export function registerGetCodebaseMapTool(server: McpServer) {
         const maxDepth = (depth as number) ?? 1
         const maxKeySymbols = (max_key_symbols as number) ?? 5
 
-        const allFiles = await store.getAllFiles()
+        const allFiles = await store.files.getAll()
         if (allFiles.length === 0) {
           return { content: [{ type: 'text', text: 'No files indexed yet.' }] }
         }

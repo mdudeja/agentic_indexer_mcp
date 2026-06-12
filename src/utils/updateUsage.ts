@@ -12,10 +12,10 @@ export async function updateUsage(
   const store = IndexerDB.getInstance()
   const sourceTokens = skipFileTokenCount
     ? filesPaths.reduce((acc, path) => acc + path.length, 0)
-    : await store.getEstimatedTokensForFiles(filesPaths)
+    : await store.files.getEstimatedTokensForPaths(filesPaths)
   const responseTokens = Math.ceil(responseLength / 4)
 
-  await store.recordToolUsage({
+  await store.toolUsage.record({
     id: randomUUIDv7(),
     tool_name: toolName,
     source_tokens: sourceTokens,
