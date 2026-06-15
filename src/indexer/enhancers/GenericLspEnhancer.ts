@@ -6,14 +6,11 @@ import { IndexerDB } from '../../database/IndexerDB.ts'
 import * as schema from '../../database/schemas/index.ts'
 import { SymbolKind } from '../../database/schemas/symbols.schema.ts'
 import { InheritenceType } from '../../database/schemas/common.schema.ts'
-import { eq, and, isNull, inArray, like } from 'drizzle-orm'
+import { eq, and, isNull, inArray, isNotNull, or } from 'drizzle-orm'
 import { join, relative } from 'path'
-import {
-  getParentsOfSymbolCall,
-  getTypeNameWithoutParent,
-  parseTypeNames,
-} from 'src/utils/misc.ts'
 import { AppStateManager } from 'src/state/index.ts'
+import { allCallableKinds } from '../../utils/allCallableKinds.ts'
+import { parseTypeNames } from 'src/utils/misc.ts'
 
 /** Enhancer implementation that connects to standard Language Servers (like Pyright or gopls) for runtime type queries. */
 export class GenericLspEnhancer implements Enhancer {
@@ -147,34 +144,13 @@ export class GenericLspEnhancer implements Enhancer {
 
     // Strip LSP prefixes like "(method)", "(alias)", "(function)"
     const cleanContent = contentToParse.replace(/^\([a-z]+\)\s*/i, '')
-    const isCall = cleanContent.includes('(') && cleanContent.includes(')')
-    const isImport =
-      cleanContent.toLowerCase().startsWith('import ') ||
-      cleanContent.includes(' from ') ||
-      cleanContent.includes(' require(')
 
-    const match = isImport
-      ? cleanContent
-          .replace(new RegExp(/import|require|from/), '')
-          .match(/([\w.]+)(?:\s+as\s+[\w.]+)?/)
-      : isCall
-        ? cleanContent.match(/\((.*?)\)(?:\s*(?:->|=>|:)\s*([^\n]*))?/)
-        : cleanContent.match(/(.*?)(?:\s*)(?:->|=>|:)\s*([^\n]*)?/)
+    const match = cleanContent.match(/(.*?)(?:\s*)(?:->|=>|:)\s*([^\n]*)?/)
 
     if (!match) return
 
     const paramsStr = match[1]?.trim()
-    const returnType = isImport
-      ? match[1]?.trim()
-      : isCall
-        ? match[2]?.replace(/:$/, '')?.replace(/\s+/g, ' ').trim()
-        : parseTypeNames(
-            match[2]
-              ?.replace(/:$/, '')
-              ?.replace(/\s+/g, ' ')
-              .replace(/\|\s*\S+$/g, '')
-              ?.trim() ?? '',
-          )[0]
+    const returnType = match[2]?.replace(/:$/, '')?.replace(/\s+/g, ' ').trim()
 
     return { paramsStr, returnType }
   }
@@ -547,63 +523,6 @@ export class GenericLspEnhancer implements Enhancer {
     )
   }
 
-  private async resolveCallViaDb(
-    db: ReturnType<IndexerDB['getDb']>,
-    callerFilePath: string,
-    calleeName: string,
-    callId: string,
-    call_text: string,
-  ): Promise<boolean> {
-    const symbolCallParents = getParentsOfSymbolCall(call_text, calleeName)
-    const importRecords = await db
-      .select({
-        id: schema.imports.id,
-        module_path: schema.imports.module_path,
-      })
-      .from(schema.imports)
-      .where(
-        and(
-          eq(schema.imports.file_path, callerFilePath),
-          inArray(schema.imports.imported_name, [
-            ...symbolCallParents,
-            calleeName,
-          ]),
-        ),
-      )
-      .limit(1)
-
-    if (importRecords.length > 0) {
-      const { id: importId, module_path } = importRecords[0]!
-      const targetSymbols = await db
-        .select({ id: schema.symbols.id })
-        .from(schema.symbols)
-        .where(
-          and(
-            like(schema.symbols.file_path, module_path + '%'),
-            eq(schema.symbols.name, calleeName),
-            eq(schema.symbols.language, this.languageId),
-          ),
-        )
-        .limit(1)
-
-      if (targetSymbols.length > 0) {
-        await db
-          .update(schema.symbol_calls)
-          .set({ callee_id: targetSymbols[0]!.id })
-          .where(eq(schema.symbol_calls.id, callId))
-        return true
-      }
-
-      await db
-        .update(schema.symbol_calls)
-        .set({ imports_id: importId })
-        .where(eq(schema.symbol_calls.id, callId))
-      return true
-    }
-
-    return false
-  }
-
   async resolveAllPendingCalls(relPaths: string[]): Promise<void> {
     if (!this.available || !this.client) {
       return
@@ -614,187 +533,135 @@ export class GenericLspEnhancer implements Enhancer {
     )
 
     const db = IndexerDB.getInstance().getDb()
+    const totalUnresolvedSymbolCallsCount = await db.$count(
+      schema.symbol_calls,
+      and(
+        eq(schema.symbol_calls.language_name, this.languageId),
+        isNull(schema.symbol_calls.callee_id),
+        isNull(schema.symbol_calls.imports_id),
+        relPaths.length > 0
+          ? inArray(schema.symbol_calls.caller_file_path, relPaths)
+          : undefined,
+      ),
+    )
+    logInfo(
+      `[LSP Enhancer] Found ${totalUnresolvedSymbolCallsCount} pending symbol calls to resolve.`,
+    )
 
-    const calls = await db
+    const callableKinds = await allCallableKinds()
+    const callableSymbols = await db
       .select()
-      .from(schema.symbol_calls)
+      .from(schema.symbols)
       .where(
         and(
-          isNull(schema.symbol_calls.callee_id),
-          isNull(schema.symbol_calls.imports_id),
-          eq(schema.symbol_calls.language_name, this.languageId),
-          relPaths.length > 0
-            ? inArray(schema.symbol_calls.caller_file_path, relPaths)
-            : undefined,
+          eq(schema.symbols.language, this.languageId),
+          inArray(schema.symbols.kind, callableKinds),
         ),
       )
 
-    logInfo(`[LSP Enhancer] Found ${calls.length} calls to resolve.`)
-    let resolvedCount = 0
+    const symbolIdToReferencesMap = new Map<
+      string,
+      Array<{
+        name: string
+        file_path: string
+        line: number
+        column: number
+      }>
+    >()
 
-    // Pass 1: resolve via imports table + direct name match (no LSP needed).
-    const unresolved: typeof calls = []
-    for (const call of calls) {
-      const resolved = await this.resolveCallViaDb(
-        db,
-        call.caller_file_path,
-        call.callee_name,
-        call.id,
-        call.call_text,
+    for (const sym of callableSymbols) {
+      const references = await this.getReferencesForSymbol(
+        sym.name,
+        join(this.cwd, sym.file_path),
+        sym.line,
+        sym.column,
       )
-      if (resolved) {
-        resolvedCount++
-      } else {
-        unresolved.push(call)
+
+      if (!references || references.length === 0) continue
+
+      symbolIdToReferencesMap.set(sym.id, [
+        ...(symbolIdToReferencesMap.get(sym.id) ?? []),
+        ...references,
+      ])
+    }
+
+    for (const [symbolId, references] of symbolIdToReferencesMap.entries()) {
+      for (const ref of references) {
+        await db
+          .update(schema.symbol_calls)
+          .set({ callee_id: symbolId })
+          .where(
+            and(
+              eq(schema.symbol_calls.language_name, this.languageId),
+              eq(schema.symbol_calls.caller_file_path, ref.file_path),
+              eq(schema.symbol_calls.call_line, ref.line),
+              eq(schema.symbol_calls.call_column, ref.column),
+              isNull(schema.symbol_calls.callee_id),
+              isNull(schema.symbol_calls.imports_id),
+            ),
+          )
       }
     }
 
-    logInfo(
-      `[LSP Enhancer] Pass 1 resolved ${resolvedCount}/${calls.length} calls. ${unresolved.length} remain for LSP.`,
+    const resolvedCount = await db.$count(
+      schema.symbol_calls,
+      and(
+        eq(schema.symbol_calls.language_name, this.languageId),
+        or(
+          isNotNull(schema.symbol_calls.callee_id),
+          isNotNull(schema.symbol_calls.imports_id),
+        ),
+        relPaths.length > 0
+          ? inArray(schema.symbol_calls.caller_file_path, relPaths)
+          : undefined,
+      ),
     )
 
-    // Pass 2: LSP fallback for calls that couldn't be resolved via the DB.
-    for (const call of unresolved) {
-      if (call.call_line == null || call.call_column == null) continue
-
-      const resolved = await this.updateCalleeInfoViaDefinition(call)
-      if (resolved) {
-        unresolved.splice(unresolved.indexOf(call), 1)
-        resolvedCount++
-      }
-    }
-
-    // Pass 3: LSP fallback for calls that couldn't be resolved via the DB or definition, using hover info.
-    const updatedResolvedCount = await this.updateCalleeInfoViaHover(
-      unresolved,
-      resolvedCount,
-    )
-
-    if (updatedResolvedCount !== undefined) {
-      resolvedCount = updatedResolvedCount
-    }
-
     logInfo(
-      `[LSP Enhancer] Resolved ${resolvedCount} out of ${calls.length} total calls.`,
+      `[LSP Enhancer] Resolved ${resolvedCount} symbol calls out of approximately ${totalUnresolvedSymbolCallsCount} pending calls.`,
     )
   }
 
-  private async updateCalleeInfoViaDefinition(
-    call: schema.IndexedSymbolCall['Select'],
-  ): Promise<boolean> {
+  private async getReferencesForSymbol(
+    name: string,
+    absPath: string,
+    line: number,
+    column: number,
+  ): Promise<
+    { name: string; file_path: string; line: number; column: number }[]
+  > {
     if (
-      !this.available ||
       !this.client ||
-      !this.supports('definitionProvider')
+      !this.available ||
+      !this.supports('referencesProvider')
     ) {
-      return false
+      return []
     }
 
-    const db = IndexerDB.getInstance().getDb()
-    const absPath = join(this.cwd, call.caller_file_path)
     this.ensureFileOpen(absPath)
 
     try {
-      const response = await this.client.request('textDocument/definition', {
+      const response = await this.client.request('textDocument/references', {
         textDocument: { uri: `file://${absPath}` },
-        position: { line: call.call_line, character: call.call_column },
+        position: { line, character: column },
+        context: { includeDeclaration: false },
       })
-      if (!response) return false
 
-      const targetLocation =
-        Array.isArray(response) && response.length > 0 ? response[0] : response
+      if (!response || !Array.isArray(response)) return []
 
-      if (!targetLocation?.uri) return false
-
-      const targetAbsPath = targetLocation.uri.replace('file://', '')
-
-      const relPath = relative(this.cwd, targetAbsPath)
-      const targetLine =
-        targetLocation.targetSelectionRange?.start?.line ??
-        targetLocation.range?.start?.line
-
-      if (targetLine === undefined) return false
-
-      const targetSymbols = await db
-        .select({ id: schema.symbols.id })
-        .from(schema.symbols)
-        .where(
-          and(
-            eq(schema.symbols.file_path, relPath),
-            eq(schema.symbols.line, targetLine),
-          ),
-        )
-        .limit(1)
-
-      if (targetSymbols.length === 0) return false
-
-      await db
-        .update(schema.symbol_calls)
-        .set({ callee_id: targetSymbols[0]!.id })
-        .where(eq(schema.symbol_calls.id, call.id))
-      return true
+      return response.map((loc) => ({
+        name,
+        file_path: relative(this.cwd, loc.uri.replace('file://', '')),
+        line: loc.range.start.line,
+        column: loc.range.start.character,
+      }))
     } catch (err) {
       logError(
-        `[LSP Enhancer] Failed definition request for call ${call.id}`,
+        `[LSP Enhancer - ${this.languageId}] References request failed for ${absPath}:${line}:${column}`,
         err,
       )
-      return false
+      return []
     }
-  }
-
-  private async updateCalleeInfoViaHover(
-    calls: Array<schema.IndexedSymbolCall['Select']>,
-    resolvedCount: number,
-  ): Promise<number | void> {
-    if (!this.available || !this.client || !this.supports('hoverProvider')) {
-      return
-    }
-
-    const db = IndexerDB.getInstance().getDb()
-
-    const typeNamesToResolve: Map<
-      string,
-      Array<schema.IndexedSymbolCall['Select']>
-    > = new Map()
-
-    for (const call of calls) {
-      if (call.call_line == null || call.call_column == null) continue
-
-      const absPath = join(this.cwd, call.caller_file_path)
-      const hoverStr = await this.getTypeAtLocation(
-        absPath,
-        call.call_line,
-        call.call_column - 2, // adjust column to point to the parent
-      )
-      if (!hoverStr) continue
-
-      const signatureInfo = this.convertHoverStringToSignature(hoverStr)
-      if (!signatureInfo || !signatureInfo.returnType) continue
-
-      const returnType = getTypeNameWithoutParent(signatureInfo.returnType)
-      if (!typeNamesToResolve.has(returnType)) {
-        typeNamesToResolve.set(returnType, [])
-      }
-      typeNamesToResolve.get(returnType)!.push(call)
-    }
-
-    if (!typeNamesToResolve.size) return
-
-    for (const [typeName, calls] of typeNamesToResolve.entries()) {
-      for (const call of calls) {
-        const resolved = await this.resolveCallViaDb(
-          db,
-          call.caller_file_path,
-          typeName,
-          call.id,
-          call.call_text,
-        )
-        if (resolved) {
-          resolvedCount++
-        }
-      }
-    }
-    return resolvedCount
   }
 
   /** Stops the background LSP process when disposing resources. */
