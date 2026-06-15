@@ -3,11 +3,14 @@ import { getColumns } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { ToolUsageRecord } from '../schemas'
 
+/** Records and analyzes the usage of tools, tracking metrics such as token usage and providing summarized insights. */
 export class ToolUsageRepository {
   private toolUsageInsert: Statement | null = null
 
+  /** Initializes a new instance of the class with the specified SQLite database. */
   constructor(private sqlite: Database) {}
 
+  /** Initializes a prepared SQL statement for inserting tool usage data into the database. */
   initStatements() {
     const cols = Object.keys(getColumns(schema.tool_usage))
     this.toolUsageInsert = this.sqlite.prepare(
@@ -15,11 +18,13 @@ export class ToolUsageRepository {
     )
   }
 
+  /** "Records the usage of a tool by inserting data into a database." */
   async record(data: ToolUsageRecord['Insert']): Promise<void> {
     const cols = Object.keys(getColumns(schema.tool_usage))
     this.toolUsageInsert?.run(...cols.map((col) => (data as any)[col] ?? null))
   }
 
+  /** Calculates and returns summarized token usage savings, including total metrics and per-tool breakdowns. */
   getTokenSavings(): {
     total_calls: number
     total_tokens_saved: number

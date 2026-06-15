@@ -4,18 +4,21 @@ import * as schema from '../schemas'
 import type { SymbolRepository } from './SymbolRepository'
 import type { CallRepository } from './CallRepository'
 
+/** A class managing database interactions and operations related to exceptions and environment variables, providing functionality to upsert records and retrieve information linked to specific symbols. */
 export class AnalysisRepository {
   private exceptionDelete: Statement | null = null
   private exceptionInsert: Statement | null = null
   private envVarDelete: Statement | null = null
   private envVarInsert: Statement | null = null
 
+  /** Initializes an object with dependencies for managing database interactions and symbol/call repositories. */
   constructor(
     private sqlite: Database,
     private symbols: SymbolRepository,
     private calls: CallRepository,
   ) {}
 
+  /** Initializes prepared SQL statements for database operations related to exceptions and environment variables. */
   initStatements() {
     const excCols = Object.keys(getColumns(schema.exceptions))
     this.exceptionDelete = this.sqlite.prepare(
@@ -34,6 +37,7 @@ export class AnalysisRepository {
     )
   }
 
+  /** "Upserts exception entries by deleting any existing records for each file path and then inserting the new exceptions." */
   async upsertExceptions(
     exceptionsData: Array<typeof schema.exceptions.$inferInsert>,
   ): Promise<void> {
@@ -56,6 +60,7 @@ export class AnalysisRepository {
     })()
   }
 
+  /** Updates or inserts environment variable data based on file paths, ensuring existing entries are replaced and new ones are added where necessary. */
   async upsertEnvVars(
     envVarsData: Array<typeof schema.env_vars.$inferInsert>,
   ): Promise<void> {
@@ -71,6 +76,7 @@ export class AnalysisRepository {
     })()
   }
 
+  /** Retrieves all exceptions associated with a specific symbol, detailing their occurrence locations and types. */
   async getExceptionsBubbleUp(symbolName: string): Promise<
     Array<{
       symbol_name: string
@@ -98,6 +104,7 @@ export class AnalysisRepository {
     }>
   }
 
+  /** Retrieves all environment variables referenced by the specified symbol, including their usage locations in the codebase. */
   async getEnvVarsBubbleUp(symbolName: string): Promise<
     Array<{
       symbol_name: string
@@ -125,6 +132,7 @@ export class AnalysisRepository {
     }>
   }
 
+  /** Identifies all symbol IDs reachable from the given symbol name by traversing outbound calls. */
   private async getReachableSymbolIds(symbolName: string): Promise<string[]> {
     const startSymbols = await this.symbols.getSymbolsByNames([symbolName])
     if (!startSymbols.length) return []

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "164bf3d0-9eea-4102-a366-baa59eefd746",
+  "id": "9fcd064f-d885-4595-a613-c9639c608494",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -520,17 +520,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "inherits_from_names",
-      "entityType": "columns",
-      "table": "symbols"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "inheritence_type",
+      "name": "inheritence",
       "entityType": "columns",
       "table": "symbols"
     },

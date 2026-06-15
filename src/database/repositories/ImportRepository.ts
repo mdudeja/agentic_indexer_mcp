@@ -4,15 +4,18 @@ import { eq, like, and, getColumns } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedImport } from '../schemas'
 
+/** A class managing import data storage and retrieval using a database. */
 export class ImportRepository {
   private importDelete: Statement | null = null
   private importInsert: Statement | null = null
 
+  /** Initializes a new instance with SQLite database dependencies. */
   constructor(
     private sqlite: Database,
     private db: SQLiteBunDatabase<typeof schema>,
   ) {}
 
+  /** Initialize prepared SQL statements for managing import operations. */
   initStatements() {
     const cols = Object.keys(getColumns(schema.imports))
     this.importDelete = this.sqlite.prepare(
@@ -23,6 +26,7 @@ export class ImportRepository {
     )
   }
 
+  /** Ensures that the provided import data exists in the database. If records exist, they are updated; if not, new records are inserted. This operation is performed within a transaction to avoid race conditions, ensuring consistency when handling multiple entries from the same file path. */
   async upsert(importsData: IndexedImport['Insert'][]): Promise<void> {
     if (!importsData.length || !this.importDelete || !this.importInsert) return
 
@@ -36,6 +40,7 @@ export class ImportRepository {
     })()
   }
 
+  /** Fetches importers matching a specified module name pattern, supporting wildcard characters (*) in the pattern. */
   async getImporters(
     moduleNamePattern: string,
   ): Promise<IndexedImport['Select'][]> {
@@ -50,6 +55,7 @@ export class ImportRepository {
       )
   }
 
+  /** Retrieves an import based on its unique identifier. Returns `null` if no import with the specified ID exists. */
   async getById(id: string): Promise<IndexedImport['Select'] | null> {
     const result = await this.db
       .select()
@@ -59,6 +65,7 @@ export class ImportRepository {
     return result[0] ?? null
   }
 
+  /** Retrieves all imports with the specified name. */
   async getByName(importedName: string): Promise<IndexedImport['Select'][]> {
     return this.db
       .select()
@@ -66,6 +73,7 @@ export class ImportRepository {
       .where(eq(schema.imports.imported_name, importedName))
   }
 
+  /** "Retrieves imports that match the specified name and file path." */
   async getByNameAndFile(
     importedName: string,
     filePath: string,
@@ -82,6 +90,7 @@ export class ImportRepository {
       .orderBy(schema.imports.module_path)
   }
 
+  /** Fetches all import records from the database. */
   async getAll(): Promise<IndexedImport['Select'][]> {
     return this.db
       .select()

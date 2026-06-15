@@ -11,24 +11,28 @@ import {
   or,
   not,
   isNotNull,
+  sql,
 } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedSymbol } from '../schemas'
 import { SymbolKind } from '../schemas'
-import { InheritenceType } from '../schemas/common.schema'
+import { type Inheritence } from '../schemas/common.schema'
 import type { EmbeddingRepository } from './EmbeddingRepository'
 
+/** A class that provides database operations for managing symbol data, including insertion, deletion, retrieval, synchronization, and querying of symbols based on various criteria. */
 export class SymbolRepository {
   private symbolInsert: Statement | null = null
   private symbolDeleteById: Statement | null = null
   private symbolSelectIdsByFile: Statement | null = null
 
+  /** This constructor initializes the dependencies required for the class, including a SQLite database connection, embeddings repository, and schema utilities. */
   constructor(
     private sqlite: Database,
     private db: SQLiteBunDatabase<typeof schema>,
     private embeddings: EmbeddingRepository,
   ) {}
 
+  /** Initializes SQLite database statements for symbol-related operations. */
   initStatements() {
     const cols = Object.keys(getColumns(schema.symbols))
     this.symbolInsert = this.sqlite.prepare(
@@ -42,6 +46,7 @@ export class SymbolRepository {
     )
   }
 
+  /** This method processes a list of symbols to either insert or delete records based on whether they exist in the current dataset, ensuring synchronization with the provided data. */
   async upsert(symbolsData: IndexedSymbol['Insert'][]): Promise<void> {
     if (
       !symbolsData.length ||
@@ -86,6 +91,7 @@ export class SymbolRepository {
     })()
   }
 
+  /** Retrieves symbols from a database based on provided IDs. */
   async getSymbolsByIds(ids: string[]): Promise<IndexedSymbol['Select'][]> {
     if (!ids.length) return []
     return this.db
@@ -94,6 +100,7 @@ export class SymbolRepository {
       .where(inArray(schema.symbols.id, ids))
   }
 
+  /** "Retrieves symbols matching the specified names." */
   async getSymbolsByNames(names: string[]): Promise<IndexedSymbol['Select'][]> {
     if (!names.length) return []
     return this.db
@@ -102,6 +109,7 @@ export class SymbolRepository {
       .where(inArray(schema.symbols.name, names))
   }
 
+  /** Searches for symbols matching the given query string, optionally filtering by symbol kind, file path pattern, and limiting results. */
   async search(
     queryStr: string,
     kind?: SymbolKind | 'all',
@@ -127,6 +135,7 @@ export class SymbolRepository {
       .limit(limitVal)
   }
 
+  /** Retrieves the definition of a symbol based on its unique identifier from the database. Returns the symbol data if found, or `null` if no matching symbol exists. */
   async getDefinition(id: string): Promise<IndexedSymbol['Select'] | null> {
     const result = await this.db
       .select()
@@ -136,6 +145,7 @@ export class SymbolRepository {
     return result[0] ?? null
   }
 
+  /** Retrieves the definition of a symbol by its name and the file path. */
   async getDefinitionByName(
     name: string,
     path: string,
@@ -150,6 +160,7 @@ export class SymbolRepository {
     return result[0] ?? null
   }
 
+  /** Retrieves all symbols associated with a specific file, ordered by their line number. */
   async getForFile(path: string): Promise<IndexedSymbol['Select'][]> {
     return this.db
       .select()
@@ -158,6 +169,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.line)
   }
 
+  /** Retrieves all symbols in the subtree of the specified symbol, including its descendants, and returns their hierarchical data as an array. */
   async getSubtree(symbolId: string): Promise<IndexedSymbol['Select'][]> {
     const rows = this.sqlite
       .prepare(
@@ -175,6 +187,7 @@ export class SymbolRepository {
     })) as IndexedSymbol['Select'][]
   }
 
+  /** Retrieves all symbols from the database, ordered by their file path and line number. */
   async getAll(): Promise<IndexedSymbol['Select'][]> {
     return this.db
       .select()
@@ -182,6 +195,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves the symbol located at the specified file and line number. Returns null if no symbol exists at that location. */
   async getAtLocation(
     filePath: string,
     line: number,
@@ -199,6 +213,7 @@ export class SymbolRepository {
     return result[0] ?? null
   }
 
+  /** "Retrieves the callable symbol at the specified location if one exists." */
   async getCallableAtLocation(
     filePath: string,
     line: number,
@@ -218,6 +233,7 @@ export class SymbolRepository {
     return result[0] ?? null
   }
 
+  /** Retrieves all symbols of the specified kinds that currently lack a docstring or have an empty one. */
   async getSymbolsNeedingDocstrings(
     targetKinds: SymbolKind[],
   ): Promise<IndexedSymbol['Select'][]> {
@@ -237,6 +253,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Get symbols within a specified file that require docstrings. This includes symbols of specified kinds that either lack a docstring or have an empty one. */
   async getSymbolsNeedingDocstringsForFile(
     relativePath: string,
     targetKinds: SymbolKind[],
@@ -258,6 +275,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.line)
   }
 
+  /** Retrieves symbols with docstrings for specified kinds. */
   async getSymbolsWithDocstrings(
     targetKinds: SymbolKind[],
   ): Promise<IndexedSymbol['Select'][]> {
@@ -277,6 +295,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Updates the docstring for the symbol identified by id. */
   async updateDocstring(id: string, docstring: string): Promise<void> {
     await this.db
       .update(schema.symbols)
@@ -284,6 +303,7 @@ export class SymbolRepository {
       .where(eq(schema.symbols.id, id))
   }
 
+  /** Delete the docstring of the symbol with the specified ID. */
   async deleteDocstring(id: string): Promise<void> {
     await this.db
       .update(schema.symbols)
@@ -291,6 +311,7 @@ export class SymbolRepository {
       .where(eq(schema.symbols.id, id))
   }
 
+  /** "Updates the type information for a callable symbol by setting its parameters and return type." */
   async updateCallableSymbolTypeInfo(
     symbolId: string,
     parametersJson: string,
@@ -302,20 +323,32 @@ export class SymbolRepository {
       .where(eq(schema.symbols.id, symbolId))
   }
 
+  /** Updates the inheritance properties of a symbol in the database. */
   async updateSymbolInheritance(
     symbolId: string,
-    inheritsFromNames: string,
-    inheritenceType: InheritenceType,
+    inheritence: Inheritence[],
   ): Promise<void> {
+    const existingInheritence = await this.db
+      .select({ inheritence: schema.symbols.inheritence })
+      .from(schema.symbols)
+      .where(eq(schema.symbols.id, symbolId))
+      .limit(1)
+
+    const existing = existingInheritence[0]?.inheritence ?? []
+    const merged = [...existing, ...inheritence]
+    const uniqueMerged = Array.from(
+      new Map(merged.map((i) => [i.inherits_from_name, i])).values(),
+    )
+
     await this.db
       .update(schema.symbols)
       .set({
-        inherits_from_names: inheritsFromNames,
-        inheritence_type: inheritenceType,
+        inheritence: uniqueMerged,
       })
       .where(eq(schema.symbols.id, symbolId))
   }
 
+  /** Retrieves all symbols that inherit from the specified base symbol. */
   async getSymbolsInheritingFrom(
     baseName: string,
   ): Promise<IndexedSymbol['Select'][]> {
@@ -323,16 +356,12 @@ export class SymbolRepository {
       .select()
       .from(schema.symbols)
       .where(
-        or(
-          eq(schema.symbols.inherits_from_names, baseName),
-          like(schema.symbols.inherits_from_names, `${baseName},%`),
-          like(schema.symbols.inherits_from_names, `%,${baseName}`),
-          like(schema.symbols.inherits_from_names, `%,${baseName},%`),
-        ),
+        sql<Boolean>`EXISTS (SELECT 1 FROM json_each(inheritence) WHERE json_extract(value, '$.inherits_from_name') = ${baseName})`,
       )
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** "Retrieves all child symbols of a given parent symbol based on the provided parent ID. The returned list is ordered by their line number." */
   async getChildSymbols(parentId: string): Promise<IndexedSymbol['Select'][]> {
     return this.db
       .select()
@@ -341,6 +370,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.line)
   }
 
+  /** Searches for symbols using a hybrid approach combining text-based and semantic (embedding) matching, returning the most relevant results based on combined text and semantic relevance scores. */
   async searchSymbolsHybrid(
     queryStr: string,
     queryEmbedding: number[] | null,
@@ -366,6 +396,7 @@ export class SymbolRepository {
         semanticRank: number
       }
     >()
+    /** Retrieves or initializes a record for the specified ID with the provided symbol and default rank values. */
     const getRecord = (id: string, sym: IndexedSymbol['Select']) => {
       if (!scores.has(id))
         scores.set(id, {

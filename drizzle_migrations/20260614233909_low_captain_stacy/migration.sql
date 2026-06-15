@@ -71,8 +71,7 @@ CREATE TABLE `symbols` (
 	`decorator` text,
 	`exported` integer DEFAULT false,
 	`language` text NOT NULL,
-	`inherits_from_names` text,
-	`inheritence_type` text,
+	`inheritence` text,
 	CONSTRAINT `fk_symbols_file_path_files_path_fk` FOREIGN KEY (`file_path`) REFERENCES `files`(`path`) ON DELETE CASCADE
 );
 --> statement-breakpoint

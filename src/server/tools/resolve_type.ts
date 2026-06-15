@@ -161,8 +161,10 @@ export function registerResolveTypeTool(server: McpServer) {
         // Inheritors section
         if (inheritors.length > 0) {
           const inheritLines = inheritors.map((i) => {
-            const rel = i.inheritence_type ?? 'extends'
-            return `  [${rel.toUpperCase()}] ${i.name} (${i.kind}) in ${i.file_path}:${i.line + 1}`
+            const rel = i.inheritence!.find(
+              (inh) => inh.inherits_from_name === name,
+            )
+            return `  [${rel?.inheritence_type?.toUpperCase() ?? 'EXTENDS'}] ${i.name} (${i.kind}) in ${i.file_path}:${i.line + 1}`
           })
           sections.push(
             `Inheritors — types/interfaces extending or composing ${name} (${inheritors.length}):\n${inheritLines.join('\n')}`,

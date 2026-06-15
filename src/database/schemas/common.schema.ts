@@ -7,7 +7,7 @@ export enum InheritenceType {
   intersection = 'intersection',
 }
 
-/** Declares a custom enumeration type for use with SQLite, specifying the name of the enumeration. */
+/** Creates a custom SQLite column type for defining enums, ensuring proper handling of enum-like data in database interactions. */
 export const customEnum = <T>(name: string) =>
   t.customType<{
     data: T
@@ -18,7 +18,8 @@ export const customEnum = <T>(name: string) =>
     },
   })(name)
 
-export const inheritenceSchema = {
-  inherits_from_names: t.text(),
-  inheritence_type: customEnum<InheritenceType>('inheritence_type'),
+export type Inheritence = {
+  inherits_from_name: string
+  inherits_from_id: string
+  inheritence_type: InheritenceType
 }

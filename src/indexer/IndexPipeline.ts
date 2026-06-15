@@ -118,8 +118,14 @@ export class IndexPipeline {
     await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
 
     await this.runEnhancementStep(processedFiles)
-    await this.runDocstringStep()
-    await this.runEmbeddingStep(processedFiles)
+    // await this.runDocstringStep()
+    // await this.runEmbeddingStep(processedFiles)
+
+    await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
+
+    await this.runEnhancementStep(processedFiles)
+    // await this.runDocstringStep()
+    // await this.runEmbeddingStep(processedFiles)
   }
 
   /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
@@ -152,6 +158,8 @@ export class IndexPipeline {
       await this.options.store.imports.upsert(parsed.imports)
       await this.options.store.analysis.upsertExceptions(parsed.exceptions)
       await this.options.store.analysis.upsertEnvVars(parsed.envVars)
+
+      // await this.runEnhancementStep([relPath])
       logInfo(
         `[Indexer] Indexed ${relPath} with ${parsed.symbols.length} symbols, ${parsed.imports.length} imports, ${parsed.calls.length} calls, ${parsed.exceptions.length} exceptions, and ${parsed.envVars.length} env vars.`,
       )
@@ -160,6 +168,11 @@ export class IndexPipeline {
       logError(`[Indexer] Failed to index ${relPath}:`, e)
       return null
     }
+  }
+
+  async enhanceFile(absPath: string): Promise<void> {
+    const relPath = relative(this.options.cwd, absPath)
+    await this.runEnhancementStep([relPath])
   }
 
   /** Removes all existing docstrings from the specified store. */

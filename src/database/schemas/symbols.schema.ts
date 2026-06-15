@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 import { files } from './files.schema'
-import { customEnum, inheritenceSchema } from './common.schema'
+import { customEnum, type Inheritence } from './common.schema'
 
 export enum SymbolKind {
   function = 'function',
@@ -43,7 +43,7 @@ export const symbols = sqliteTable(
     decorator: text(),
     exported: integer({ mode: 'boolean' }).default(false),
     language: text().notNull(),
-    ...inheritenceSchema,
+    inheritence: text({ mode: 'json' }).$type<Inheritence[]>(),
   },
   (table) => [
     index('idx_symbols_name').on(table.name),

@@ -5,14 +5,17 @@ import * as schema from '../schemas'
 import type { IndexedSymbolCall } from '../schemas'
 import type { DirectCaller, NestedCaller } from '../types'
 
+/** Manages database operations for symbol call information, including inserting, querying, and updating records. */
 export class CallRepository {
   private callInsert: Statement | null = null
 
+  /** Initializes an object with dependencies for database operations, utilizing the SQLiteBunDatabase instance defined by the provided schema. */
   constructor(
     private sqlite: Database,
     private db: SQLiteBunDatabase<typeof schema>,
   ) {}
 
+  /** Initializes the SQLite prepared statement for inserting symbol calls data. */
   initStatements() {
     const cols = Object.keys(getColumns(schema.symbol_calls))
     this.callInsert = this.sqlite.prepare(
@@ -20,6 +23,7 @@ export class CallRepository {
     )
   }
 
+  /** The method `upsert` inserts multiple records into the database based on the provided call data. */
   async upsert(callsData: IndexedSymbolCall['Insert'][]): Promise<void> {
     if (!callsData.length || !this.callInsert) return
 
@@ -31,6 +35,7 @@ export class CallRepository {
     })()
   }
 
+  /** Retrieves records from the symbol_calls table for specified caller IDs. Returns an array of selected symbol call data matching the provided identifiers. */
   async getForSymbols(
     callerIds: string[],
   ): Promise<IndexedSymbolCall['Select'][]> {
@@ -41,6 +46,7 @@ export class CallRepository {
       .where(inArray(schema.symbol_calls.caller_id, callerIds))
   }
 
+  /** Retrieves unresolved symbol calls from the database. */
   async getUnresolved(): Promise<IndexedSymbolCall['Select'][]> {
     return this.db
       .select()
@@ -58,6 +64,7 @@ export class CallRepository {
       )
   }
 
+  /** Updates the `callee_id` for a specific call in the database. */
   async updateCalleeId(callId: string, calleeId: string): Promise<void> {
     await this.db
       .update(schema.symbol_calls)
@@ -65,6 +72,7 @@ export class CallRepository {
       .where(eq(schema.symbol_calls.id, callId))
   }
 
+  /** Updates the import identifier for a specific symbol call based on its unique identifier. */
   async updateImportsId(callId: string, importsId: string): Promise<void> {
     await this.db
       .update(schema.symbol_calls)
@@ -72,6 +80,7 @@ export class CallRepository {
       .where(eq(schema.symbol_calls.id, callId))
   }
 
+  /** Gets the ID associated with a given name by checking a local map and querying the database for imported modules if necessary. */
   async getIdFromName(
     filePathToNameId: Map<string, { name: string; id: string }[]>,
     call: IndexedSymbolCall['Insert'],
@@ -101,6 +110,7 @@ export class CallRepository {
     return null
   }
 
+  /** "Retrieves all direct callers of a given symbol by querying the symbol_calls and symbols tables in an SQLite database." */
   async getCallers(symbolName: string): Promise<DirectCaller[]> {
     return this.sqlite
       .prepare(
@@ -114,6 +124,7 @@ export class CallRepository {
       .all(symbolName, symbolName) as DirectCaller[]
   }
 
+  /** Retrieves all nested callers of a given symbol, including their direct and indirect call relationships. */
   async getCallersNested(symbolName: string): Promise<NestedCaller[]> {
     return this.sqlite
       .prepare(

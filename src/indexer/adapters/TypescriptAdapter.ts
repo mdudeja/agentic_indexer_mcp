@@ -23,6 +23,12 @@ export class TypescriptAdapter implements LanguageAdapter {
     // Maps node ID to symbol ID to quickly find parent_id
     const nodeToSymbolId = new Map<number, string>()
 
+    // Symbols that live inside an anonymous function scope (arrow_function /
+    // function_expression not registered in nodeToSymbolId). Their parent_id
+    // ends up null even though they are local, so cleanUpLexicals needs this
+    // set to handle them correctly.
+    const anonScopeSymbols = new Set<string>()
+
     // First pass: extract symbols to build parent map
     for (const match of matches) {
       for (const capture of match.captures) {
@@ -36,6 +42,7 @@ export class TypescriptAdapter implements LanguageAdapter {
             file_path,
             result,
             nodeToSymbolId,
+            anonScopeSymbols,
           )
         }
       }
@@ -108,7 +115,9 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
 
-    return result
+    const cleanedResult = this.cleanUpLexicals(result, anonScopeSymbols)
+
+    return cleanedResult
   }
 
   private handleSymbolCapture(
@@ -117,6 +126,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
+    anonScopeSymbols: Set<string>,
   ) {
     const blockInitMarker = '{'
     let kind: SymbolKind | undefined
@@ -203,6 +213,7 @@ export class TypescriptAdapter implements LanguageAdapter {
                 : SymbolKind.var
         }
         nameNode = node
+        targetNode = declNode
         signature = targetNode.text.split(blockInitMarker)[0]
         break
     }
@@ -218,18 +229,30 @@ export class TypescriptAdapter implements LanguageAdapter {
       signature: targetNode.text,
     })
 
-    // Find parent
+    // Find parent — also detect if we cross an anonymous function boundary
+    // (arrow_function / function_expression not in nodeToSymbolId) so that
+    // cleanUpLexicals can remove locals that appear to have no registered parent.
+    const ANON_SCOPE_TYPES = new Set(['arrow_function', 'function_expression'])
     let parent_id: string | null = null
+    let insideAnonScope = false
     let p = targetNode.parent
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
         parent_id = nodeToSymbolId.get(p.id)!
         break
       }
+      if (ANON_SCOPE_TYPES.has(p.type)) {
+        insideAnonScope = true
+        break
+      }
       p = p.parent
     }
 
     nodeToSymbolId.set(targetNode.id, id)
+
+    if (insideAnonScope) {
+      anonScopeSymbols.add(id)
+    }
 
     // Simplified extraction for brevity
     result.symbols.push({
@@ -246,8 +269,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       return_type: null,
       docstring: null, // simplified
       parent_id,
-      inheritence_type: null,
-      inherits_from_names: null,
+      inheritence: null,
       exported: targetNode.parent?.type.includes('export') ?? false,
       decorator: null,
       language: 'typescript',
@@ -274,7 +296,10 @@ export class TypescriptAdapter implements LanguageAdapter {
     if (!caller_id) return
 
     let callExpr: Node | null = node.parent
-    while (callExpr && callExpr.type !== 'call_expression') {
+    while (
+      callExpr &&
+      !['call_expression', 'new_expression'].includes(callExpr.type)
+    ) {
       callExpr = callExpr.parent
     }
     const callText = callExpr ? callExpr.text : node.text
@@ -411,5 +436,51 @@ export class TypescriptAdapter implements LanguageAdapter {
       line: node.startPosition.row,
       column: node.startPosition.column,
     })
+  }
+
+  private cleanUpLexicals(
+    result: ExtractionResult,
+    anonScopeSymbols: Set<string>,
+  ) {
+    const lexicalKinds = [SymbolKind.const, SymbolKind.let, SymbolKind.var]
+    const callableKinds = [
+      SymbolKind.function,
+      SymbolKind.method,
+      SymbolKind.arrowFunction,
+    ]
+
+    const toRemoveIds = new Set<string>()
+
+    for (const symbol of result.symbols) {
+      if (!lexicalKinds.includes(symbol.kind) || symbol.exported) continue
+
+      const hasCallableParent =
+        anonScopeSymbols.has(symbol.id) ||
+        (symbol.parent_id
+          ? result.symbols.some(
+              (s) =>
+                s.id === symbol.parent_id && callableKinds.includes(s.kind),
+            )
+          : false)
+
+      if (hasCallableParent) {
+        toRemoveIds.add(symbol.id)
+      }
+    }
+
+    result.symbols = result.symbols.filter(
+      (s) => !toRemoveIds.has(s.id) && !toRemoveIds.has(s.parent_id ?? ''),
+    )
+    result.calls = result.calls.filter((c) =>
+      result.symbols.some((s) => s.id === c.caller_id),
+    )
+    result.exceptions = result.exceptions.filter((e) =>
+      result.symbols.some((s) => s.id === e.symbol_id),
+    )
+    result.envVars = result.envVars.filter((v) =>
+      result.symbols.some((s) => s.id === v.symbol_id),
+    )
+
+    return result
   }
 }

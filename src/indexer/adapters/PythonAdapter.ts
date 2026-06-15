@@ -159,8 +159,7 @@ export class PythonAdapter implements LanguageAdapter {
       return_type: null,
       docstring: null,
       parent_id,
-      inheritence_type: null,
-      inherits_from_names: null,
+      inheritence: null,
       exported: true, // simplified
       decorator: null,
       language: 'python',

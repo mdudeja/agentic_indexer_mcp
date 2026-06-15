@@ -17,6 +17,7 @@ import {
   ToolUsageRepository,
 } from './repositories'
 
+/** A singleton class managing SQLite database connections with vector indexing capabilities. It provides repository interfaces for handling embeddings, symbols, files, imports, calls, analysis, and tool usage. The IndexerDB initializes the database connection, runs migrations, and ensures proper resource management. */
 export class IndexerDB {
   private dbInited: boolean = false
   private dbFilePath?: string
@@ -33,6 +34,7 @@ export class IndexerDB {
   readonly analysis: AnalysisRepository
   readonly toolUsage: ToolUsageRepository
 
+  /** Initializes the database connection and constructs the application's data repositories. */
   private constructor(dbPath?: string) {
     this.isMemory = dbPath === ':memory:'
     this.dbFilePath = this.isMemory
@@ -75,6 +77,7 @@ export class IndexerDB {
     this.toolUsage = new ToolUsageRepository(this.sqlite)
   }
 
+  /** Returns the singleton instance of IndexerDB, ensuring only one instance exists per database path. */
   static getInstance(dbPath?: string): IndexerDB {
     if (
       !IndexerDB.instance ||
@@ -85,10 +88,12 @@ export class IndexerDB {
     return IndexerDB.instance
   }
 
+  /** Gets the database object. */
   getDb() {
     return this.db
   }
 
+  /** Initialize the database and related components when the application starts. This includes running migrations, creating necessary database tables, and preparing statements for various modules. */
   async init() {
     if (this.dbInited) return
 
@@ -120,6 +125,7 @@ export class IndexerDB {
     logDebug('Database initialized')
   }
 
+  /** Deletes all data from the database tables. */
   async clear() {
     try {
       this.sqlite.run(`DELETE FROM vec_symbols`)
@@ -135,6 +141,7 @@ export class IndexerDB {
     await this.db.delete(schema.env_vars)
   }
 
+  /** Closes the SQLite database connection, cleans up associated resources, and resets internal state. */
   close() {
     this.sqlite.run('PRAGMA journal_mode = DELETE;')
     this.sqlite.close()

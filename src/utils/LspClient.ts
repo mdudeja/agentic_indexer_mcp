@@ -6,9 +6,9 @@ export class LspClient {
   private messageId = 0
   private pendingRequests = new Map<
     number,
-    { resolve: (res: any) => void; reject: (err: any) => void }
+    { resolve: (res: any) => void; reject: (err: any) => void; method: string }
   >()
-  private buffer = ''
+  private rawBuffer = Buffer.alloc(0)
   private serverCapabilities: Record<string, any> = {}
 
   get capabilities(): Record<string, any> {
@@ -75,10 +75,12 @@ export class LspClient {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          logError('[LSP] stdout stream ended (server process exited?)')
+          break
+        }
 
-        const chunk = new TextDecoder().decode(value)
-        this.buffer += chunk
+        this.rawBuffer = Buffer.concat([this.rawBuffer, value])
         this.processBuffer()
       }
     } catch (e) {
@@ -87,61 +89,80 @@ export class LspClient {
   }
 
   private processBuffer(): void {
+    const HEADER_END = Buffer.from('\r\n\r\n')
+
     while (true) {
-      const contentLengthIndex = this.buffer.indexOf('Content-Length:')
-      if (contentLengthIndex === -1) break
+      const clIdx = this.rawBuffer.indexOf('Content-Length:')
+      if (clIdx === -1) break
 
-      const headerEndIndex = this.buffer.indexOf('\r\n\r\n', contentLengthIndex)
-      if (headerEndIndex === -1) break
+      const headerEndIdx = this.rawBuffer.indexOf(HEADER_END, clIdx)
+      if (headerEndIdx === -1) break
 
-      const headerLines = this.buffer
-        .slice(contentLengthIndex, headerEndIndex)
+      const headerSection = this.rawBuffer
+        .subarray(clIdx, headerEndIdx)
+        .toString('utf8')
+      const clLine = headerSection
         .split('\r\n')
-      const contentLengthLine = headerLines.find((line) =>
-        line.startsWith('Content-Length:'),
-      )
-      if (!contentLengthLine) {
-        // Skip malformed header
-        this.buffer = this.buffer.slice(headerEndIndex + 4)
+        .find((line) => line.startsWith('Content-Length:'))
+      if (!clLine) {
+        logError(`[LSP] Malformed header, skipping: ${headerSection}`)
+        this.rawBuffer = this.rawBuffer.subarray(headerEndIdx + 4)
         continue
       }
 
-      const contentLength = parseInt(
-        contentLengthLine.split(':')[1]!.trim(),
-        10,
-      )
-      const messageStartIndex = headerEndIndex + 4
+      const contentLength = parseInt(clLine.split(':')[1]!.trim(), 10)
+      const bodyStart = headerEndIdx + 4
 
-      if (this.buffer.length < messageStartIndex + contentLength) {
+      if (this.rawBuffer.length < bodyStart + contentLength) {
         // Incomplete message body, wait for next stream chunks
         break
       }
 
-      const body = this.buffer.slice(
-        messageStartIndex,
-        messageStartIndex + contentLength,
-      )
-      this.buffer = this.buffer.slice(messageStartIndex + contentLength)
+      const body = this.rawBuffer
+        .subarray(bodyStart, bodyStart + contentLength)
+        .toString('utf8')
+      this.rawBuffer = this.rawBuffer.subarray(bodyStart + contentLength)
 
       try {
         const parsed = JSON.parse(body)
         this.handleMessage(parsed)
       } catch (err) {
-        logError('[LSP] Failed to parse message body JSON:', err)
+        logError('[LSP] Failed to parse message body JSON:', err, 'body:', body)
       }
     }
   }
 
   private handleMessage(msg: any): void {
-    if (msg.id !== undefined && this.pendingRequests.has(msg.id)) {
-      const promise = this.pendingRequests.get(msg.id)!
-      this.pendingRequests.delete(msg.id)
-      if (msg.error) {
-        promise.reject(msg.error)
-      } else {
-        promise.resolve(msg.result)
-      }
+    // Server-initiated request (has both id and method)
+    if (msg.id !== undefined && msg.method) {
+      this.send({ jsonrpc: '2.0', id: msg.id, result: null })
+      return
     }
+
+    // Server notification (no id, has method)
+    if (msg.id === undefined && msg.method) {
+      return
+    }
+
+    // Response to a client request
+    if (msg.id !== undefined) {
+      if (this.pendingRequests.has(msg.id)) {
+        const pending = this.pendingRequests.get(msg.id)!
+        if (msg.error) {
+          pending.reject(msg.error)
+        } else {
+          pending.resolve(msg.result)
+        }
+        this.pendingRequests.delete(msg.id)
+      } else {
+        logError(
+          `[LSP] <-- response for unknown id=${msg.id} (no pending request). Pending ids: [${[...this.pendingRequests.keys()].join(', ')}]`,
+        )
+      }
+      return
+    }
+
+    logError(`[LSP] <-- unrecognized message shape:`, JSON.stringify(msg))
   }
 
   private async readStderr(): Promise<void> {
@@ -159,7 +180,6 @@ export class LspClient {
         const { done, value } = await reader.read()
         if (done) break
         const text = new TextDecoder().decode(value)
-        // Log stderr as debug logging
         logDebug(`[LSP Stderr] ${text.trim()}`)
       }
     } catch (e) {
@@ -189,22 +209,34 @@ export class LspClient {
   }
 
   /** Sends a JSON-RPC request to the language server and returns a promise for the result. */
-  request(method: string, params: any): Promise<any> {
+  request(method: string, params: any, timeoutMs?: number): Promise<any> {
     const id = this.messageId++
-    return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject })
+
+    const requestPromise = new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject, method })
       try {
-        this.send({
-          jsonrpc: '2.0',
-          id,
-          method,
-          params,
-        })
+        this.send({ jsonrpc: '2.0', id, method, params })
       } catch (err) {
+        logError(`[LSP] --> request send failed: ${method} (id=${id}):`, err)
         this.pendingRequests.delete(id)
         reject(err)
       }
     })
+
+    if (!timeoutMs) return requestPromise
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        if (!this.pendingRequests.has(id)) return
+        this.pendingRequests.delete(id)
+        logError(
+          `[LSP] Request timed out: ${method} (id=${id}) after ${timeoutMs}ms — server may be stuck on type inference`,
+        )
+        reject(new Error(`LSP request timeout after ${timeoutMs}ms: ${method}`))
+      }, timeoutMs),
+    )
+
+    return Promise.race([requestPromise, timeoutPromise])
   }
 
   /** Gracefully terminates the language server. */

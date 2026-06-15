@@ -2,13 +2,16 @@ import { Database, Statement } from 'bun:sqlite'
 import type { IndexedSymbol } from '../schemas'
 import { logError } from 'src/utils/logger'
 
+/** A class providing functionality to manage vector embeddings for symbols within an SQLite database. It handles operations such as inserting, updating, deleting, and searching embeddings. */
 export class EmbeddingRepository {
   private vectorInsert: Statement | null = null
   private vectorDelete: Statement | null = null
   private vectorDeleteByFile: Statement | null = null
 
+  /** The constructor initializes an instance of a class with a specified SQLite database. */
   constructor(private sqlite: Database) {}
 
+  /** Initializes prepared SQL statements for vector-related database operations. */
   initStatements() {
     this.vectorInsert = this.sqlite.prepare(
       `INSERT INTO vec_symbols (symbol_id, embedding) VALUES (?, ?)`,
@@ -21,6 +24,7 @@ export class EmbeddingRepository {
     )
   }
 
+  /** Updates or inserts an embedding vector by symbol ID, ensuring any existing entry is replaced with the new one. */
   async upsert(symbolId: string, embedding: number[]): Promise<void> {
     const buffer = Buffer.from(new Float32Array(embedding).buffer)
     try {
@@ -33,6 +37,7 @@ export class EmbeddingRepository {
     }
   }
 
+  /** Returns symbols from specified files that require embeddings since they lack existing vector representations. */
   async getSymbolsNeedingEmbeddings(
     filePaths: string[],
   ): Promise<IndexedSymbol['Select'][]> {
@@ -52,6 +57,7 @@ export class EmbeddingRepository {
     }
   }
 
+  /** Deletes the embedding associated with the specified symbol ID. */
   async delete(symbolId: string): Promise<void> {
     try {
       this.vectorDelete?.run(symbolId)
@@ -60,6 +66,7 @@ export class EmbeddingRepository {
     }
   }
 
+  /** Deletes all embeddings associated with the specified file. */
   deleteForFile(path: string): void {
     try {
       this.vectorDeleteByFile?.run(path)
@@ -68,6 +75,7 @@ export class EmbeddingRepository {
     }
   }
 
+  /** Searches a vector database for similar items based on an embedding representation. Returns the closest matches up to the specified limit. */
   searchVector(
     queryEmbedding: number[],
     limit: number,

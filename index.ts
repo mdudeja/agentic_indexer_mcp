@@ -49,6 +49,10 @@ const { values, positionals } = parseArgs({
     file: {
       type: 'string',
     },
+    force: {
+      type: 'boolean',
+      short: 'f',
+    },
   },
   strict: true,
   allowPositionals: true,
@@ -67,6 +71,7 @@ Commands:
   stop                Stop the MCP server
   index               Run a one-off index of the workspace
   index-file          Index a single file (provide path via --file option)
+  enhance-file        Enhance the symbol information for a single file (provide path via --file option)
   remove-docstrings   Remove all generated docstrings from source files and database
   query               Query the existing index from CLI
 
@@ -75,7 +80,7 @@ Options:
   -q,   --query               Search query pattern (e.g. "auth*")
   -k,   --kind                Filter by symbol kind (e.g. "function")
   -h,   --help                Show this help message
-  -g,  --include-gitignored  Include files ignored by .gitignore (default: false)
+  -g,  --include-gitignored   Include files ignored by .gitignore (default: false)
   --file                      Path to a single file to index (required for index-file command)
   `)
   process.exit(values.help ? 0 : 1)
@@ -117,6 +122,7 @@ async function main() {
       })
 
       await pipeline.run()
+      process.exit(0)
       break
     }
 
@@ -135,6 +141,24 @@ async function main() {
       })
 
       await pipeline.runOnFile(absPath)
+      break
+    }
+
+    case 'enhance-file': {
+      if (!values.file) {
+        console.error('Error: --file is required for the enhance-file command')
+        process.exit(1)
+      }
+
+      const absPath = resolvePath(values.file)
+      logWarning(`Enhancing single file: ${absPath}`)
+      const pipeline = new IndexPipeline({
+        cwd,
+        store,
+        includeGitIgnored: true, // For single file enhancement, we should include it even if it's gitignored
+      })
+
+      await pipeline.enhanceFile(absPath)
       break
     }
 

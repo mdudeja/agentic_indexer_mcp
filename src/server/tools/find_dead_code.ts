@@ -274,18 +274,17 @@ async function getInheritenceCoveredIds(
     const childClasses = await db
       .select({
         id: schema.symbols.id,
-        inherits_from_names: schema.symbols.inherits_from_names,
+        inheritence: schema.symbols.inheritence,
       })
       .from(schema.symbols)
-      .where(isNotNull(schema.symbols.inherits_from_names))
+      .where(isNotNull(schema.symbols.inheritence))
 
     // classId → parentTypeName (only for parents that have called methods)
     const classIdToParentName = new Map<string, string>()
     for (const cls of childClasses) {
-      if (!cls.inherits_from_names) continue
-      for (const parentName of cls.inherits_from_names
-        .split(',')
-        .map((n) => n.trim())) {
+      if (!cls.inheritence || !cls.inheritence.length) continue
+      for (const parent of cls.inheritence) {
+        const parentName = parent.inherits_from_name
         if (!calledByTypeName.has(parentName)) continue
         classIdToParentName.set(cls.id, parentName)
         break // one parent per class (by assumption)
