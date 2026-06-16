@@ -8,7 +8,9 @@ import {
 import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
 
+/** An adapter class for extracting and categorizing symbols, imports, calls, exceptions, environment variables, and docstrings from Python code. It processes source files to gather metadata about code elements and organizes them into structured results. */
 export class PythonAdapter implements LanguageAdapter {
+  /** Extracts and categorizes symbols, imports, calls, exceptions, environment variables, and docstrings from a file based on query matches. Returns an object containing the extracted elements organized by type. */
   extract(matches: QueryMatch[], file_path: string): ExtractionResult {
     const result: ExtractionResult = {
       symbols: [],
@@ -95,6 +97,7 @@ export class PythonAdapter implements LanguageAdapter {
     return result
   }
 
+  /** Processes and records symbol information captured during code analysis. It identifies symbols such as classes, functions, and variables, calculates unique identifiers based on their metadata, and establishes parent-child relationships between them. This method ensures that each symbol's details are stored for further use in the analysis process. */
   private handleSymbolCapture(
     captureName: string,
     node: Node,
@@ -166,6 +169,7 @@ export class PythonAdapter implements LanguageAdapter {
     })
   }
 
+  /** Processes a node to capture call information and record it in the result, including caller and callee details along with relevant context. */
   private handleCallCapture(
     node: Node,
     file_path: string,
@@ -202,6 +206,7 @@ export class PythonAdapter implements LanguageAdapter {
     })
   }
 
+  /** "Captures import information from a node and stores it in the result. Used to track imported modules during code analysis or processing." */
   private handleImportCapture(
     node: Node,
     file_path: string,
@@ -215,6 +220,7 @@ export class PythonAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures exception information during code analysis and links exceptions to their nearest symbol in the codebase by traversing parent nodes. */
   private handleExceptionCapture(
     node: Node,
     file_path: string,
@@ -242,6 +248,7 @@ export class PythonAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures environment variable references in a file by identifying their declaration context and adding metadata to the result. */
   private handleEnvCapture(
     node: Node,
     file_path: string,

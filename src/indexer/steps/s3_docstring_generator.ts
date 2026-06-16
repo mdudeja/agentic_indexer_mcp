@@ -178,6 +178,7 @@ export class DocstringGenerationStep {
     )
   }
 
+  /** Gathers unique symbol kinds by combining callables and containers. */
   private async collectTargetKinds(): Promise<SymbolKind[]> {
     const { allCallableKinds } = await import('../../utils/allCallableKinds')
     const { allContainerKinds } = await import('../../utils/allContainerKinds')

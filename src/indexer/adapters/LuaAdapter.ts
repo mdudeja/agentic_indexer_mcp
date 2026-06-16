@@ -8,7 +8,9 @@ import {
 import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
 
+/** Extracts and processes code elements (such as symbols, imports, calls, exceptions, and environment variables) from Lua files using query matches. Constructs an ExtractionResult containing extracted information for further analysis or documentation generation. */
 export class LuaAdapter implements LanguageAdapter {
+  /** Extracts relevant code elements (such as symbols, docstrings, calls, imports, exceptions, and environment variables) from query matches within a specified file. The method processes these elements to construct an ExtractionResult containing extracted information for further analysis or documentation generation. */
   extract(matches: QueryMatch[], file_path: string): ExtractionResult {
     const result: ExtractionResult = {
       symbols: [],
@@ -101,6 +103,7 @@ export class LuaAdapter implements LanguageAdapter {
     return result
   }
 
+  /** Captures and processes symbol declarations in Lua code by handling nodes in the Abstract Syntax Tree (AST). It extracts information such as name, type, location, and parent relationships to build a comprehensive index of project symbols. */
   private handleSymbolCapture(
     captureName: string,
     node: Node,
@@ -170,6 +173,7 @@ export class LuaAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures and records function call details in Lua code, tracking caller information and call context. */
   private handleCallCapture(
     node: Node,
     file_path: string,
@@ -206,6 +210,7 @@ export class LuaAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures import information when handling nodes during processing, adding each import to the extraction result with a unique identifier, file path, and module path. */
   private handleImportCapture(
     node: Node,
     file_path: string,
@@ -219,6 +224,7 @@ export class LuaAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures exception details during node processing, adding them to the extraction result with relevant metadata. */
   private handleExceptionCapture(
     node: Node,
     file_path: string,
@@ -246,6 +252,7 @@ export class LuaAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures environment variable references within AST nodes and records them in the extraction result. */
   private handleEnvCapture(
     node: Node,
     file_path: string,

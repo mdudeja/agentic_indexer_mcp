@@ -24,6 +24,7 @@ export interface LanguageAdapter {
   extract(matches: QueryMatch[], file_path: string): ExtractionResult
 }
 
+/** Extracts the docstring associated with a given node in the code. */
 export function extractCallDocstring(node: Node | null): string | null {
   if (!node) return null
 

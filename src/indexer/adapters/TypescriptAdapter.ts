@@ -10,7 +10,9 @@ import { resolveImportedModulePath } from '../../utils/paths'
 import { getCommentText } from '../docstrings/formatComment'
 import { hashSymbol } from 'src/utils/hashers'
 
+/** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
 export class TypescriptAdapter implements LanguageAdapter {
+  /** Extracts and organizes symbols, docstrings, calls, imports, exceptions, and environment variables from the given query matches in a file, returning a structured ExtractionResult containing all extracted information. */
   extract(matches: QueryMatch[], file_path: string): ExtractionResult {
     const result: ExtractionResult = {
       symbols: [],
@@ -120,6 +122,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     return cleanedResult
   }
 
+  /** Processes and records symbol information for different code elements (e.g., classes, functions, variables) by capturing their metadata and managing parent-child relationships, particularly within anonymous scopes. */
   private handleSymbolCapture(
     captureName: string,
     node: Node,
@@ -274,8 +277,84 @@ export class TypescriptAdapter implements LanguageAdapter {
       decorator: null,
       language: 'typescript',
     })
+
+    // TypeScript parameter properties: `constructor(private foo: string)`
+    // both declares a constructor parameter and a class field. Capture the
+    // implied fields too, parented to the same class as the constructor.
+    if (kind === SymbolKind.method && nameNode.text === 'constructor') {
+      this.extractConstructorParameterProperties(
+        targetNode,
+        file_path,
+        result,
+        nodeToSymbolId,
+        parent_id,
+      )
+    }
   }
 
+  /** Extracts constructor parameters that are promoted to class properties (i.e., those with accessibility modifiers or `readonly`) and adds their details to the extraction result. */
+  private extractConstructorParameterProperties(
+    constructorNode: Node,
+    file_path: string,
+    result: ExtractionResult,
+    nodeToSymbolId: Map<number, string>,
+    class_id: string | null,
+  ) {
+    const paramsNode = constructorNode.childForFieldName('parameters')
+    if (!paramsNode) return
+
+    const PARAMETER_NODE_TYPES = new Set([
+      'required_parameter',
+      'optional_parameter',
+    ])
+
+    for (const param of paramsNode.children) {
+      if (!param || !PARAMETER_NODE_TYPES.has(param.type)) continue
+
+      // A parameter is promoted to a class field if it carries an
+      // accessibility modifier (public/private/protected) and/or `readonly`.
+      const isParameterProperty = param.children.some(
+        (c) => c?.type === 'accessibility_modifier' || c?.type === 'readonly',
+      )
+      if (!isParameterProperty) continue
+
+      const fieldNameNode = param.children.find((c) => c?.type === 'identifier')
+      if (!fieldNameNode) continue
+
+      const id = hashSymbol({
+        name: fieldNameNode.text,
+        kind: SymbolKind.property,
+        file_path,
+        line: param.startPosition.row,
+        column: param.startPosition.column,
+        signature: param.text,
+      })
+
+      nodeToSymbolId.set(param.id, id)
+
+      result.symbols.push({
+        id,
+        name: fieldNameNode.text,
+        kind: SymbolKind.property,
+        file_path,
+        line: param.startPosition.row,
+        column: param.startPosition.column,
+        end_line: param.endPosition.row,
+        end_column: param.endPosition.column,
+        signature: param.text,
+        parameters_json: null,
+        return_type: null,
+        docstring: null,
+        parent_id: class_id,
+        inheritence: null,
+        exported: false,
+        decorator: null,
+        language: 'typescript',
+      })
+    }
+  }
+
+  /** Processes nodes to extract and record call information, including caller details and call location, adding it to the extraction result for further analysis. */
   private handleCallCapture(
     node: Node,
     file_path: string,
@@ -314,9 +393,11 @@ export class TypescriptAdapter implements LanguageAdapter {
       caller_file_path: file_path,
       call_text: callText,
       docstring: extractCallDocstring(callExpr || node),
+      is_lang_feature: false,
     })
   }
 
+  /** Captures import information from a node and stores it in the result. */
   private handleImportCapture(
     node: Node,
     file_path: string,
@@ -384,6 +465,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     }
   }
 
+  /** Capture exceptions during processing and log them with relevant details including symbol IDs and file paths. */
   private handleExceptionCapture(
     node: Node,
     file_path: string,
@@ -411,6 +493,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     })
   }
 
+  /** Processes and captures environment variable references from the provided AST node, recording their details in the extraction result. */
   private handleEnvCapture(
     node: Node,
     file_path: string,
@@ -438,6 +521,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     })
   }
 
+  /** Cleans up the extraction results by removing unnecessary lexical symbols. Specifically targets variables (const, let, var) and constants declared in anonymous scope or under callable parents to prevent redundant references. */
   private cleanUpLexicals(
     result: ExtractionResult,
     anonScopeSymbols: Set<string>,

@@ -1,0 +1,1 @@
+ALTER TABLE `symbol_calls` ADD `is_lang_feature` integer DEFAULT false;

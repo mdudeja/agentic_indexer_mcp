@@ -3,14 +3,17 @@ import type { EmbedderConfig } from 'src/config/types'
 import { AppStateManager } from 'src/state'
 import { logError } from 'src/utils/logger'
 
+/** Generates text embeddings using the Ollama API to convert text into numerical vector representations for machine learning tasks. */
 export class OllamaEmbeddingGenerator implements EmbeddingGenerator {
   private config?: EmbedderConfig
   private ollamaConfig: EmbedderConfig['ollama']
+  /** The constructor initializes an instance of the OllamaEmbeddingGenerator by loading its configuration settings. */
   constructor() {
     this.config = AppStateManager.getInstance().getItem('config')?.embedder
     this.ollamaConfig = this.config?.ollama
   }
 
+  /** Initialize the embedding generator and verify its functionality through a connection test. Returns true if successful, false otherwise. */
   async init(): Promise<boolean> {
     const testEmbed = await this.getEmbedding('test connection')
 
@@ -22,6 +25,7 @@ export class OllamaEmbeddingGenerator implements EmbeddingGenerator {
     return true
   }
 
+  /** Generates embeddings from text using the Ollama API. Converts input text into numerical vector representations for machine learning tasks. */
   async getEmbedding(text: string): Promise<number[] | null> {
     if (!this.config || !this.config.enabled || !this.ollamaConfig) {
       return null

@@ -13,6 +13,7 @@ export function parseTypeNames(raw: string): string[] {
   let depth = 0
   let current = ''
 
+  /** Flushes and processes the current string to extract a valid identifier name. */
   function flush() {
     // Strip generic params and array/tuple suffixes, keep the bare name
     const name = current
@@ -42,6 +43,7 @@ export function parseTypeNames(raw: string): string[] {
   return results
 }
 
+/** Gets the parent symbols or classes before a specific symbol call in a given code context. This function extracts hierarchical parents by analyzing the text before the specified callee name, ignoring nested structures like parentheses to avoid including irrelevant separators within arguments. */
 export function getParentsOfSymbolCall(
   callText: string,
   callee_name: string,
@@ -49,7 +51,10 @@ export function getParentsOfSymbolCall(
   const separators = ['.', '->', '::', '?.', '!.', '#']
   const separatorRegex = new RegExp(separators.map((s) => `\\${s}`).join('|'))
 
-  callText = callText.trim().substring(0, callText.indexOf(callee_name))
+  callText = callText
+    .trim()
+    .replace(/\s+/g, '')
+    .substring(0, callText.indexOf(callee_name))
 
   // Strip paren contents so separators inside argument lists are ignored.
   // Each pass removes the innermost parens; repeat until none remain.
@@ -62,9 +67,6 @@ export function getParentsOfSymbolCall(
   // split by separators and filter out empty parts
   const parts = callText.split(separatorRegex).filter(Boolean)
 
-  // if there's only one part, there are no parents to resolve
-  if (parts.length <= 1) return []
-
   // further clean up each parent part by removing function call parentheses and array indexing
   for (let i = 0; i < parts.length - 1; i++) {
     parts[i] = (parts[i] ?? '').replace(/\(.*\)/g, '').replace(/\[.*\]/g, '')
@@ -73,6 +75,7 @@ export function getParentsOfSymbolCall(
   return parts.filter((part) => part && part.length > 0)
 }
 
+/** This function returns the base name of a type by extracting the last segment after removing any hierarchical or qualified parts. */
 export function getTypeNameWithoutParent(typeName: string): string {
   const separators = ['.', '->', '::', '?.', '!.', '#']
   const separatorRegex = new RegExp(separators.map((s) => `\\${s}`).join('|'))

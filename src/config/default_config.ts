@@ -36,6 +36,10 @@ export const default_config: Record<'indexer', IndexerConfig> = {
           '/home/md/.local/share/nvim/mason/bin/typescript-language-server',
           '--stdio',
         ],
+        lang_features_paths: [
+          'node_modules/typescript/lib',
+          'node_modules/@types/node',
+        ],
         treesitter: {
           language_name: 'typescript',
           signature_max_length: 400,
@@ -46,6 +50,10 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         lsp_command: [
           '/home/md/.local/share/nvim/mason/bin/typescript-language-server',
           '--stdio',
+        ],
+        lang_features_paths: [
+          'node_modules/typescript/lib',
+          'node_modules/@types/node',
         ],
         treesitter: {
           language_name: 'tsx',

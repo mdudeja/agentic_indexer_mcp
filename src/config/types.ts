@@ -4,7 +4,7 @@ export type {
   IndexedImport,
   IndexedSymbolCall,
   IndexedException,
-  IndexedEnvVar
+  IndexedEnvVar,
 } from '../database/schemas'
 export { SymbolKind } from '../database/schemas'
 
@@ -31,6 +31,7 @@ export type NodeInfo = {
 export type LanguageConfig = {
   extensions: string[]
   lsp_command?: string[]
+  lang_features_paths?: string[]
   treesitter: {
     language_name: string
     signature_max_length?: number
@@ -49,7 +50,11 @@ export type DocstringConfig = {
   ollama?: { model: string; base_url?: string }
 }
 
-export type EmbeddingGeneratorName = 'ollama' | 'openai' | 'gemini' | 'anthropic'
+export type EmbeddingGeneratorName =
+  | 'ollama'
+  | 'openai'
+  | 'gemini'
+  | 'anthropic'
 
 export type EmbedderConfig = {
   enabled: boolean

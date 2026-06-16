@@ -396,6 +396,7 @@ export class SymbolRepository {
         semanticRank: number
       }
     >()
+
     /** Retrieves or initializes a record for the specified ID with the provided symbol and default rank values. */
     const getRecord = (id: string, sym: IndexedSymbol['Select']) => {
       if (!scores.has(id))

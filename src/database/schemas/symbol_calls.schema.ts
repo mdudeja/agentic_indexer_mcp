@@ -21,6 +21,7 @@ export const symbol_calls = sqliteTable(
     // SET NULL rather than CASCADE so a callee re-index doesn't delete call records.
     callee_id: text().references(() => symbols.id, { onDelete: 'set null' }),
     imports_id: text().references(() => imports.id, { onDelete: 'set null' }),
+    is_lang_feature: integer({ mode: 'boolean' }).notNull().default(false),
     call_line: integer(),
     call_column: integer(),
   },

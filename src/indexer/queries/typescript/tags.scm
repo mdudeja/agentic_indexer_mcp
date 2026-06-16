@@ -66,16 +66,47 @@
   (comment)+ @symbol.docstring
   .
   [
-    (lexical_declaration (variable_declarator) @symbol.docstring.target)
-    (variable_declaration (variable_declarator) @symbol.docstring.target)
+    (lexical_declaration) @symbol.docstring.target
+    (variable_declaration) @symbol.docstring.target
   ]
+)
+
+; Preceding Docstrings for Exported Declarations
+; (export ...) wraps the declaration, so the comment is a sibling of
+; export_statement rather than of the declaration itself.
+(
+  (comment)+ @symbol.docstring
+  .
+  (export_statement
+    declaration: [
+      (class_declaration)
+      (interface_declaration)
+      (type_alias_declaration)
+      (function_declaration)
+      (generator_function_declaration)
+      (enum_declaration)
+      (internal_module)
+      (ambient_declaration)
+    ] @symbol.docstring.target
+  )
+)
+
+(
+  (comment)+ @symbol.docstring
+  .
+  (export_statement
+    declaration: [
+      (lexical_declaration) @symbol.docstring.target
+      (variable_declaration) @symbol.docstring.target
+    ]
+  )
 )
 
 ; Trailing Inline Docstrings for Variables
 (
   [
-    (lexical_declaration (variable_declarator) @symbol.docstring.target)
-    (variable_declaration (variable_declarator) @symbol.docstring.target)
+    (lexical_declaration) @symbol.docstring.target
+    (variable_declaration) @symbol.docstring.target
   ]
   .
   (comment)+ @symbol.docstring.trailing

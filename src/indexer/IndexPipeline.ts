@@ -1,7 +1,7 @@
 import { join, relative } from 'path'
 import { readdir, stat } from 'node:fs/promises'
 import { TreeSitterIndexer } from './TreeSitterIndexer.ts'
-import type { IndexerDB } from '../database/IndexerDB.ts'
+import { IndexerDB } from '../database/IndexerDB.ts'
 import type { IndexerConfig } from 'src/config/types.ts'
 import { AppStateManager } from 'src/state/index.ts'
 import { logError, logInfo } from 'src/utils/logger.ts'
@@ -115,16 +115,10 @@ export class IndexPipeline {
 
     const processedFiles = await this.runSymbolExtractionStep()
 
-    await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
+    await Bun.sleep(3000) // slight delay to ensure all DB transactions are settled before enhancement
 
     await this.runEnhancementStep(processedFiles)
-    // await this.runDocstringStep()
-    // await this.runEmbeddingStep(processedFiles)
-
-    await Bun.sleep(1000) // slight delay to ensure all DB transactions are settled before enhancement
-
-    await this.runEnhancementStep(processedFiles)
-    // await this.runDocstringStep()
+    await this.runDocstringStep()
     // await this.runEmbeddingStep(processedFiles)
   }
 
@@ -170,6 +164,7 @@ export class IndexPipeline {
     }
   }
 
+  /** Enhances a specific file by processing its content. */
   async enhanceFile(absPath: string): Promise<void> {
     const relPath = relative(this.options.cwd, absPath)
     await this.runEnhancementStep([relPath])
@@ -262,6 +257,7 @@ export class IndexPipeline {
     }
   }
 
+  /** Initializes and returns an embedding generator based on configuration settings. */
   private async loadEmbedder(): Promise<EmbeddingGenerator | null> {
     if (!this.config.embedder?.enabled || !this.config.embedder?.provider) {
       logError(
@@ -316,10 +312,13 @@ export class IndexPipeline {
         for (const relPath of processedFilesByExt[ext]!) {
           enhancer.refreshFile(join(this.options.cwd, relPath))
         }
+
+        await enhancer.prepareFiles(processedFilesByExt[ext]!)
         await enhancer.resolveAllPendingCalls(processedFilesByExt[ext]!)
         await enhancer.enhanceSymbolTypesForCallables(processedFilesByExt[ext]!)
         await enhancer.enhanceInterfaceInheritence(processedFilesByExt[ext]!)
         await enhancer.enhanceTypeInheritence(processedFilesByExt[ext]!)
+        await enhancer.closeFiles(processedFilesByExt[ext]!)
       }
     }
 

@@ -4,7 +4,6 @@ import type { IndexerConfig } from './types'
 import { existsSync } from 'node:fs'
 import { logError, logWarning } from 'src/utils/logger'
 
-/** Loads the configuration file from the specified directory, using default values if the file is not found. */
 /** Load the configuration for the indexer by checking the specified directory and files. If a valid configuration file is found, use its settings; otherwise, default values are applied, with special attention to docstring generation preferences. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
   const AGENTIC_DIR = import.meta.env.AGENTIC_DIR || '.agentic'
