@@ -46,6 +46,7 @@ CREATE TABLE `symbol_calls` (
 	`docstring` text,
 	`callee_id` text,
 	`imports_id` text,
+	`is_lang_feature` integer DEFAULT false NOT NULL,
 	`call_line` integer,
 	`call_column` integer,
 	CONSTRAINT `fk_symbol_calls_caller_id_symbols_id_fk` FOREIGN KEY (`caller_id`) REFERENCES `symbols`(`id`) ON DELETE CASCADE,
