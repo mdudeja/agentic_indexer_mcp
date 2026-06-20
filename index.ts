@@ -70,6 +70,7 @@ Commands:
   serve               Run the MCP server (reads over stdio)
   stop                Stop the MCP server
   index               Run a one-off index of the workspace
+  enhance             Run a one-off enhancement of the workspace
   index-file          Index a single file (provide path via --file option)
   enhance-file        Enhance the symbol information for a single file (provide path via --file option)
   remove-docstrings   Remove all generated docstrings from source files and database
@@ -111,7 +112,6 @@ async function main() {
     case 'stop':
       await stopMcpServer()
       process.exit(0)
-      break
 
     case 'index': {
       logWarning(`Running index on ${cwd}`)
@@ -123,7 +123,18 @@ async function main() {
 
       await pipeline.run()
       process.exit(0)
-      break
+    }
+
+    case 'enhance': {
+      logWarning(`Running enhancement on ${cwd}`)
+      const pipeline = new IndexPipeline({
+        cwd,
+        store,
+        includeGitIgnored: values.includeGitIgnored ?? false,
+      })
+
+      await pipeline.runEnhancementStep([])
+      process.exit(0)
     }
 
     case 'index-file': {

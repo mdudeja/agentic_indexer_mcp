@@ -20,6 +20,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       calls: [],
       exceptions: [],
       envVars: [],
+      explicitExports: [],
     }
 
     // Maps node ID to symbol ID to quickly find parent_id
@@ -30,6 +31,38 @@ export class TypescriptAdapter implements LanguageAdapter {
     // ends up null even though they are local, so cleanUpLexicals needs this
     // set to handle them correctly.
     const anonScopeSymbols = new Set<string>()
+
+    // sort matches
+    matches.sort((a, b) => a.patternIndex - b.patternIndex)
+
+    // Pre first pass to gather exports
+    for (const match of matches) {
+      for (const capture of match.captures) {
+        if (capture.name.startsWith('export')) {
+          const capturedNode = capture.node
+          if (!capturedNode) continue
+          result.explicitExports.push({
+            id: randomUUIDv7(),
+            file_path,
+            name: capturedNode.text,
+            line: capturedNode.startPosition.row,
+            column: capturedNode.startPosition.column,
+            end_line: capturedNode.endPosition.row,
+            end_column: capturedNode.endPosition.column,
+            decorator: null,
+            docstring: null,
+            exported: true,
+            inheritence: null,
+            kind: SymbolKind.export,
+            language: 'typescript',
+            parent_id: null,
+            signature: null,
+            parameters_json: null,
+            return_type: null,
+          })
+        }
+      }
+    }
 
     // First pass: extract symbols to build parent map
     for (const match of matches) {
@@ -131,7 +164,6 @@ export class TypescriptAdapter implements LanguageAdapter {
     nodeToSymbolId: Map<number, string>,
     anonScopeSymbols: Set<string>,
   ) {
-    const blockInitMarker = '{'
     let kind: SymbolKind | undefined
     let nameNode: Node | null = null
     let targetNode: Node = node
@@ -142,7 +174,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         kind = SymbolKind.class
         nameNode = node
         targetNode = node.parent!
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
       case 'symbol.interface':
         kind = SymbolKind.interface
@@ -166,7 +198,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         kind = SymbolKind.namespace
         nameNode = node
         targetNode = node.parent!
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
       case 'symbol.module':
         kind = SymbolKind.module
@@ -176,25 +208,25 @@ export class TypescriptAdapter implements LanguageAdapter {
             (c) => c?.type === 'string' || c?.type === 'identifier',
           ) || node
         targetNode = node
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
       case 'symbol.function':
         kind = SymbolKind.function
         nameNode = node
         targetNode = node.parent!
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
       case 'symbol.method':
         kind = SymbolKind.method
         nameNode = node
         targetNode = node.parent!
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
       case 'symbol.field':
         kind = SymbolKind.property
         nameNode = node
         targetNode = node.parent!
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
       case 'symbol.var.decl':
         // The matched node is the declaration, but we captured the name in symbol.var.name
@@ -217,7 +249,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         }
         nameNode = node
         targetNode = declNode
-        signature = targetNode.text.split(blockInitMarker)[0]
+        signature = this.generateSignature(targetNode)
         break
     }
 
@@ -244,10 +276,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         parent_id = nodeToSymbolId.get(p.id)!
         break
       }
-      if (ANON_SCOPE_TYPES.has(p.type)) {
-        insideAnonScope = true
-        break
-      }
+      insideAnonScope = ANON_SCOPE_TYPES.has(p.type) || insideAnonScope
       p = p.parent
     }
 
@@ -273,7 +302,9 @@ export class TypescriptAdapter implements LanguageAdapter {
       docstring: null, // simplified
       parent_id,
       inheritence: null,
-      exported: targetNode.parent?.type.includes('export') ?? false,
+      exported:
+        targetNode.parent?.type.includes('export') ||
+        result.explicitExports.some((e) => e.name === nameNode.text),
       decorator: null,
       language: 'typescript',
     })
@@ -536,7 +567,16 @@ export class TypescriptAdapter implements LanguageAdapter {
     const toRemoveIds = new Set<string>()
 
     for (const symbol of result.symbols) {
-      if (!lexicalKinds.includes(symbol.kind) || symbol.exported) continue
+      const parentId = symbol.parent_id
+      const isParentExported = parentId
+        ? result.symbols.some((s) => s.id === parentId && s.exported)
+        : false
+      if (
+        !lexicalKinds.includes(symbol.kind) ||
+        symbol.exported ||
+        isParentExported
+      )
+        continue
 
       const hasCallableParent =
         anonScopeSymbols.has(symbol.id) ||
@@ -566,5 +606,20 @@ export class TypescriptAdapter implements LanguageAdapter {
     )
 
     return result
+  }
+
+  /** Generates a signature string for a given AST node by analyzing its text content, accounting for nested generics and function bodies.*/
+  private generateSignature(node: Node): string | undefined {
+    let depth = 0
+    const initialText = node.text.split('=>')[0] ?? node.text
+    for (let i = 0; i < initialText.length; i++) {
+      const char = initialText[i]
+      if (char === '<' || char === '(') depth++
+      else if (char === '>' || char === ')') depth--
+      else if (char === '{' && depth === 0) {
+        return initialText.slice(0, i).trim()
+      }
+    }
+    return initialText.trim()
   }
 }

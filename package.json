@@ -6,8 +6,9 @@
   "scripts": {
     "start": "bun run --env-file .env index.ts serve",
     "index": "bun run --env-file .env index.ts index",
-    "index-file": "bun run --env-file .env index.ts index-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/database/IndexerDB.ts",
-    "enhance-file": "bun run --env-file .env index.ts enhance-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/database/repositories/ImportRepository.ts",
+    "enhance": "bun run --env-file .env index.ts enhance",
+    "index-file": "bun run --env-file .env index.ts index-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/utils/datetime.ts",
+    "enhance-file": "bun run --env-file .env index.ts enhance-file --file /home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/server/tools/explore_codebase.ts",
     "remove-docstrings": "bun run --env-file .env index.ts remove-docstrings",
     "query": "bun run --env-file .env index.ts query",
     "serve": "bun run --env-file .env index.ts serve",

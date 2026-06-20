@@ -10,7 +10,11 @@ import { eq, and, isNull, inArray, or } from 'drizzle-orm'
 import { join, relative } from 'path'
 import { AppStateManager } from 'src/state/index.ts'
 import { allCallableKinds } from '../../utils/allCallableKinds.ts'
-import { getParentsOfSymbolCall, parseTypeNames } from 'src/utils/misc.ts'
+import {
+  getParentsOfSymbolCall,
+  parseArguments,
+  parseTypeNames,
+} from 'src/utils/misc.ts'
 
 /** Enhancer implementation that connects to standard Language Servers (like typescript language server, Pyright, or gopls) for runtime type queries. */
 export class GenericLspEnhancer implements Enhancer {
@@ -213,8 +217,8 @@ export class GenericLspEnhancer implements Enhancer {
 
       let parameters: { name: string; type: string }[] = []
       if (paramsStr && paramsStr.trim().length > 0) {
-        const paramParts = paramsStr.split(',').map((p) => p.trim())
-        parameters = paramParts.map((p) => {
+        const parsed = parseArguments(paramsStr)
+        parameters = parsed.map((p) => {
           const [name, ...typeParts] = p.split(':')
           return {
             name: name?.trim() ?? '',
@@ -313,6 +317,12 @@ export class GenericLspEnhancer implements Enhancer {
     }
 
     let enhancedCount = 0
+    let implSymbols: Array<{
+      id: string
+      file_path: string
+      line: number
+      inheritence: schema.Inheritence[] | null
+    }> = []
     if (hits.length > 0) {
       // Single batched lookup for every implementing symbol referenced by the hits.
       const locationKey = (filePath: string, line: number) =>
@@ -320,7 +330,7 @@ export class GenericLspEnhancer implements Enhancer {
       const uniqueLocations = new Map(
         hits.map((h) => [locationKey(h.filePath, h.targetLine), h]),
       )
-      const implSymbols = await this.db
+      implSymbols = await this.db
         .select({
           id: schema.symbols.id,
           file_path: schema.symbols.file_path,
@@ -388,7 +398,7 @@ export class GenericLspEnhancer implements Enhancer {
     }
 
     logInfo(
-      `[LSP Enhancer - ${this.languageId} - Interface Inheritance] Total interface symbols: ${interfaceSymbols.length}, implementation hits from LSP: ${hits.length}, enhanced inheritance entries: ${enhancedCount}.`,
+      `[LSP Enhancer - ${this.languageId} - Interface Inheritance] Total interface symbols: ${interfaceSymbols.length}, implementation hits from LSP: ${hits.length}, symbols found: ${implSymbols.length}, enhanced inheritance entries: ${enhancedCount}.`,
     )
   }
 
@@ -546,7 +556,7 @@ export class GenericLspEnhancer implements Enhancer {
     }
 
     const symbolCallResolutionStats = {
-      definition: 0,
+      languageFeatures: 0,
       references: 0,
       imports: 0,
     }
@@ -564,9 +574,9 @@ export class GenericLspEnhancer implements Enhancer {
       ),
     )
 
-    const resolvedDefinitionCount =
-      await this.resolvePendingCallViaDefinition(relPaths)
-    symbolCallResolutionStats.definition += resolvedDefinitionCount
+    const resolvedLanguageFeatureCount =
+      await this.resolvePendingLanguageFeatureCalls(relPaths)
+    symbolCallResolutionStats.languageFeatures += resolvedLanguageFeatureCount
 
     const totalUnresolvedSymbolCallsCount = await this.db.$count(
       schema.symbol_calls,
@@ -665,13 +675,13 @@ export class GenericLspEnhancer implements Enhancer {
     symbolCallResolutionStats.imports += importsResolvedCount
 
     const totalResolved =
-      symbolCallResolutionStats.definition +
+      symbolCallResolutionStats.languageFeatures +
       symbolCallResolutionStats.references +
       symbolCallResolutionStats.imports
     const remainingUnresolved = allPendingCallsCount - totalResolved
 
     logInfo(
-      `[LSP Enhancer - ${this.languageId} - Symbol Calls] Resolved Counts. Definition: ${symbolCallResolutionStats.definition}, References: ${symbolCallResolutionStats.references}, Imports: ${symbolCallResolutionStats.imports}.`,
+      `[LSP Enhancer - ${this.languageId} - Symbol Calls] Resolved Counts. Language Features: ${symbolCallResolutionStats.languageFeatures}, References: ${symbolCallResolutionStats.references}, Imports: ${symbolCallResolutionStats.imports}.`,
     )
     logInfo(
       `[LSP Enhancer - ${this.languageId} - Symbol Calls] Total Calls: ${allPendingCallsCount}, Resolved: ${totalResolved}, Remaining Unresolved: ${remainingUnresolved}`,
@@ -733,8 +743,11 @@ export class GenericLspEnhancer implements Enhancer {
     // Strip LSP prefixes like "(method)", "(alias)", "(function)"
     const cleanContent = contentToParse.replace(/^\([a-z]+\)\s*/i, '')
 
-    const match = cleanContent.match(/(.*?)(?:\s*)(?:->|=>|:)\s*([^\\\n|$]+)?/)
+    const isCall = cleanContent.includes('(') && cleanContent.includes(')')
 
+    const match = isCall
+      ? cleanContent.match(/\((.*?)\)(?:\s*)(?:->|=>|:)\s*([^\\\n$(]+)?/s)
+      : cleanContent.match(/(.*?)(?:\s*)(?:->|=>|:)\s*([^\\\n$(]+)?/s)
     if (!match) return
 
     const name = match[1]?.trim()
@@ -886,19 +899,25 @@ export class GenericLspEnhancer implements Enhancer {
 
   /** Finds the import whose name best matches a (possibly union) hover type string, searching only the imports already loaded for that file. Mirrors `LIKE '<name>%'` (case-insensitive prefix match). */
   private resolveImportIdByType(
-    typeStr: string,
+    typeStr: string[],
     importsForFile: schema.IndexedImport['Select'][] | undefined,
   ): string | undefined {
     if (!importsForFile || importsForFile.length === 0) return undefined
 
-    const typeNames = parseTypeNames(typeStr.replaceAll('|', '').trim())
-    // No usable type names were extracted: fall back to the first import in the
-    // file, matching the original query's behavior when its LIKE clause list was empty.
-    if (typeNames.length === 0) return importsForFile[0]?.id
+    const typeNames = parseTypeNames(
+      typeStr
+        .join(',')
+        .replaceAll(/(\s+|\s+[A-Za-z0-9_])/g, '')
+        .trim(),
+    )
+    if (typeNames.length === 0) return
 
     const match = importsForFile.find((imp) =>
-      typeNames.some((name) =>
-        imp.imported_name?.toLowerCase().startsWith(name.toLowerCase()),
+      typeNames.some(
+        (name) =>
+          imp.imported_name?.toLowerCase().startsWith(name.toLowerCase()) ||
+          (imp.imported_name &&
+            name.toLowerCase().startsWith(imp.imported_name?.toLowerCase())),
       ),
     )
     return match?.id
@@ -957,9 +976,10 @@ export class GenericLspEnhancer implements Enhancer {
     const symbolsByFile = await this.loadSymbolsByFile(distinctFiles)
 
     let resolvedCount = 0
-    const stillUnresolvedCalls = new Set<schema.IndexedSymbolCall['Select']>()
+    const passBUnresolvedCalls = new Set<schema.IndexedSymbolCall['Select']>()
     const passAResolutions: { callId: string; importId: string }[] = []
 
+    // resolve calls by matching the callee name and its parents against the imports for that file
     for (const call of unresolvedCalls) {
       const parents = getParentsOfSymbolCall(call.call_text, call.callee_name)
       const namesToMatch = new Set([...parents, call.callee_name])
@@ -969,7 +989,7 @@ export class GenericLspEnhancer implements Enhancer {
       )
 
       if (!importEntry) {
-        stillUnresolvedCalls.add(call)
+        passBUnresolvedCalls.add(call)
         continue
       }
 
@@ -977,13 +997,14 @@ export class GenericLspEnhancer implements Enhancer {
       resolvedCount++
     }
     await this.applyImportResolutions(passAResolutions)
-
     totalResolvedCount += resolvedCount
 
     resolvedCount = 0
+    const passCUnresolvedCalls = new Set<schema.IndexedSymbolCall['Select']>()
     const passBResolutions: { callId: string; importId: string }[] = []
 
-    for (const call of stillUnresolvedCalls) {
+    // resolve calls by matching the callee's parent symbols against the imports for that file
+    for (const call of passBUnresolvedCalls) {
       const parents = getParentsOfSymbolCall(
         call.call_text,
         call.callee_name,
@@ -1002,16 +1023,18 @@ export class GenericLspEnhancer implements Enhancer {
         if (importId) {
           passBResolutions.push({ callId: call.id, importId })
           resolvedCount++
+        } else {
+          passCUnresolvedCalls.add(call)
         }
         continue
       }
 
       const signatureInfo =
         await this.getHoverSignatureForSymbol(candidateSymbol)
-      if (!signatureInfo || !signatureInfo.type) continue
+      if (!signatureInfo || !signatureInfo.type || !signatureInfo.name) continue
 
       const importId = this.resolveImportIdByType(
-        signatureInfo.type,
+        [signatureInfo.type, signatureInfo.name],
         importsByFile.get(call.caller_file_path),
       )
       if (!importId) continue
@@ -1020,13 +1043,13 @@ export class GenericLspEnhancer implements Enhancer {
       resolvedCount++
     }
     await this.applyImportResolutions(passBResolutions)
-
     totalResolvedCount += resolvedCount
+
     return totalResolvedCount
   }
 
   /** This method resolves pending symbol calls by checking their definitions against known language feature paths. It updates unresolved calls in the database and returns the number of successfully resolved items. */
-  private async resolvePendingCallViaDefinition(
+  private async resolvePendingLanguageFeatureCalls(
     relPaths: string[],
   ): Promise<number> {
     const langFeaturePaths: string[] =
@@ -1077,7 +1100,7 @@ export class GenericLspEnhancer implements Enhancer {
     return resolvedCount
   }
 
-  /** Hovers at the call site itself (rather than at a parent symbol's declaration) to recover a return type, then resolves it to an import id using the preloaded imports for that file. Returns `undefined` instead of writing directly, so callers can batch the resulting writes. */
+  /** Hovers at the call site's parent to recover a return type, then resolves it to an import id using the preloaded imports for that file. Returns `undefined` instead of writing directly, so callers can batch the resulting writes. */
   private async findImportIdViaParentType(
     call: schema.IndexedSymbolCall['Select'],
     parents: string[],
@@ -1087,20 +1110,48 @@ export class GenericLspEnhancer implements Enhancer {
       return undefined
     }
 
+    let importId: string | undefined
     const absPath = join(this.cwd, call.caller_file_path)
-    const hoverStr = await this.getTypeAtLocation(
-      absPath,
-      call.call_line,
-      call.call_column + call.call_text.indexOf(call.callee_name) - 2,
+    const relevantText = call.call_text.substring(
+      0,
+      call.call_text.indexOf(call.callee_name),
     )
-    if (!hoverStr) return undefined
 
-    const signatureInfo = this.convertHoverStringToSignature(hoverStr)
-    if (!signatureInfo || !signatureInfo.type) return undefined
+    for (const parent of parents) {
+      const parentIndex = relevantText.lastIndexOf(parent)
+      if (parentIndex === -1) continue
+      const lineBreaksBetweenCallAndParent =
+        relevantText.substring(parentIndex).split('\n').length - 1
+      const hoverLine = call.call_line - lineBreaksBetweenCallAndParent
+      const hoverColumn =
+        hoverLine === call.call_line
+          ? call.call_column - (relevantText.length - parentIndex)
+          : (relevantText.substring(0, parentIndex).split('\n').at(-1)
+              ?.length ?? call.call_column - 2)
 
-    return this.resolveImportIdByType(
-      signatureInfo.type,
-      importsByFile.get(call.caller_file_path),
-    )
+      const hoverStr = await this.getTypeAtLocation(
+        absPath,
+        hoverLine,
+        hoverColumn,
+      )
+
+      if (!hoverStr) continue
+
+      const signatureInfo = this.convertHoverStringToSignature(hoverStr)
+      if (!signatureInfo || !signatureInfo.type || !signatureInfo.name) {
+        continue
+      }
+
+      importId = this.resolveImportIdByType(
+        [signatureInfo.type, signatureInfo.name],
+        importsByFile.get(call.caller_file_path),
+      )
+
+      if (importId) {
+        break
+      }
+    }
+
+    return importId
   }
 }

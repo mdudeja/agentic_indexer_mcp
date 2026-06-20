@@ -119,7 +119,7 @@ export class IndexPipeline {
 
     await this.runEnhancementStep(processedFiles)
     await this.runDocstringStep()
-    await this.runEmbeddingStep(processedFiles)
+    // await this.runEmbeddingStep(processedFiles)
   }
 
   /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
@@ -292,6 +292,14 @@ export class IndexPipeline {
 
   /** Runs an enhancement step to improve symbol information in processed files by leveraging type-specific enhancers for better indexing and analysis. */
   async runEnhancementStep(processedFiles: string[]): Promise<void> {
+    if (!processedFiles || processedFiles.length === 0) {
+      await this.populateIgnorePatterns()
+      const files = await this.findFiles(this.options.cwd)
+      processedFiles = files.map((absPath) =>
+        relative(this.options.cwd, absPath),
+      )
+    }
+
     logInfo(
       `[Indexer] Running Step 2: Symbol Enhancement on ${processedFiles.length} files...`,
     )
@@ -314,10 +322,10 @@ export class IndexPipeline {
         }
 
         await enhancer.prepareFiles(processedFilesByExt[ext]!)
-        await enhancer.resolveAllPendingCalls(processedFilesByExt[ext]!)
         await enhancer.enhanceSymbolTypesForCallables(processedFilesByExt[ext]!)
         await enhancer.enhanceInterfaceInheritence(processedFilesByExt[ext]!)
         await enhancer.enhanceTypeInheritence(processedFilesByExt[ext]!)
+        await enhancer.resolveAllPendingCalls(processedFilesByExt[ext]!)
         await enhancer.closeFiles(processedFilesByExt[ext]!)
       }
     }

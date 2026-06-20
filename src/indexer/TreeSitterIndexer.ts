@@ -49,10 +49,13 @@ export class TreeSitterIndexer {
       this.languages.set(langName, lang)
 
       try {
-        const queryPath = path.resolve(__dirname, `queries/${langName}/tags.scm`)
+        const queryPath = path.resolve(
+          __dirname,
+          `queries/${langName}/tags.scm`,
+        )
         if (fs.existsSync(queryPath)) {
           const queryString = fs.readFileSync(queryPath, 'utf-8')
-          const query = new Query(lang, queryString )
+          const query = new Query(lang, queryString)
           this.queries.set(langName, query)
         }
       } catch (qErr) {
@@ -82,20 +85,41 @@ export class TreeSitterIndexer {
 
       if (!langName) {
         logError(`No language mapping found for extension: ${ext}`)
-        return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
+        return {
+          symbols: [],
+          imports: [],
+          calls: [],
+          exceptions: [],
+          envVars: [],
+          explicitExports: [],
+        }
       }
 
       const tree = await this.parseFile(sourceCode, langName)
 
       if (!tree) {
-        return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
+        return {
+          symbols: [],
+          imports: [],
+          calls: [],
+          exceptions: [],
+          envVars: [],
+          explicitExports: [],
+        }
       }
 
       const treesitterConfig = this.config.languages?.[langName]?.treesitter
 
       if (!treesitterConfig) {
         logError(`No Tree-sitter config found for language: ${langName}`)
-        return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
+        return {
+          symbols: [],
+          imports: [],
+          calls: [],
+          exceptions: [],
+          envVars: [],
+          explicitExports: [],
+        }
       }
 
       const query = this.queries.get(langName)
@@ -104,7 +128,14 @@ export class TreeSitterIndexer {
     } catch (err) {
       logError(`Error parsing file ${filePath}`)
       logError('', err)
-      return { symbols: [], imports: [], calls: [], exceptions: [], envVars: [] }
+      return {
+        symbols: [],
+        imports: [],
+        calls: [],
+        exceptions: [],
+        envVars: [],
+        explicitExports: [],
+      }
     }
   }
 

@@ -14,6 +14,7 @@ export interface ExtractionResult {
   calls: IndexedSymbolCall['Insert'][]
   exceptions: IndexedException['Select'][]
   envVars: IndexedEnvVar['Select'][]
+  explicitExports: IndexedSymbol['Select'][]
 }
 
 export interface LanguageAdapter {

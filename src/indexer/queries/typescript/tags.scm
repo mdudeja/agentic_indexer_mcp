@@ -1,16 +1,16 @@
 ; Symbols
-(class_declaration name: (type_identifier) @symbol.class)
-(interface_declaration name: (type_identifier) @symbol.interface)
-(type_alias_declaration name: (type_identifier) @symbol.typeAlias)
-(enum_declaration name: (identifier) @symbol.enum)
 (internal_module name: (_) @symbol.namespace)
 (ambient_declaration) @symbol.module
+(class_declaration name: (type_identifier) @symbol.class)
 
 (function_declaration name: (identifier) @symbol.function)
 (generator_function_declaration name: (identifier) @symbol.function)
-(arrow_function) @symbol.arrow_function ; requires parent var matching
-
 (method_definition name: (property_identifier) @symbol.method)
+
+(interface_declaration name: (type_identifier) @symbol.interface)
+(type_alias_declaration name: (type_identifier) @symbol.typeAlias)
+(enum_declaration name: (identifier) @symbol.enum)
+
 (public_field_definition name: (property_identifier) @symbol.field)
 
 (lexical_declaration 
@@ -32,6 +32,9 @@
 
 ; Imports
 (import_statement) @import.statement
+
+; Exports
+(export_specifier (identifier) @export.identifier)
 
 ; Exceptions
 (throw_statement) @exception.throw

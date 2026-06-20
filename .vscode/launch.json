@@ -22,6 +22,20 @@
             "type": "bun",
             "internalConsoleOptions": "openOnSessionStart",
             "request": "launch",
+            "name": "Debug Enhance",
+            "runtime": "bun",
+            "runtimeArgs": [
+                "run",
+                "enhance",
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "watchMode": false
+        },
+        {
+            "type": "bun",
+            "internalConsoleOptions": "openOnSessionStart",
+            "request": "launch",
             "name": "Debug Index File",
             "runtime": "bun",
             "runtimeArgs": [

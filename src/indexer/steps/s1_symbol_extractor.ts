@@ -1,15 +1,11 @@
 import type { Node, Query } from 'web-tree-sitter'
-import {
-  type IndexedSymbol,
-  type IndexedImport,
-  type IndexedSymbolCall,
-  type IndexedException,
-  type IndexedEnvVar,
-} from '../../config/types'
 import { TypescriptAdapter } from '../adapters/TypescriptAdapter'
 import { PythonAdapter } from '../adapters/PythonAdapter'
 import { LuaAdapter } from '../adapters/LuaAdapter'
-import { type LanguageAdapter } from '../adapters/LanguageAdapter'
+import {
+  type ExtractionResult,
+  type LanguageAdapter,
+} from '../adapters/LanguageAdapter'
 import { logError } from '../../utils/logger'
 
 const adapters: Record<string, LanguageAdapter> = {
@@ -24,20 +20,15 @@ export function extractSymbols(
   rootNode: Node,
   file_path: string,
   langName: string,
-  query?: Query
-): {
-  symbols: IndexedSymbol['Select'][]
-  imports: IndexedImport['Select'][]
-  calls: IndexedSymbolCall['Insert'][]
-  exceptions: IndexedException['Select'][]
-  envVars: IndexedEnvVar['Select'][]
-} {
-  const defaultResult = {
+  query?: Query,
+): ExtractionResult {
+  const defaultResult: ExtractionResult = {
     symbols: [],
     imports: [],
     calls: [],
     exceptions: [],
     envVars: [],
+    explicitExports: [],
   }
 
   if (!rootNode || !query) {

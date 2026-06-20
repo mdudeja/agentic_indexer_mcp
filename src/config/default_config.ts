@@ -39,6 +39,9 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         lang_features_paths: [
           'node_modules/typescript/lib',
           'node_modules/@types/node',
+          'node_modules/%40types/node',
+          'node_modules/@types/bun',
+          'node_modules/%40types/bun',
         ],
         treesitter: {
           language_name: 'typescript',
@@ -54,6 +57,9 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         lang_features_paths: [
           'node_modules/typescript/lib',
           'node_modules/@types/node',
+          'node_modules/%40types/node',
+          'node_modules/@types/bun',
+          'node_modules/%40types/bun',
         ],
         treesitter: {
           language_name: 'tsx',

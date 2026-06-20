@@ -51,10 +51,13 @@ export function getParentsOfSymbolCall(
   const separators = ['.', '->', '::', '?.', '!.', '#']
   const separatorRegex = new RegExp(separators.map((s) => `\\${s}`).join('|'))
 
-  callText = callText
-    .trim()
-    .replace(/\s+/g, '')
-    .substring(0, callText.indexOf(callee_name))
+  callText = callText.trim().replace(/\s+/g, '')
+  callText = callText.substring(
+    0,
+    callText.search(
+      new RegExp(`\\b${callee_name.replaceAll(/[\$\^]/g, '')}\\b`),
+    ),
+  )
 
   // Strip paren contents so separators inside argument lists are ignored.
   // Each pass removes the innermost parens; repeat until none remain.
@@ -75,10 +78,33 @@ export function getParentsOfSymbolCall(
   return parts.filter((part) => part && part.length > 0)
 }
 
-/** This function returns the base name of a type by extracting the last segment after removing any hierarchical or qualified parts. */
-export function getTypeNameWithoutParent(typeName: string): string {
-  const separators = ['.', '->', '::', '?.', '!.', '#']
-  const separatorRegex = new RegExp(separators.map((s) => `\\${s}`).join('|'))
-  const parts = typeName.split(separatorRegex).filter(Boolean)
-  return parts.length > 0 ? parts.at(-1)! : typeName
+/** Parses a string of function arguments, correctly handling nested parentheses, brackets, and braces to ensure that commas within these structures do not split the arguments incorrectly.
+ * Returns an array of individual argument strings. */
+export function parseArguments(argString: string): string[] {
+  const args: string[] = []
+  let depth = 0
+  let currentArg = ''
+
+  for (const char of argString) {
+    if (char === '(' || char === '[' || char === '{' || char === '<') {
+      depth++
+      currentArg += char
+    } else if (char === ')' || char === ']' || char === '}' || char === '>') {
+      depth--
+      currentArg += char
+    } else if (char === ',' && depth === 0) {
+      args.push(currentArg.trim())
+      currentArg = ''
+    } else {
+      currentArg += char
+    }
+  }
+
+  if (currentArg.trim() !== '') {
+    args.push(currentArg.trim())
+  }
+
+  return args
+    .map((arg) => arg.replace(/\s+/g, ' '))
+    .filter((arg) => arg.length > 0)
 }

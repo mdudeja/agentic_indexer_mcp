@@ -18,6 +18,7 @@ export class PythonAdapter implements LanguageAdapter {
       calls: [],
       exceptions: [],
       envVars: [],
+      explicitExports: [],
     }
 
     const nodeToSymbolId = new Map<number, string>()
