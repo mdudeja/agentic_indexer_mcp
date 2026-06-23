@@ -20,6 +20,7 @@ export const customEnum = <T>(name: string) =>
 
 export type Inheritence = {
   inherits_from_name: string
-  inherits_from_id: string
+  inherits_from_id?: string
+  inherits_from_imports_id?: string
   inheritence_type: InheritenceType
 }

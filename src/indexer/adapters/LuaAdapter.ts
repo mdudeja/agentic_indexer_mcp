@@ -22,6 +22,41 @@ export class LuaAdapter implements LanguageAdapter {
     }
 
     const nodeToSymbolId = new Map<number, string>()
+    const anonScopeSymbols = new Set<string>()
+
+    matches.sort((a, b) => a.patternIndex - b.patternIndex)
+
+    // Pre first pass to gather exports
+    for (const match of matches) {
+      for (const capture of match.captures) {
+        if (capture.name.startsWith('export')) {
+          const capturedNode = capture.node
+          if (!capturedNode) continue
+          let text = capturedNode.text
+          if (text.startsWith('"') && text.endsWith('"')) text = text.slice(1, -1)
+          else if (text.startsWith("'") && text.endsWith("'")) text = text.slice(1, -1)
+          result.explicitExports.push({
+            id: randomUUIDv7(),
+            file_path,
+            name: text,
+            line: capturedNode.startPosition.row,
+            column: capturedNode.startPosition.column,
+            end_line: capturedNode.endPosition.row,
+            end_column: capturedNode.endPosition.column,
+            decorator: null,
+            docstring: null,
+            exported: true,
+            inheritence: null,
+            kind: SymbolKind.export,
+            language: 'lua',
+            parent_id: null,
+            signature: null,
+            parameters_json: null,
+            return_type: null,
+          })
+        }
+      }
+    }
 
     // First pass: extract symbols
     for (const match of matches) {
@@ -36,6 +71,7 @@ export class LuaAdapter implements LanguageAdapter {
             file_path,
             result,
             nodeToSymbolId,
+            anonScopeSymbols,
           )
         }
       }
@@ -101,7 +137,7 @@ export class LuaAdapter implements LanguageAdapter {
       }
     }
 
-    return result
+    return this.cleanUpLexicals(result, anonScopeSymbols)
   }
 
   /** Captures and processes symbol declarations in Lua code by handling nodes in the Abstract Syntax Tree (AST). It extracts information such as name, type, location, and parent relationships to build a comprehensive index of project symbols. */
@@ -111,6 +147,7 @@ export class LuaAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
+    anonScopeSymbols: Set<string>,
   ) {
     let kind: SymbolKind | undefined
     let nameNode: Node | null = null
@@ -132,26 +169,36 @@ export class LuaAdapter implements LanguageAdapter {
 
     if (!kind || !nameNode) return
 
+    const signature = this.generateSignature(targetNode)
+
     const id = hashSymbol({
       name: nameNode.text,
       kind,
       file_path,
       line: targetNode.startPosition.row,
       column: targetNode.startPosition.column,
-      signature: targetNode.text.slice(0, 100),
+      signature: targetNode.text,
     })
 
+    const ANON_SCOPE_TYPES = new Set(['function_definition'])
     let parent_id: string | null = null
+    let insideAnonScope = false
     let p = targetNode.parent
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
         parent_id = nodeToSymbolId.get(p.id)!
         break
       }
+      insideAnonScope = ANON_SCOPE_TYPES.has(p.type) || insideAnonScope
       p = p.parent
     }
 
     nodeToSymbolId.set(targetNode.id, id)
+    if (insideAnonScope) {
+      anonScopeSymbols.add(id)
+    }
+
+    const exported = targetNode.parent?.type === 'chunk' && !nameNode.text.startsWith('_')
 
     result.symbols.push({
       id,
@@ -162,13 +209,13 @@ export class LuaAdapter implements LanguageAdapter {
       column: targetNode.startPosition.column,
       end_line: targetNode.endPosition.row,
       end_column: targetNode.endPosition.column,
-      signature: targetNode.text,
+      signature: signature,
       parameters_json: null,
       return_type: null,
       docstring: null,
       parent_id,
       inheritence: null,
-      exported: true,
+      exported,
       decorator: null,
       language: 'lua',
     })
@@ -208,6 +255,7 @@ export class LuaAdapter implements LanguageAdapter {
       caller_file_path: file_path,
       call_text: callText,
       docstring: extractCallDocstring(callExpr || node),
+      is_lang_feature: false,
     })
   }
 
@@ -217,11 +265,39 @@ export class LuaAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
   ) {
+    let modulePath = 'unknown'
+    let importedName: string | null = null
+
+    const argsNode = node.children.find(c => c?.type === 'arguments')
+    if (argsNode) {
+      const stringNode = argsNode.children.find(c => c?.type === 'string')
+      if (stringNode) {
+        modulePath = stringNode.text.slice(1, -1)
+      }
+    }
+
+    let p = node.parent
+    while (p) {
+      if (p.type === 'variable_declaration') {
+        const idNode = p.children.find(c => c?.type === 'identifier')
+        if (idNode) importedName = idNode.text
+        break
+      } else if (p.type === 'assignment_statement') {
+        const varList = p.children.find(c => c?.type === 'variable_list')
+        if (varList) {
+          const idNode = varList.children.find(c => c?.type === 'identifier')
+          if (idNode) importedName = idNode.text
+        }
+        break
+      }
+      p = p.parent
+    }
+
     result.imports.push({
       id: randomUUIDv7(),
       file_path,
-      module_path: node.parent?.text ?? 'unknown', // simplified for lua require
-      imported_name: null,
+      module_path: modulePath,
+      imported_name: importedName,
     })
   }
 
@@ -275,9 +351,71 @@ export class LuaAdapter implements LanguageAdapter {
       id: randomUUIDv7(),
       symbol_id,
       file_path,
-      name: node.text, // Simplified
+      name: node.text,
       line: node.startPosition.row,
       column: node.startPosition.column,
     })
+  }
+
+  /** Cleans up the extraction results by removing unnecessary lexical symbols. Specifically targets variables declared in anonymous scope or under callable parents to prevent redundant references. */
+  private cleanUpLexicals(
+    result: ExtractionResult,
+    anonScopeSymbols: Set<string>,
+  ) {
+    const lexicalKinds = [SymbolKind.var]
+    const callableKinds = [SymbolKind.function]
+
+    const toRemoveIds = new Set<string>()
+
+    for (const symbol of result.symbols) {
+      const parentId = symbol.parent_id
+      const isParentExported = parentId
+        ? result.symbols.some((s) => s.id === parentId && s.exported)
+        : false
+      
+      if (
+        !lexicalKinds.includes(symbol.kind) ||
+        symbol.exported ||
+        isParentExported
+      )
+        continue
+
+      const hasCallableParent =
+        anonScopeSymbols.has(symbol.id) ||
+        (symbol.parent_id
+          ? result.symbols.some(
+              (s) =>
+                s.id === symbol.parent_id && callableKinds.includes(s.kind) && !s.exported,
+            )
+          : false)
+
+      if (hasCallableParent) {
+        toRemoveIds.add(symbol.id)
+      }
+    }
+
+    result.symbols = result.symbols.filter(
+      (s) => !toRemoveIds.has(s.id) && !toRemoveIds.has(s.parent_id ?? ''),
+    )
+    result.calls = result.calls.filter((c) =>
+      result.symbols.some((s) => s.id === c.caller_id),
+    )
+    result.exceptions = result.exceptions.filter((e) =>
+      result.symbols.some((s) => s.id === e.symbol_id),
+    )
+    result.envVars = result.envVars.filter((v) =>
+      result.symbols.some((s) => s.id === v.symbol_id),
+    )
+
+    return result
+  }
+
+  /** Generates a signature string for a given AST node by analyzing its text content, removing function bodies. */
+  private generateSignature(node: Node): string {
+    const lines = node.text.split('\n')
+    if (lines.length > 0) {
+      return lines[0]!.trim()
+    }
+    return node.text.slice(0, 100).trim()
   }
 }

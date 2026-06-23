@@ -6,8 +6,8 @@ import { logError, logWarning } from 'src/utils/logger'
 
 /** Load the configuration for the indexer by checking the specified directory and files. If a valid configuration file is found, use its settings; otherwise, default values are applied, with special attention to docstring generation preferences. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
-  const AGENTIC_DIR = import.meta.env.AGENTIC_DIR || '.agentic'
-  const CONFIG_FILENAME = import.meta.env.CONFIG_FILENAME || 'config.json'
+  const AGENTIC_DIR = process.env.AGENTIC_DIR || '.agentic'
+  const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.json'
 
   const configPath = join(rootDir, AGENTIC_DIR, CONFIG_FILENAME)
 

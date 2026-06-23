@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'bun'
 import { homedir } from 'node:os'
-import { dirname, relative } from 'node:path'
-import { isAbsolute, resolve } from 'path'
+import { dirname, join, isAbsolute, resolve, relative } from 'path'
+import { AppStateManager } from 'src/state'
 
 /** "Resolves a given path by converting relative and tilde-based paths to absolute paths." */
 export const resolvePath = (inputPath: string): string => {
@@ -14,7 +14,8 @@ export const resolvePath = (inputPath: string): string => {
     return resolvedPath
   }
 
-  const baseDir = resolve(import.meta.dir, '../../')
+  const root = AppStateManager.getInstance().getItem('root')
+  const baseDir = root || resolve(import.meta.dir, '../../')
   resolvedPath = resolve(baseDir, resolvedPath)
   return resolvedPath
 }
@@ -24,22 +25,30 @@ export const resolveImportedModulePath = (
   importPath: string,
   filePath: string,
 ): string => {
-  const baseDir = resolve(import.meta.dir, '../../')
-  const fileDir = relative(baseDir, dirname(filePath))
+  const fileDir = dirname(filePath)
+
+  const root = AppStateManager.getInstance().getItem('root')
+  const baseDir = root || resolve(import.meta.dir, '../../')
 
   if (importPath.startsWith('.')) {
-    // Relative import
-    return relative(baseDir, resolve(fileDir, importPath))
+    const relativeImpPath = relative(
+      baseDir,
+      resolve(baseDir, fileDir, importPath),
+    )
+    return relativeImpPath.replace(/(\.{1,})(\/)?/g, '')
   } else {
-    // For non-relative imports, it could be a package or an absolute path. We need to handle both cases.
+    // For non-relative imports, we resolve to the absolute path and then slice off the root
     try {
-      const resolvedModulePath = relative(
-        baseDir,
-        fileURLToPath(import.meta.resolve(importPath)),
-      )
-      return resolvedModulePath
+      const resolved = fileURLToPath(import.meta.resolve(importPath))
+      const root = AppStateManager.getInstance().getItem('root')
+      const baseDir = root || resolve(import.meta.dir, '../../')
+
+      if (resolved.startsWith(baseDir)) {
+        return resolved.slice(baseDir.length).replace(/^[/\\]/, '')
+      }
+
+      return resolved
     } catch {
-      // If it fails, treat it as an absolute path
       return importPath
     }
   }

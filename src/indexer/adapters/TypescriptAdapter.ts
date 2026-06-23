@@ -83,7 +83,45 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
 
-    // Second pass: extract docstrings
+    // Second pass: attach decorators to their target symbols
+    for (const match of matches) {
+      const decoratorCapture = match.captures.find(
+        (c) => c.name === 'symbol.decorator',
+      )
+      if (!decoratorCapture) continue
+
+      const decoratorNode = decoratorCapture.node
+      const parent = decoratorNode.parent
+      if (!parent) continue
+
+      let targetId: string | undefined
+
+      if (parent.type === 'public_field_definition') {
+        // Decorator is a child of the field node — field itself is the target
+        targetId = nodeToSymbolId.get(parent.id)
+      } else {
+        // Decorator is a sibling — skip past other decorators to find the target
+        let sibling = decoratorNode.nextNamedSibling
+        while (sibling?.type === 'decorator') {
+          sibling = sibling.nextNamedSibling
+        }
+        if (sibling) {
+          targetId = nodeToSymbolId.get(sibling.id)
+        }
+      }
+
+      if (targetId) {
+        const symbol = result.symbols.find((s) => s.id === targetId)
+        if (symbol) {
+          const text = decoratorNode.text
+          symbol.decorator = symbol.decorator
+            ? symbol.decorator + '\n' + text
+            : text
+        }
+      }
+    }
+
+    // Third pass: extract docstrings
     for (const match of matches) {
       const docstringCaptures = match.captures.filter(
         (c) =>
@@ -119,7 +157,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
 
-    // Third pass: extract calls, imports, exceptions, envVars (needs caller context)
+    // Fourth pass: extract calls, imports, exceptions, envVars (needs caller context)
     for (const match of matches) {
       for (const capture of match.captures) {
         if (capture.name.startsWith('call.')) {

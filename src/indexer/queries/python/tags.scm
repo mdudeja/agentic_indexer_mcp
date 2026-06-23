@@ -15,18 +15,69 @@
 (import_statement) @import.statement
 (import_from_statement) @import.statement
 
+; Exports
+(assignment
+  left: (identifier) @_name
+  right: (list (string) @export.identifier)
+  (#eq? @_name "__all__"))
+
 ; Exceptions
 (raise_statement) @exception.raise
 
 ; EnvVars
+; environ["KEY"]
 (subscript
-  value: (identifier) @env.obj
-  subscript: (string) @env.index)
+  value: (identifier) @_obj
+  subscript: (string) @env.key
+  (#eq? @_obj "environ"))
+
+; os.environ["KEY"]
 (subscript
-  value: (attribute attribute: (identifier) @env.obj)
-  subscript: (string) @env.index)
+  value: (attribute
+    object: (identifier) @_module
+    attribute: (identifier) @_attr)
+  subscript: (string) @env.key
+  (#eq? @_module "os")
+  (#eq? @_attr "environ"))
+
+; os.getenv("KEY")
 (call
-  function: (attribute attribute: (identifier) @env.func))
+  function: (attribute
+    object: (identifier) @_module
+    attribute: (identifier) @_func)
+  arguments: (argument_list (string) @env.key)
+  (#eq? @_module "os")
+  (#eq? @_func "getenv"))
+
+; environ.get("KEY")
+(call
+  function: (attribute
+    object: (identifier) @_module
+    attribute: (identifier) @_func)
+  arguments: (argument_list (string) @env.key)
+  (#eq? @_module "environ")
+  (#eq? @_func "get"))
+
+; os.environ.get("KEY")
+(call
+  function: (attribute
+    object: (attribute
+      object: (identifier) @_module
+      attribute: (identifier) @_attr)
+    attribute: (identifier) @_func)
+  arguments: (argument_list (string) @env.key)
+  (#eq? @_module "os")
+  (#eq? @_attr "environ")
+  (#eq? @_func "get"))
+
+; Decorators
+(decorated_definition
+  (decorator) @symbol.decorator
+  definition: [
+    (function_definition)
+    (class_definition)
+  ] @symbol.decorator.target
+)
 
 ; Docstrings
 (class_definition

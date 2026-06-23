@@ -18,28 +18,22 @@ import {
 
 /** Enhancer implementation that connects to standard Language Servers (like typescript language server, Pyright, or gopls) for runtime type queries. */
 export class GenericLspEnhancer implements Enhancer {
-  private store: IndexerDB
-  private db: ReturnType<IndexerDB['getDb']>
-  private client: LspClient | null = null
-  private openDocuments = new Set<string>()
-  private initialized = false
-  private available = false
-  private serverCapabilities: Record<string, any> = {}
+  protected store: IndexerDB
+  protected db: ReturnType<IndexerDB['getDb']>
+  protected client: LspClient | null = null
+  protected openDocuments = new Set<string>()
+  protected initialized = false
+  protected available = false
+  protected serverCapabilities: Record<string, any> = {}
 
   /** Initializes a new instance of the GenericLspEnhancer class with the specified current working directory (cwd), LSP command, and language identifier. Sets up the database connection using IndexerDB. */
   constructor(
-    private cwd: string,
-    private lspCommand: string[],
-    private languageId: string,
+    protected cwd: string,
+    protected lspCommand: string[],
+    protected languageId: string,
   ) {
     this.store = IndexerDB.getInstance()
     this.db = this.store.getDb()
-  }
-
-  /** Determines whether a specified capability is supported by the server. */
-  private supports(capability: string): boolean {
-    const cap = this.serverCapabilities[capability]
-    return cap === true || (typeof cap === 'object' && cap !== null)
   }
 
   /** Initializes the LSP client and returns whether the initialization was successful. */
@@ -461,7 +455,6 @@ export class GenericLspEnhancer implements Enhancer {
             ...parseTypeNames(extendsMatch[1]!).map((n) => ({
               inheritence_type: InheritenceType.extends,
               inherits_from_name: n,
-              inherits_from_id: '',
             })),
           )
         }
@@ -470,7 +463,6 @@ export class GenericLspEnhancer implements Enhancer {
             ...parseTypeNames(implementsMatch[1]!).map((n) => ({
               inheritence_type: InheritenceType.implements,
               inherits_from_name: n,
-              inherits_from_id: '',
             })),
           )
         }
@@ -487,7 +479,6 @@ export class GenericLspEnhancer implements Enhancer {
             ...parseTypeNames(rhs.replace(/&/g, ',')).map((n) => ({
               inheritence_type: InheritenceType.intersection,
               inherits_from_name: n,
-              inherits_from_id: '',
             })),
           )
         } else if (rhs.includes('|')) {
@@ -495,7 +486,6 @@ export class GenericLspEnhancer implements Enhancer {
             ...parseTypeNames(rhs.replace(/\|/g, ',')).map((n) => ({
               inheritence_type: InheritenceType.union,
               inherits_from_name: n,
-              inherits_from_id: '',
             })),
           )
         } else {
@@ -505,7 +495,6 @@ export class GenericLspEnhancer implements Enhancer {
             inheritence.push({
               inheritence_type: InheritenceType.extends,
               inherits_from_name: utilityMatch[1]!,
-              inherits_from_id: '',
             })
           }
         }
@@ -695,8 +684,14 @@ export class GenericLspEnhancer implements Enhancer {
     }
   }
 
+  /** Determines whether a specified capability is supported by the server. */
+  protected supports(capability: string): boolean {
+    const cap = this.serverCapabilities[capability]
+    return cap === true || (typeof cap === 'object' && cap !== null)
+  }
+
   /** "Ensures the specified file is opened by notifying the language server if not already open." */
-  private ensureFileOpen(absPath: string): void {
+  protected ensureFileOpen(absPath: string): void {
     if (!this.client || this.openDocuments.has(absPath)) return
 
     try {
@@ -719,7 +714,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Converts a hover string containing function or method information into a structured format with the function's name and return type. */
-  private convertHoverStringToSignature(hoverStr: string):
+  protected convertHoverStringToSignature(hoverStr: string):
     | {
         name?: string
         type?: string
@@ -757,7 +752,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Hovers over a symbol's name (located via its signature) and parses the resulting hover string into a `{name, type}` pair. Returns `undefined` if hover info is unavailable. */
-  private async getHoverSignatureForSymbol(sym: {
+  protected async getHoverSignatureForSymbol(sym: {
     file_path: string
     name: string
     line: number
@@ -777,7 +772,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** This method retrieves all references for a given symbol at a specific location in a file. */
-  private async getReferencesForSymbol(
+  protected async getReferencesForSymbol(
     name: string,
     absPath: string,
     line: number,
@@ -820,7 +815,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Retrieves the definition locations for a given symbol call by querying the language server. Returns an array of file paths with their corresponding line and column numbers where the symbol is defined. */
-  private async getDefinitionForSymbolCall(
+  protected async getDefinitionForSymbolCall(
     call: schema.IndexedSymbolCall['Select'],
   ): Promise<{ file_path: string; line: number; column: number }[]> {
     if (
@@ -857,7 +852,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Groups an array of rows keyed by their `file_path`, preserving each row's original relative order within its group. */
-  private groupByFilePath<T extends { file_path: string }>(
+  protected groupByFilePath<T extends { file_path: string }>(
     rows: T[],
   ): Map<string, T[]> {
     const map = new Map<string, T[]>()
@@ -870,7 +865,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Batch-loads every import for the given files in a single query, grouped by file path. */
-  private async loadImportsByFile(
+  protected async loadImportsByFile(
     filePaths: string[],
   ): Promise<Map<string, schema.IndexedImport['Select'][]>> {
     if (filePaths.length === 0) return new Map()
@@ -884,7 +879,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Batch-loads every symbol for the given files in a single query, grouped by file path. */
-  private async loadSymbolsByFile(
+  protected async loadSymbolsByFile(
     filePaths: string[],
   ): Promise<Map<string, schema.IndexedSymbol['Select'][]>> {
     if (filePaths.length === 0) return new Map()
@@ -898,7 +893,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Finds the import whose name best matches a (possibly union) hover type string, searching only the imports already loaded for that file. Mirrors `LIKE '<name>%'` (case-insensitive prefix match). */
-  private resolveImportIdByType(
+  protected resolveImportIdByType(
     typeStr: string[],
     importsForFile: schema.IndexedImport['Select'][] | undefined,
   ): string | undefined {
@@ -924,7 +919,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Applies a batch of call -> import resolutions, issuing one UPDATE per distinct import (covering all of its calls via `inArray`) instead of one UPDATE per call. */
-  private async applyImportResolutions(
+  protected async applyImportResolutions(
     resolutions: { callId: string; importId: string }[],
   ): Promise<void> {
     if (resolutions.length === 0) return
@@ -945,7 +940,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Resolves pending symbol calls by leveraging imported modules. This method attempts to match unresolved calls with their corresponding imports to fulfill language service requests. */
-  private async resolvePendingCallsViaImports(
+  protected async resolvePendingCallsViaImports(
     relPaths: string[],
   ): Promise<number> {
     let totalResolvedCount = 0
@@ -1049,7 +1044,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** This method resolves pending symbol calls by checking their definitions against known language feature paths. It updates unresolved calls in the database and returns the number of successfully resolved items. */
-  private async resolvePendingLanguageFeatureCalls(
+  protected async resolvePendingLanguageFeatureCalls(
     relPaths: string[],
   ): Promise<number> {
     const langFeaturePaths: string[] =
@@ -1101,7 +1096,7 @@ export class GenericLspEnhancer implements Enhancer {
   }
 
   /** Hovers at the call site's parent to recover a return type, then resolves it to an import id using the preloaded imports for that file. Returns `undefined` instead of writing directly, so callers can batch the resulting writes. */
-  private async findImportIdViaParentType(
+  protected async findImportIdViaParentType(
     call: schema.IndexedSymbolCall['Select'],
     parents: string[],
     importsByFile: Map<string, schema.IndexedImport['Select'][]>,

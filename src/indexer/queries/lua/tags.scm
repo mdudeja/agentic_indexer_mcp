@@ -22,18 +22,23 @@
   name: (identifier) @_name
   (#eq? @_name "require")) @import.statement
 
+; Exports
+(return_statement (expression_list (identifier) @export.identifier))
+
 ; Exceptions
 (function_call 
   name: (identifier) @_name
   (#eq? @_name "error")) @exception.raise
 
 ; EnvVars
+; os.getenv("KEY")
 (function_call
   name: (dot_index_expression
     table: (identifier) @_tbl
-    field: (identifier) @_fld
-    (#eq? @_tbl "os")
-    (#eq? @_fld "getenv"))) @env.call
+    field: (identifier) @_fld)
+  arguments: (arguments (string) @env.key)
+  (#eq? @_tbl "os")
+  (#eq? @_fld "getenv"))
 
 ; Preceding Docstrings
 (

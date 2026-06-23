@@ -39,13 +39,29 @@
 ; Exceptions
 (throw_statement) @exception.throw
 
+; Decorators
+; Target association is done in the adapter: walk nextNamedSibling past
+; other decorators for siblings, or use parent for field children.
+(decorator) @symbol.decorator
+
 ; EnvVars
+; process.env.KEY
 (member_expression
-  object: (identifier) @env.obj
-  property: (property_identifier) @env.prop)
+  object: (member_expression
+    object: (identifier) @_obj
+    property: (property_identifier) @_prop)
+  property: (property_identifier) @env.key
+  (#eq? @_obj "process")
+  (#eq? @_prop "env"))
+
+; process.env["KEY"]
 (subscript_expression
-  object: (identifier) @env.obj
-  index: (string) @env.index)
+  object: (member_expression
+    object: (identifier) @_obj
+    property: (property_identifier) @_prop)
+  index: (string) @env.key
+  (#eq? @_obj "process")
+  (#eq? @_prop "env"))
 
 ; Preceding Docstrings
 (

@@ -4,15 +4,20 @@ export const default_config: Record<'indexer', IndexerConfig> = {
   indexer: {
     enabled: true,
     ignore_patterns: [
-      '.git',
+      '.git/',
       '.vscode',
       '.idea',
       '*.md',
-      'drizzle_migrations',
+      'migrations',
+      'node_modules',
       '*.lock',
       'tsconfig',
       '.prettier*',
       '.claude/*.json',
+      '__pycache__',
+      'venv',
+      'poetry',
+      'docker',
     ],
     extnToLangMap: {
       tsx: 'tsx',
@@ -68,7 +73,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       python: {
         extensions: ['.py'],
-        lsp_command: ['pyright-langserver', '--stdio'],
+        lsp_command: [
+          '/home/md/.local/share/nvim/mason/bin/pyright-langserver',
+          '--stdio',
+        ],
+        lang_features_paths: ['lib/python', 'typeshed'],
         treesitter: {
           language_name: 'python',
           signature_max_length: 400,
@@ -76,7 +85,8 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       lua: {
         extensions: ['.lua'],
-        lsp_command: ['lua-language-server'],
+        lsp_command: ['/home/md/.local/share/nvim/mason/bin/stylua', '--stdio'],
+        lang_features_paths: ['lib/lua', 'luajit'],
         treesitter: {
           language_name: 'lua',
           signature_max_length: 400,
@@ -87,6 +97,13 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         lsp_command: [
           '/home/md/.local/share/nvim/mason/bin/typescript-language-server',
           '--stdio',
+        ],
+        lang_features_paths: [
+          'node_modules/typescript/lib',
+          'node_modules/@types/node',
+          'node_modules/%40types/node',
+          'node_modules/@types/bun',
+          'node_modules/%40types/bun',
         ],
         treesitter: {
           language_name: 'javascript',

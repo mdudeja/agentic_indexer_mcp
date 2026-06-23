@@ -11,6 +11,8 @@ import { DocstringGenerationStep } from './steps/s3_docstring_generator.ts'
 import type { EmbeddingGenerator } from './steps/s4_EmbeddingGenerator.ts'
 import { OllamaEmbeddingGenerator } from './embedders/OllamaEmbeddingGenerator.ts'
 import { hashFileContent } from 'src/utils/hashers.ts'
+import { PythonLspEnhancer } from './enhancers/PythonLspEnhancer.ts'
+import { TypescriptLspEnhancer } from './enhancers/TypescriptLspEnhancer.ts'
 
 const embedderNameToClass: Record<string, new () => EmbeddingGenerator> = {
   ollama: OllamaEmbeddingGenerator,
@@ -85,6 +87,13 @@ export class IndexPipeline {
     const gitignoreFiles = await this.findGitignoreFiles(this.options.cwd)
 
     for (const gitignoreFile of gitignoreFiles) {
+      if (
+        [...this.ignoreRegexPatterns].some((pattern) =>
+          pattern.test(gitignoreFile),
+        )
+      ) {
+        continue
+      }
       const content = await Bun.file(gitignoreFile).text()
       const patterns = content
         .split('\n')
@@ -239,11 +248,28 @@ export class IndexPipeline {
       return null
     }
 
-    const enhancer = new GenericLspEnhancer(
-      this.options.cwd,
-      lspCommand,
-      language,
-    )
+    let enhancer: Enhancer
+
+    switch (language) {
+      case 'python':
+        enhancer = new PythonLspEnhancer(this.options.cwd, lspCommand, language)
+        break
+      case 'typescript':
+      case 'javascript':
+        enhancer = new TypescriptLspEnhancer(
+          this.options.cwd,
+          lspCommand,
+          language,
+        )
+        break
+      default:
+        enhancer = new GenericLspEnhancer(
+          this.options.cwd,
+          lspCommand,
+          language,
+        )
+        break
+    }
     const initialized = await enhancer.init()
     if (initialized) {
       this.enhancers[ext] = enhancer
