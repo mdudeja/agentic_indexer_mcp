@@ -510,7 +510,7 @@ export class GenericLspEnhancer implements Enhancer {
 
     if (candidates.length === 0) {
       logInfo(
-        `[LSP Enhancer - ${this.languageId}] No inheritance relationships found.`,
+        `[LSP Enhancer - ${this.languageId}] No type inheritance relationships found.`,
       )
       return
     }
@@ -1073,11 +1073,11 @@ export class GenericLspEnhancer implements Enhancer {
       const definitions = await this.getDefinitionForSymbolCall(call)
       if (definitions.length === 0) continue
 
-      const isEs5 = definitions.every((def) =>
+      const isLangFeature = definitions.every((def) =>
         langFeaturePaths.some((featPath) => def.file_path.includes(featPath)),
       )
 
-      if (isEs5) {
+      if (isLangFeature) {
         langFeatureCalls.add(call.id)
         resolvedCount++
       }

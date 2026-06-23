@@ -265,6 +265,7 @@ export class DocstringGenerationStep {
       // Remove anything within <think> tags if present
       const cleanedDocstring = docstring
         .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .replace(/[\"\']/g, '')
         .trim()
       if (cleanedDocstring.length === 0) {
         logWarning(
@@ -284,11 +285,18 @@ export class DocstringGenerationStep {
       if (docCfg.write_to_file) {
         const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
         const comment = formatComment(cleanedDocstring, sym.language)
-        const indentedComment = comment
+        let indentedComment = comment
           .split('\n')
           .map((l) => `${indent}${l}`)
           .join('\n')
-        fileLines.splice(sym.line, 0, indentedComment)
+
+        if (sym.language === 'python') {
+          indentedComment = `    ${indentedComment}`
+        }
+
+        const targetLine = sym.language === 'python' ? sym.line + 1 : sym.line
+
+        fileLines.splice(targetLine, 0, indentedComment)
       }
     }
 

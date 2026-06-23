@@ -74,10 +74,12 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       python: {
         extensions: ['.py'],
         lsp_command: [
-          '/home/md/.local/share/nvim/mason/bin/pyright-langserver',
+          '/home/md/.local/share/nvim/mason/bin/basedpyright-langserver',
+          '-v',
+          '/home/md/Projects/ECN/ashiyana_mis/repo/.venv',
           '--stdio',
         ],
-        lang_features_paths: ['lib/python', 'typeshed'],
+        lang_features_paths: ['/usr/lib/python', 'typeshed', 'django'],
         treesitter: {
           language_name: 'python',
           signature_max_length: 400,

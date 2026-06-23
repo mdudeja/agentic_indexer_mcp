@@ -5,6 +5,13 @@
 (assignment 
   left: (identifier) @symbol.var.name) @symbol.var.decl
 
+; class properties
+(assignment
+  left: (attribute
+    object: (identifier) @_module
+    attribute: (identifier) @symbol.field)
+  (#eq? @_module "self"))
+
 ; Calls
 (call
   function: (identifier) @call.identifier)

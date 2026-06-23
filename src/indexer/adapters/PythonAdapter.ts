@@ -196,6 +196,10 @@ export class PythonAdapter implements LanguageAdapter {
       kind = SymbolKind.var
       targetNode = node.parent!
       nameNode = node
+    } else if (captureName === 'symbol.field') {
+      kind = SymbolKind.property
+      targetNode = node.parent!
+      nameNode = node
     }
 
     if (!kind || !nameNode) return
@@ -218,6 +222,21 @@ export class PythonAdapter implements LanguageAdapter {
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
         parent_id = nodeToSymbolId.get(p.id)!
+        if (kind === SymbolKind.property) {
+          let classParentId: string | null = parent_id
+          while (true) {
+            classParentId =
+              result.symbols.find((s) => s.id === classParentId)?.parent_id ??
+              null
+            if (
+              classParentId &&
+              result.symbols.find((s) => s.id === classParentId)?.kind ===
+                SymbolKind.class
+            )
+              break
+          }
+          parent_id = classParentId
+        }
         break
       }
       insideAnonScope = ANON_SCOPE_TYPES.has(p.type) || insideAnonScope
