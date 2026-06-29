@@ -87,6 +87,12 @@ export function registerSearchSymbolsTool(server: McpServer) {
             if (r.return_type) {
               str += `\n  Returns: ${r.return_type}`
             }
+            if (r.inheritence && r.inheritence.length) {
+              str += '\n  Inheritence: '
+              for (const item of r.inheritence) {
+                str += `\n  ${item.inheritence_type} ${item.inherits_from_name} (${item.inherits_from_id ? `id=${item.inherits_from_id}, ` : `imports_id=${item.inherits_from_imports_id}`})`
+              }
+            }
             return str
           })
           .join('\n\n')

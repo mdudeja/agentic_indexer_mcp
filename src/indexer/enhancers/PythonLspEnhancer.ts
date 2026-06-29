@@ -1,11 +1,12 @@
 import { GenericLspEnhancer } from './GenericLspEnhancer'
 import * as schema from '../../database/schemas/index.ts'
-import { eq, and, isNull, inArray, or } from 'drizzle-orm'
+import { eq, and, isNull, inArray } from 'drizzle-orm'
 import { SymbolKind } from '../../database/schemas/index.ts'
 import { logInfo } from 'src/utils/logger.ts'
 
 /** Specialized LSP enhancer for Python, extending generic LSP capabilities with language-specific optimizations and features. */
 export class PythonLspEnhancer extends GenericLspEnhancer {
+  /** Enhances interface inheritance by resolving missing inheritance information for classes in specified files. */
   override async enhanceInterfaceInheritence(
     relPaths: string[],
   ): Promise<void> {
@@ -61,6 +62,7 @@ export class PythonLspEnhancer extends GenericLspEnhancer {
     )
   }
 
+  /** Extracts inherited items from a class declaration based on its constructor parameters. */
   private async getInheritsFromItems(
     symbol: schema.IndexedSymbol['Select'],
   ): Promise<string[] | null> {
@@ -93,6 +95,7 @@ export class PythonLspEnhancer extends GenericLspEnhancer {
     return Array.from(new Set(separatedInheritenceList))
   }
 
+  /** Generates inheritance relationships for a given symbol by analyzing its inherited types, determining if they are imported or locally defined. Returns an array of inheritance items specifying the type and source of each inheritance. */
   private async generateInheritenceForSymbol(
     symbol: schema.IndexedSymbol['Select'],
     importsByFile: schema.IndexedImport['Select'][] | undefined,

@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import type { NestedCaller } from 'src/database/types'
-import type { IndexedImport } from 'src/database/schemas'
+import type { IndexedImport, IndexedSymbol } from 'src/database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find all references to a symbol — both call sites and import locations. Supersedes find_importers with symbol-level precision. */
@@ -14,10 +14,11 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
       description:
         'Find every place in the codebase that references a symbol or module. ' +
         '\n\n' +
-        'THREE REFERENCE TYPES RETURNED: ' +
+        'FOUR REFERENCE TYPES RETURNED: ' +
         '(1) Call sites — functions that invoke the symbol (with file:line). ' +
         '(2) Named imports — files that import the symbol by name (`import { foo } from ...`). ' +
         "(3) Module importers — files that import the symbol's containing module (only when input looks like a path). " +
+        '(4) Inheriters — symbols that inherit from the symbol (with file:line).' +
         '\n\n' +
         'HOW TO CALL: Pass a symbol name to find call sites and named imports. ' +
         'Pass a file path (containing `/` or `.`) to also find module-level importers. ' +
@@ -47,14 +48,25 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           .boolean()
           .default(true)
           .describe('Include call sites where this symbol is invoked'),
+        include_inheritors: z
+          .boolean()
+          .default(true)
+          .describe('Include symbols that inherit from this symbol'),
       }),
     },
-    async ({ symbol_name, file_pattern, include_imports, include_calls }) => {
+    async ({
+      symbol_name,
+      file_pattern,
+      include_imports,
+      include_calls,
+      include_inheritors,
+    }) => {
       const store = IndexerDB.getInstance()
       try {
         let allCallers: NestedCaller[] = [],
           importRefs: IndexedImport['Select'][] = [],
-          moduleImporters: IndexedImport['Select'][] = []
+          moduleImporters: IndexedImport['Select'][] = [],
+          inheritors: IndexedSymbol['Select'][] = []
 
         const name = symbol_name as string
         const sections: string[] = []
@@ -118,6 +130,23 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           }
         }
 
+        if (include_inheritors) {
+          inheritors = await store.symbols.getSymbolsInheritingFrom(
+            symbol!.name,
+            symbol!.id,
+          )
+          if (inheritors.length > 0) {
+            const inheritorLines = inheritors.map(
+              (i) => `  - ${i.name} in ${i.file_path}:${i.line + 1}`,
+            )
+            sections.push(
+              `Inherited by (${inheritors.length} symbol${inheritors.length !== 1 ? 's' : ''}):\n${inheritorLines.join('\n')}`,
+            )
+          } else {
+            sections.push(`Inherited by: (none found)`)
+          }
+        }
+
         // Module-level importers when name looks like a path
         if (name.includes('/') || name.includes('.')) {
           const cleanedName = name.replace(/\//g, '').replace(/\.[\w]+$/g, '')
@@ -152,6 +181,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
             .filter((p): p is string => p !== null),
           ...importRefs.map((i) => i.file_path),
           ...moduleImporters.map((i) => i.file_path),
+          ...inheritors.map((i) => i.file_path),
         ])
         await updateUsage(
           'find_symbol_references',

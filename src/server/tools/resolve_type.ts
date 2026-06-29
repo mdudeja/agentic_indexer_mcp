@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { like, or } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
-import type { SymbolKind } from '../../database/schemas'
+import { SymbolKind } from '../../database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
 
 /** Registers a tool to find a type/interface definition and all symbols that produce or consume it. */
@@ -53,11 +53,12 @@ export function registerResolveTypeTool(server: McpServer) {
         const resultLimit = limit ?? 20
 
         // Find type and interface definitions
-        const [typeMatches, ifaceMatches] = await Promise.all([
-          store.symbols.search(name, 'type' as SymbolKind, undefined, 10),
-          store.symbols.search(name, 'interface' as SymbolKind, undefined, 10),
+        const [typeMatches, ifaceMatches, classMatches] = await Promise.all([
+          store.symbols.search(name, SymbolKind.type, undefined, 10),
+          store.symbols.search(name, SymbolKind.interface, undefined, 10),
+          store.symbols.search(name, SymbolKind.class, undefined, 10),
         ])
-        const definitions = [...typeMatches, ...ifaceMatches]
+        const definitions = [...typeMatches, ...ifaceMatches, ...classMatches]
 
         // Find symbols that produce this type (return_type contains the name)
         const producers = await db
@@ -167,7 +168,7 @@ export function registerResolveTypeTool(server: McpServer) {
             return `  [${rel?.inheritence_type?.toUpperCase() ?? 'EXTENDS'}] ${i.name} (${i.kind}) in ${i.file_path}:${i.line + 1}`
           })
           sections.push(
-            `Inheritors — types/interfaces extending or composing ${name} (${inheritors.length}):\n${inheritLines.join('\n')}`,
+            `Inheritors — types/interfaces/classes extending or composing ${name} (${inheritors.length}):\n${inheritLines.join('\n')}`,
           )
         } else {
           sections.push(`Inheritors: (none found)`)

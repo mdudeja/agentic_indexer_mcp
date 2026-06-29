@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, like, not, SQL } from 'drizzle-orm'
+import { eq, and, like, not, SQL, sql } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
 
@@ -13,12 +13,13 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
       title: 'Find Similar Patterns',
       description:
         'Find symbols with the same structural shape as a given reference symbol, matching on any combination of ' +
-        'kind (function/class/method/etc.), return type, parameter count, and decorator. ' +
+        'kind (function/class/method/etc.), return type, parameter count, inherits from, and decorator. ' +
         '\n\n' +
         'USE THIS TOOL (not search_symbols) when you care about structure, not name. Examples: ' +
         '"find all functions that return Promise<void> and take 2 parameters", ' +
         '"find all @Controller-decorated classes like this one", ' +
         '"find every function with the same signature shape so I can apply this fix consistently". ' +
+        '"find all functions that inherit from `BaseConsumerInterface`". ' +
         '\n\n' +
         'WHEN TO USE: Applying a bug fix or refactor pattern across all structurally similar symbols; ' +
         'auditing whether a convention is followed consistently; discovering related implementations ' +
@@ -41,8 +42,22 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
             'Optional file path to disambiguate when multiple symbols share the name',
           ),
         match_on: z
-          .array(z.enum(['kind', 'return_type', 'param_count', 'decorator']))
-          .default(['kind', 'return_type', 'param_count', 'decorator'])
+          .array(
+            z.enum([
+              'kind',
+              'return_type',
+              'param_count',
+              'decorator',
+              'inheritence',
+            ]),
+          )
+          .default([
+            'kind',
+            'return_type',
+            'param_count',
+            'decorator',
+            'inheritence',
+          ])
           .describe('Which attributes to match on (default: all)'),
       }),
     },
@@ -55,6 +70,7 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
           'return_type',
           'param_count',
           'decorator',
+          'inheritence',
         ]
         const db = store.getDb()
 
@@ -112,6 +128,38 @@ export function registerFindSimilarPatternsTool(server: McpServer) {
 
         if (matchDims.includes('decorator') && target.decorator) {
           conditions.push(eq(schema.symbols.decorator, target.decorator))
+        }
+
+        if (
+          matchDims.includes('inheritence') &&
+          target.inheritence &&
+          target.inheritence.length > 0
+        ) {
+          const inheritanceConditions = target.inheritence.map((i) => {
+            const nameCond = sql`json_extract(value, '$.inherits_from_name') = ${i.inherits_from_name}`
+
+            const idConds: SQL[] = []
+            if (i.inherits_from_id) {
+              idConds.push(
+                sql`json_extract(value, '$.inherits_from_id') = ${i.inherits_from_id}`,
+              )
+            }
+            if (i.inherits_from_imports_id) {
+              idConds.push(
+                sql`json_extract(value, '$.inherits_from_imports_id') = ${i.inherits_from_imports_id}`,
+              )
+            }
+
+            if (idConds.length > 0) {
+              return sql`(${nameCond} AND (${sql.join(idConds, sql` OR `)}))`
+            } else {
+              return nameCond
+            }
+          })
+
+          conditions.push(
+            sql`EXISTS (SELECT 1 FROM json_each(inheritence) WHERE ${sql.join(inheritanceConditions, sql` OR `)})`,
+          )
         }
 
         let results = await db

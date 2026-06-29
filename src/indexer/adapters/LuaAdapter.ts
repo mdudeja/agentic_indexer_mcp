@@ -180,7 +180,7 @@ export class LuaAdapter implements LanguageAdapter {
       signature: targetNode.text,
     })
 
-    const ANON_SCOPE_TYPES = new Set(['function_definition'])
+    const ANON_SCOPE_TYPES = new Set(['function_definition', 'function_definition_statement', 'local_function_definition_statement'])
     let parent_id: string | null = null
     let insideAnonScope = false
     let p = targetNode.parent
@@ -240,7 +240,7 @@ export class LuaAdapter implements LanguageAdapter {
     if (!caller_id) return
 
     let callExpr: Node | null = node.parent
-    while (callExpr && callExpr.type !== 'function_call') {
+    while (callExpr && callExpr.type !== 'call') {
       callExpr = callExpr.parent
     }
     const callText = callExpr ? callExpr.text : (node.parent?.text ?? node.text)
@@ -268,7 +268,7 @@ export class LuaAdapter implements LanguageAdapter {
     let modulePath = 'unknown'
     let importedName: string | null = null
 
-    const argsNode = node.children.find(c => c?.type === 'arguments')
+    const argsNode = node.children.find(c => c?.type === 'argument_list')
     if (argsNode) {
       const stringNode = argsNode.children.find(c => c?.type === 'string')
       if (stringNode) {
@@ -278,15 +278,14 @@ export class LuaAdapter implements LanguageAdapter {
 
     let p = node.parent
     while (p) {
-      if (p.type === 'variable_declaration') {
-        const idNode = p.children.find(c => c?.type === 'identifier')
-        if (idNode) importedName = idNode.text
-        break
-      } else if (p.type === 'assignment_statement') {
+      if (p.type === 'local_variable_declaration' || p.type === 'variable_assignment') {
         const varList = p.children.find(c => c?.type === 'variable_list')
         if (varList) {
-          const idNode = varList.children.find(c => c?.type === 'identifier')
-          if (idNode) importedName = idNode.text
+          const variable = varList.children.find(c => c?.type === 'variable')
+          if (variable) {
+            const idNode = variable.children.find(c => c?.type === 'identifier')
+            if (idNode) importedName = idNode.text
+          }
         }
         break
       }

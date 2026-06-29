@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'bun'
+import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join, isAbsolute, resolve, relative } from 'path'
+import { dirname, isAbsolute, resolve, relative } from 'path'
 import { AppStateManager } from 'src/state'
 
 /** "Resolves a given path by converting relative and tilde-based paths to absolute paths." */
@@ -24,6 +26,8 @@ export const resolvePath = (inputPath: string): string => {
 export const resolveImportedModulePath = (
   importPath: string,
   filePath: string,
+  extension: string,
+  directoryIndex: string,
 ): string => {
   const fileDir = dirname(filePath)
 
@@ -31,11 +35,19 @@ export const resolveImportedModulePath = (
   const baseDir = root || resolve(import.meta.dir, '../../')
 
   if (importPath.startsWith('.')) {
-    const relativeImpPath = relative(
-      baseDir,
-      resolve(baseDir, fileDir, importPath),
-    )
-    return relativeImpPath.replace(/(\.{1,})(\/)?/g, '')
+    const absPath = resolve(baseDir, fileDir, importPath)
+    const relativeImpPath = relative(baseDir, absPath)
+
+    const pathStats = statSync(absPath, { throwIfNoEntry: false })
+    if (pathStats?.isDirectory()) {
+      return `${relativeImpPath}/${directoryIndex}`
+    }
+
+    if (relativeImpPath.endsWith(extension)) {
+      return relativeImpPath
+    }
+
+    return `${relativeImpPath}${extension}`
   } else {
     // For non-relative imports, we resolve to the absolute path and then slice off the root
     try {

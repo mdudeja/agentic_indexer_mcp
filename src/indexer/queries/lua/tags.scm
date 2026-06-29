@@ -1,42 +1,51 @@
 ; Symbols
-(function_declaration 
+(function_definition_statement 
   name: (_) @symbol.function.name) @symbol.function.decl
-(local_function_declaration 
+(local_function_definition_statement 
   name: (identifier) @symbol.function.name) @symbol.function.decl
 
-(variable_declaration
-  (identifier) @symbol.var.name) @symbol.var.decl
-(assignment_statement
-  (variable_list (identifier) @symbol.var.name)) @symbol.var.decl
+(local_variable_declaration
+  (variable_list
+    (variable
+      (identifier) @symbol.var.name))) @symbol.var.decl
+(variable_assignment
+  (variable_list
+    (variable
+      (identifier) @symbol.var.name))) @symbol.var.decl
 
 ; Calls
-(function_call
-  name: (identifier) @call.identifier)
-(function_call
-  name: (method_index_expression method: (identifier) @call.method))
-(function_call
-  name: (dot_index_expression field: (identifier) @call.member))
+(call
+  function: (variable
+    name: (identifier) @call.identifier))
+(call
+  function: (variable
+    method: (identifier) @call.method))
+(call
+  function: (variable
+    field: (identifier) @call.member))
 
 ; Imports
-(function_call 
-  name: (identifier) @_name
+(call
+  function: (variable
+    name: (identifier) @_name)
   (#eq? @_name "require")) @import.statement
 
 ; Exports
-(return_statement (expression_list (identifier) @export.identifier))
+(return_statement (expression_list (variable (identifier) @export.identifier)))
 
 ; Exceptions
-(function_call 
-  name: (identifier) @_name
+(call
+  function: (variable
+    name: (identifier) @_name)
   (#eq? @_name "error")) @exception.raise
 
 ; EnvVars
 ; os.getenv("KEY")
-(function_call
-  name: (dot_index_expression
+(call
+  function: (variable
     table: (identifier) @_tbl
     field: (identifier) @_fld)
-  arguments: (arguments (string) @env.key)
+  arguments: (argument_list (expression_list (string) @env.key))
   (#eq? @_tbl "os")
   (#eq? @_fld "getenv"))
 
@@ -45,23 +54,23 @@
   (comment)+ @symbol.docstring
   .
   [
-    (function_declaration)
-    (local_function_declaration)
-    (variable_declaration)
+    (function_definition_statement)
+    (local_function_definition_statement)
+    (local_variable_declaration)
   ] @symbol.docstring.target
 )
 
 (
   (comment)+ @symbol.docstring
   .
-  (assignment_statement (variable_list) @symbol.docstring.target)
+  (variable_assignment (variable_list) @symbol.docstring.target)
 )
 
 ; Trailing Inline Docstrings for Variables
 (
   [
-    (variable_declaration) @symbol.docstring.target
-    (assignment_statement (variable_list) @symbol.docstring.target)
+    (local_variable_declaration) @symbol.docstring.target
+    (variable_assignment (variable_list) @symbol.docstring.target)
   ]
   .
   (comment)+ @symbol.docstring.trailing

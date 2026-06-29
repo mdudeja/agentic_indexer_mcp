@@ -5,6 +5,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
     enabled: true,
     ignore_patterns: [
       '.git/',
+      '.agentic/',
       '.vscode',
       '.idea',
       '*.md',
@@ -75,8 +76,6 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         extensions: ['.py'],
         lsp_command: [
           '/home/md/.local/share/nvim/mason/bin/basedpyright-langserver',
-          '-v',
-          '/home/md/Projects/ECN/ashiyana_mis/repo/.venv',
           '--stdio',
         ],
         lang_features_paths: ['/usr/lib/python', 'typeshed', 'django'],

@@ -146,6 +146,7 @@ export class IndexerDB {
     this.sqlite.run('PRAGMA journal_mode = DELETE;')
     this.sqlite.close()
     this.dbInited = false
+    IndexerDB.instance = null
     logDebug('Database connection closed')
   }
 }

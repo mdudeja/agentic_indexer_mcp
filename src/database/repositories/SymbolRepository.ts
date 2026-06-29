@@ -350,14 +350,32 @@ export class SymbolRepository {
 
   /** Retrieves all symbols that inherit from the specified base symbol. */
   async getSymbolsInheritingFrom(
-    baseName: string,
+    symbolName?: string,
+    symbolId?: string,
   ): Promise<IndexedSymbol['Select'][]> {
+    if (!symbolName && !symbolId) {
+      return []
+    }
+    let baseQuery = 'EXISTS (SELECT 1 FROM json_each(inheritence) WHERE'
+
+    if (symbolId) {
+      baseQuery += ` json_extract(value, '$.inherits_from_id') = ${symbolId}`
+
+      if (symbolName) {
+        baseQuery += ` AND `
+      }
+    }
+
+    if (symbolName) {
+      baseQuery += ` json_extract(value, '$.inherits_from_name') = ${symbolName}`
+    }
+
+    baseQuery += ')'
+
     return this.db
       .select()
       .from(schema.symbols)
-      .where(
-        sql<Boolean>`EXISTS (SELECT 1 FROM json_each(inheritence) WHERE json_extract(value, '$.inherits_from_name') = ${baseName})`,
-      )
+      .where(sql<Boolean>`${baseQuery}`)
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 

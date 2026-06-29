@@ -26,6 +26,8 @@ import { registerGetCouplingMetricsTool } from './get_coupling_metrics'
 import { registerAuditAgentConfigTool } from './audit_agent_config'
 import { registerExploreCodebaseTool } from './explore_codebase'
 import { registerGetTokenSavingsTool } from './get_token_savings'
+import { registerGetImportsForFileTool } from './get_imports_for_file'
+import { registerGetImportByIdTool } from './get_import_by_id'
 
 /** Registers all MCP tools on the server. */
 export function registerTools(server: McpServer) {
@@ -51,6 +53,8 @@ export function registerTools(server: McpServer) {
   registerGetCodebaseMapTool(server)
   registerGetEntryPointsTool(server)
   registerFindRelatedTestsTool(server)
+  registerGetImportsForFileTool(server)
+  registerGetImportByIdTool(server)
 
   // Type and pattern analysis
   registerResolveTypeTool(server)

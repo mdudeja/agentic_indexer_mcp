@@ -133,8 +133,15 @@ export class IndexPipeline {
 
   /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
   async runOnFile(absPath: string): Promise<string | null> {
+    if (
+      this.config.ignore_patterns.length > 0 &&
+      this.ignoreRegexPatterns.size === 0
+    ) {
+      await this.populateIgnorePatterns()
+    }
+
     const relPath = relative(this.options.cwd, absPath)
-    if (this.config.ignore_patterns.some((p) => relPath.includes(p))) {
+    if ([...this.ignoreRegexPatterns].some((regex) => regex.test(relPath))) {
       return null
     }
 

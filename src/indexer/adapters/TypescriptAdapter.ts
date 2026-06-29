@@ -481,37 +481,37 @@ export class TypescriptAdapter implements LanguageAdapter {
       (c) => c && c.type === 'import_clause',
     )
 
-    if (importClause) {
-      const defaultImport = importClause.children.find(
+    if (!importClause) return
+
+    const defaultImport = importClause.children.find(
+      (c) => c && c.type === 'identifier',
+    )
+    if (defaultImport) importedNames.push(defaultImport.text)
+
+    const namedImports = importClause.children.find(
+      (c) => c && c.type === 'named_imports',
+    )
+    if (namedImports) {
+      const specifiers = namedImports.children.filter(
+        (c) => c && c.type === 'import_specifier',
+      )
+      for (const spec of specifiers) {
+        if (!spec) continue
+        const nameNode =
+          spec.childForFieldName('name') ||
+          spec.children.find((c) => c && c.type === 'identifier')
+        if (nameNode) importedNames.push(nameNode.text)
+      }
+    }
+
+    const namespaceImport = importClause.children.find(
+      (c) => c && c.type === 'namespace_import',
+    )
+    if (namespaceImport) {
+      const idNode = namespaceImport.children.find(
         (c) => c && c.type === 'identifier',
       )
-      if (defaultImport) importedNames.push(defaultImport.text)
-
-      const namedImports = importClause.children.find(
-        (c) => c && c.type === 'named_imports',
-      )
-      if (namedImports) {
-        const specifiers = namedImports.children.filter(
-          (c) => c && c.type === 'import_specifier',
-        )
-        for (const spec of specifiers) {
-          if (!spec) continue
-          const nameNode =
-            spec.childForFieldName('name') ||
-            spec.children.find((c) => c && c.type === 'identifier')
-          if (nameNode) importedNames.push(nameNode.text)
-        }
-      }
-
-      const namespaceImport = importClause.children.find(
-        (c) => c && c.type === 'namespace_import',
-      )
-      if (namespaceImport) {
-        const idNode = namespaceImport.children.find(
-          (c) => c && c.type === 'identifier',
-        )
-        if (idNode) importedNames.push(idNode.text)
-      }
+      if (idNode) importedNames.push(idNode.text)
     }
 
     if (importedNames.length > 0) {
@@ -520,7 +520,12 @@ export class TypescriptAdapter implements LanguageAdapter {
         result.imports.push({
           id,
           file_path,
-          module_path: resolveImportedModulePath(moduleName, file_path),
+          module_path: resolveImportedModulePath(
+            moduleName,
+            file_path,
+            '.ts',
+            'index.ts',
+          ),
           imported_name: name,
         })
       }
@@ -528,7 +533,12 @@ export class TypescriptAdapter implements LanguageAdapter {
       result.imports.push({
         id: randomUUIDv7(),
         file_path,
-        module_path: resolveImportedModulePath(moduleName, file_path),
+        module_path: resolveImportedModulePath(
+          moduleName,
+          file_path,
+          '.ts',
+          'index.ts',
+        ),
         imported_name: '',
       })
     }

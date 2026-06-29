@@ -347,7 +347,15 @@ export class PythonAdapter implements LanguageAdapter {
       if (!moduleNameNode) return
       const modulePath = moduleNameNode
         ? moduleNameNode.type === 'relative_import'
-          ? resolveImportedModulePath(moduleNameNode.text, file_path)
+          ? resolveImportedModulePath(
+              moduleNameNode.text
+                .replaceAll('..', '../')
+                .replace(/^\.(?!\.)/g, './')
+                .replace(/(\w+)\./g, '$1/'),
+              file_path,
+              '.py',
+              '__init__.py',
+            )
           : moduleNameNode.text
         : ''
       const imports = node.children.filter(

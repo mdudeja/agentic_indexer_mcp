@@ -166,6 +166,12 @@ export function registerGetFileDetailsTool(server: McpServer) {
             if (return_type) {
               line += `\n    Returns: ${return_type}`
             }
+            if (s.inheritence && s.inheritence.length) {
+              line += '\n  Inheritence: '
+              for (const item of s.inheritence) {
+                line += `\n  ${item.inheritence_type} ${item.inherits_from_name} (${item.inherits_from_id ? `id=${item.inherits_from_id}, ` : `imports_id=${item.inherits_from_imports_id}`})`
+              }
+            }
             return line
           })
           sections.push(`## ${kind.toUpperCase()}\n${lines.join('\n')}`)
