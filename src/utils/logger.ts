@@ -10,8 +10,6 @@ enum LogLevel {
 }
 
 const CURRENT_LOG_LEVEL = parseLogLevel(process.env.LOG_LEVEL)
-const log_types = ['log', 'error', 'warn', 'info'] as const
-export type LogType = (typeof log_types)[number]
 
 /** Parses a log level string into its corresponding standard value, defaulting to INFO if unspecified or unrecognized. */
 function parseLogLevel(level: string | undefined): LogLevel {
@@ -67,14 +65,6 @@ function formatMessage(
 /** Determines whether a log message with the specified level should be logged. */
 function shouldLog(messageLevel: LogLevel): boolean {
   return messageLevel >= CURRENT_LOG_LEVEL
-}
-
-/** Log an informational message to the console. */
-export function log(message: string, ...args: unknown[]): void {
-  if (shouldLog(LogLevel.INFO)) {
-    const formatted = formatMessage('INFO', message, ...args)
-    console.error(formatted)
-  }
 }
 
 /** Log an error message with optional additional arguments. */

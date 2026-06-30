@@ -1,14 +1,3 @@
-export interface ParamInfo {
-  name: string
-  type: string
-  optional: boolean
-}
-
-export interface ResolvedCallableTypeInfo {
-  params: ParamInfo[]
-  returnType: string
-}
-
 export interface Enhancer {
   init(): Promise<boolean>
   enhanceSymbolTypesForCallables(relPaths: string[]): Promise<void>

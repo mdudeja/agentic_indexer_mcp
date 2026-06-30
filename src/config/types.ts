@@ -1,3 +1,4 @@
+/** This module defines TypeScript type definitions for configuring and working with an indexer or similar tool. It includes types related to language configurations, docstring strategies, embedding generation, and indexers themselves. The module provides a structured way to define how code is processed, documented, and analyzed, supporting multiple language providers and integration with various AI-based tools like Claude, Gemini, OpenAI, and more. */
 export type {
   IndexedFile,
   IndexedSymbol,
@@ -9,25 +10,6 @@ export type {
 export { SymbolKind } from '../database/schemas'
 
 import type { SupportedLanguage } from 'tree-sitter-wasm'
-import { SymbolKind } from '../database/schemas'
-
-export enum DocstringStrategy {
-  none = 'none',
-  comment_before = 'comment_before',
-  comment_after = 'comment_after',
-  either = 'either',
-}
-
-export type NodeInfo = {
-  kind: SymbolKind
-  name_field?: string
-  source_field?: string
-  parameters_field?: string
-  return_type_field?: string
-  docstring?: DocstringStrategy
-  inherit_name_from_parent?: boolean
-  heritage_node?: string
-}
 
 export type LanguageConfig = {
   extensions: string[]
@@ -39,7 +21,7 @@ export type LanguageConfig = {
   }
 }
 
-export type DocstringProviderName = 'claude' | 'gemini' | 'openai' | 'ollama'
+type DocstringProviderName = 'claude' | 'gemini' | 'openai' | 'ollama'
 
 export type DocstringConfig = {
   enabled: boolean
@@ -52,11 +34,7 @@ export type DocstringConfig = {
   ollama?: { model: string; base_url?: string }
 }
 
-export type EmbeddingGeneratorName =
-  | 'ollama'
-  | 'openai'
-  | 'gemini'
-  | 'anthropic'
+type EmbeddingGeneratorName = 'ollama' | 'openai' | 'gemini' | 'anthropic'
 
 export type EmbedderConfig = {
   enabled: boolean

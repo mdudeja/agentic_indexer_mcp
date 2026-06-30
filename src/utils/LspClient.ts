@@ -14,7 +14,7 @@ export class LspClient {
   private diagnosticsReceivedUris = new Set<string>()
 
   /** Gets the server's capabilities. */
-  get capabilities(): Record<string, any> {
+  getCapabilities(): Record<string, any> {
     return this.serverCapabilities
   }
 

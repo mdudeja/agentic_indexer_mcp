@@ -288,12 +288,19 @@ export class PythonAdapter implements LanguageAdapter {
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
   ) {
+    const lexicalKinds = [SymbolKind.const, SymbolKind.let, SymbolKind.var]
+
     let caller_id: string | null = null
     let p = node.parent
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
-        caller_id = nodeToSymbolId.get(p.id)!
-        break
+        const capturedSymbol = result.symbols.find(
+          (s) => s.id === nodeToSymbolId.get(p!.id),
+        )
+        if (capturedSymbol && !lexicalKinds.includes(capturedSymbol.kind)) {
+          caller_id = nodeToSymbolId.get(p.id)!
+          break
+        }
       }
       p = p.parent
     }

@@ -1,3 +1,4 @@
+/** Lists top-level exported symbols in a codebase, optionally filtering to identify true program entry points. */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
@@ -64,7 +65,13 @@ export function registerGetEntryPointsTool(server: McpServer) {
 
         const conditions: SQL[] = [
           eq(schema.symbols.exported, true),
-          isNull(schema.symbols.parent_id),
+          inArray(
+            schema.symbols.parent_id,
+            db
+              .select({ id: schema.symbols.id })
+              .from(schema.symbols)
+              .where(eq(schema.symbols.name, '<module>')),
+          ),
           inArray(schema.symbols.kind, kinds as SymbolKind[]),
         ]
 

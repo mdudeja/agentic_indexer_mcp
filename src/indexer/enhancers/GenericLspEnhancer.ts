@@ -44,7 +44,7 @@ export class GenericLspEnhancer implements Enhancer {
     try {
       this.client = new LspClient(this.lspCommand, this.cwd)
       await this.client.start()
-      this.serverCapabilities = this.client.capabilities
+      this.serverCapabilities = this.client.getCapabilities()
       this.available = true
     } catch (err) {
       logError(

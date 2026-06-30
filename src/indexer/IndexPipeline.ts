@@ -1,3 +1,4 @@
+/** Manages the overall indexing process by orchestrating symbol extraction, enhancement, docstring generation, and embedding for project files. */
 import { join, relative } from 'path'
 import { readdir, stat } from 'node:fs/promises'
 import { TreeSitterIndexer } from './TreeSitterIndexer.ts'
@@ -18,7 +19,7 @@ const embedderNameToClass: Record<string, new () => EmbeddingGenerator> = {
   ollama: OllamaEmbeddingGenerator,
 }
 
-export interface IndexPipelineOptions {
+interface IndexPipelineOptions {
   cwd: string
   store: IndexerDB
   includeGitIgnored: boolean

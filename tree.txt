@@ -1,0 +1,1499 @@
+(program
+  (import_statement
+    (import_clause
+      (named_imports
+        (import_specifier
+          name: (identifier "logDebug"))
+        (import_specifier
+          name: (identifier "logError"))))
+    source: (string
+      (string_fragment "./logger.ts")))
+  (comment "/** A lightweight, Bun-native LSP client implementation communicating over JSON-RPC stdio. */")
+  (export_statement
+    declaration: (class_declaration
+      name: (type_identifier "LspClient")
+      body: (class_body
+        (public_field_definition
+          (accessibility_modifier)
+          name: (property_identifier "process")
+          type: (type_annotation
+            (generic_type
+              name: (type_identifier "ReturnType")
+              type_arguments: (type_arguments
+                (type_query
+                  (member_expression
+                    object: (identifier "Bun")
+                    property: (property_identifier "spawn")))))))
+        (public_field_definition
+          (accessibility_modifier)
+          name: (property_identifier "messageId")
+          value: (number "0"))
+        (public_field_definition
+          (accessibility_modifier)
+          name: (property_identifier "pendingRequests")
+          value: (new_expression
+            constructor: (identifier "Map")
+            type_arguments: (type_arguments
+              (predefined_type)
+              (object_type
+                (property_signature
+                  name: (property_identifier "resolve")
+                  type: (type_annotation
+                    (function_type
+                      parameters: (formal_parameters
+                        (required_parameter
+                          pattern: (identifier "res")
+                          type: (type_annotation
+                            (predefined_type))))
+                      return_type: (predefined_type))))
+                (property_signature
+                  name: (property_identifier "reject")
+                  type: (type_annotation
+                    (function_type
+                      parameters: (formal_parameters
+                        (required_parameter
+                          pattern: (identifier "err")
+                          type: (type_annotation
+                            (predefined_type))))
+                      return_type: (predefined_type))))
+                (property_signature
+                  name: (property_identifier "method")
+                  type: (type_annotation
+                    (predefined_type)))))
+            arguments: (arguments)))
+        (public_field_definition
+          (accessibility_modifier)
+          name: (property_identifier "rawBuffer")
+          value: (call_expression
+            function: (member_expression
+              object: (identifier "Buffer")
+              property: (property_identifier "alloc"))
+            arguments: (arguments
+              (number "0"))))
+        (public_field_definition
+          (accessibility_modifier)
+          name: (property_identifier "serverCapabilities")
+          type: (type_annotation
+            (generic_type
+              name: (type_identifier "Record")
+              type_arguments: (type_arguments
+                (predefined_type)
+                (predefined_type))))
+          value: (object))
+        (comment "/** URIs the server has published at least one `textDocument/publishDiagnostics` notification for since they were last opened/changed — used as a settle signal that the server has actually finished analyzing the file, instead of guessing with a fixed sleep. */")
+        (public_field_definition
+          (accessibility_modifier)
+          name: (property_identifier "diagnosticsReceivedUris")
+          value: (new_expression
+            constructor: (identifier "Set")
+            type_arguments: (type_arguments
+              (predefined_type))
+            arguments: (arguments)))
+        (comment "/** Gets the server's capabilities. */")
+        (method_definition
+          name: (property_identifier "capabilities")
+          parameters: (formal_parameters)
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Record")
+              type_arguments: (type_arguments
+                (predefined_type)
+                (predefined_type))))
+          body: (statement_block
+            (return_statement
+              (member_expression
+                object: (this "this")
+                property: (property_identifier "serverCapabilities")))))
+        (comment "/** The constructor initializes an LSP (Language Server Protocol) client with specific commands and a root path, preparing it to communicate with an LSP server. */")
+        (method_definition
+          name: (property_identifier "constructor")
+          parameters: (formal_parameters
+            (required_parameter
+              (accessibility_modifier)
+              pattern: (identifier "lspCommand")
+              type: (type_annotation
+                (array_type
+                  (predefined_type))))
+            (required_parameter
+              (accessibility_modifier)
+              pattern: (identifier "rootPath")
+              type: (type_annotation
+                (predefined_type))))
+          body: (statement_block))
+        (comment "/** Starts the language server child process and handles standard JSON-RPC initialization. */")
+        (method_definition
+          name: (property_identifier "start")
+          parameters: (formal_parameters)
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Promise")
+              type_arguments: (type_arguments
+                (predefined_type))))
+          body: (statement_block
+            (expression_statement
+              (call_expression
+                function: (identifier "logDebug")
+                arguments: (arguments
+                  (template_string
+                    (string_fragment "[LSP] Spawning LSP server process: ")
+                    (template_substitution
+                      (call_expression
+                        function: (member_expression
+                          object: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "lspCommand"))
+                          property: (property_identifier "join"))
+                        arguments: (arguments
+                          (string
+                            (string_fragment " ")))))))))
+            (expression_statement
+              (assignment_expression
+                left: (member_expression
+                  object: (this "this")
+                  property: (property_identifier "process"))
+                right: (call_expression
+                  function: (member_expression
+                    object: (identifier "Bun")
+                    property: (property_identifier "spawn"))
+                  arguments: (arguments
+                    (member_expression
+                      object: (this "this")
+                      property: (property_identifier "lspCommand"))
+                    (object
+                      (pair
+                        key: (property_identifier "cwd")
+                        value: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rootPath")))
+                      (pair
+                        key: (property_identifier "stdin")
+                        value: (string
+                          (string_fragment "pipe")))
+                      (pair
+                        key: (property_identifier "stdout")
+                        value: (string
+                          (string_fragment "pipe")))
+                      (pair
+                        key: (property_identifier "stderr")
+                        value: (string
+                          (string_fragment "pipe"))))))))
+            (comment "// Start background loops to read output")
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (this "this")
+                  property: (property_identifier "readStdout"))
+                arguments: (arguments)))
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (this "this")
+                  property: (property_identifier "readStderr"))
+                arguments: (arguments)))
+            (comment "// Initialize request")
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "resp")
+                value: (await_expression
+                  (call_expression
+                    function: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "request"))
+                    arguments: (arguments
+                      (string
+                        (string_fragment "initialize"))
+                      (object
+                        (pair
+                          key: (property_identifier "processId")
+                          value: (null "null"))
+                        (pair
+                          key: (property_identifier "rootPath")
+                          value: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "rootPath")))
+                        (pair
+                          key: (property_identifier "rootUri")
+                          value: (template_string
+                            (string_fragment "file://")
+                            (template_substitution
+                              (member_expression
+                                object: (this "this")
+                                property: (property_identifier "rootPath")))))
+                        (pair
+                          key: (property_identifier "capabilities")
+                          value: (object
+                            (pair
+                              key: (property_identifier "textDocument")
+                              value: (object
+                                (pair
+                                  key: (property_identifier "hover")
+                                  value: (object
+                                    (pair
+                                      key: (property_identifier "contentFormat")
+                                      value: (array
+                                        (string
+                                          (string_fragment "markdown"))
+                                        (string
+                                          (string_fragment "plaintext"))))))
+                                (pair
+                                  key: (property_identifier "definition")
+                                  value: (object
+                                    (pair
+                                      key: (property_identifier "linkSupport")
+                                      value: (false "false"))))
+                                (pair
+                                  key: (property_identifier "references")
+                                  value: (object))
+                                (pair
+                                  key: (property_identifier "implementation")
+                                  value: (object
+                                    (pair
+                                      key: (property_identifier "linkSupport")
+                                      value: (false "false"))))
+                                (pair
+                                  key: (property_identifier "typeDefinition")
+                                  value: (object
+                                    (pair
+                                      key: (property_identifier "linkSupport")
+                                      value: (false "false"))))
+                                (pair
+                                  key: (property_identifier "documentSymbol")
+                                  value: (object))
+                                (pair
+                                  key: (property_identifier "publishDiagnostics")
+                                  value: (object))))
+                            (pair
+                              key: (property_identifier "workspace")
+                              value: (object
+                                (pair
+                                  key: (property_identifier "symbol")
+                                  value: (object))))))))))))
+            (expression_statement
+              (assignment_expression
+                left: (member_expression
+                  object: (this "this")
+                  property: (property_identifier "serverCapabilities"))
+                right: (binary_expression
+                  left: (member_expression
+                    object: (identifier "resp")
+                    optional_chain: (optional_chain)
+                    property: (property_identifier "capabilities"))
+                  right: (object))))
+            (comment "// Send initialized notification")
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (this "this")
+                  property: (property_identifier "notify"))
+                arguments: (arguments
+                  (string
+                    (string_fragment "initialized"))
+                  (object))))
+            (expression_statement
+              (call_expression
+                function: (identifier "logDebug")
+                arguments: (arguments
+                  (template_string
+                    (string_fragment "[LSP] LSP server initialized successfully: ")
+                    (template_substitution
+                      (call_expression
+                        function: (member_expression
+                          object: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "lspCommand"))
+                          property: (property_identifier "join"))
+                        arguments: (arguments
+                          (string
+                            (string_fragment " ")))))))))))
+        (comment "/** Reads and processes the standard output from the LSP process. */")
+        (method_definition
+          (accessibility_modifier)
+          name: (property_identifier "readStdout")
+          parameters: (formal_parameters)
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Promise")
+              type_arguments: (type_arguments
+                (predefined_type))))
+          body: (statement_block
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (unary_expression
+                    argument: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "process")))
+                  right: (unary_expression
+                    argument: (member_expression
+                      object: (member_expression
+                        object: (this "this")
+                        property: (property_identifier "process"))
+                      property: (property_identifier "stdout")))))
+              consequence: (statement_block
+                (expression_statement
+                  (call_expression
+                    function: (identifier "logError")
+                    arguments: (arguments
+                      (string
+                        (string_fragment "[LSP] Cannot read stdout: LSP process is not running")))))
+                (return_statement)))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "reader")
+                value: (call_expression
+                  function: (member_expression
+                    object: (parenthesized_expression
+                      (as_expression
+                        (member_expression
+                          object: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "process"))
+                          property: (property_identifier "stdout"))
+                        (generic_type
+                          name: (type_identifier "ReadableStream")
+                          type_arguments: (type_arguments
+                            (type_identifier "Uint8Array")))))
+                    property: (property_identifier "getReader"))
+                  arguments: (arguments))))
+            (try_statement
+              body: (statement_block
+                (while_statement
+                  condition: (parenthesized_expression
+                    (true "true"))
+                  body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (object_pattern
+                          (shorthand_property_identifier_pattern "done")
+                          (shorthand_property_identifier_pattern "value"))
+                        value: (await_expression
+                          (call_expression
+                            function: (member_expression
+                              object: (identifier "reader")
+                              property: (property_identifier "read"))
+                            arguments: (arguments)))))
+                    (if_statement
+                      condition: (parenthesized_expression
+                        (identifier "done"))
+                      consequence: (statement_block
+                        (expression_statement
+                          (call_expression
+                            function: (identifier "logError")
+                            arguments: (arguments
+                              (string
+                                (string_fragment "[LSP] stdout stream ended (server process exited?)")))))
+                        (break_statement)))
+                    (expression_statement
+                      (assignment_expression
+                        left: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rawBuffer"))
+                        right: (call_expression
+                          function: (member_expression
+                            object: (identifier "Buffer")
+                            property: (property_identifier "concat"))
+                          arguments: (arguments
+                            (array
+                              (member_expression
+                                object: (this "this")
+                                property: (property_identifier "rawBuffer"))
+                              (identifier "value"))))))
+                    (expression_statement
+                      (call_expression
+                        function: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "processBuffer"))
+                        arguments: (arguments))))))
+              handler: (catch_clause
+                parameter: (identifier "e")
+                body: (statement_block
+                  (expression_statement
+                    (call_expression
+                      function: (identifier "logError")
+                      arguments: (arguments
+                        (string
+                          (string_fragment "[LSP] Error in stdout stream reader:"))
+                        (identifier "e")))))))))
+        (comment "/** Processes buffered data containing LSP (Language Server Protocol) messages. It extracts each message's header and body, parses the JSON content, and handles the parsed messages accordingly. */")
+        (method_definition
+          (accessibility_modifier)
+          name: (property_identifier "processBuffer")
+          parameters: (formal_parameters)
+          return_type: (type_annotation
+            (predefined_type))
+          body: (statement_block
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "HEADER_END")
+                value: (call_expression
+                  function: (member_expression
+                    object: (identifier "Buffer")
+                    property: (property_identifier "from"))
+                  arguments: (arguments
+                    (string
+                      (escape_sequence "\\r")
+                      (escape_sequence "\\n")
+                      (escape_sequence "\\r")
+                      (escape_sequence "\\n"))))))
+            (while_statement
+              condition: (parenthesized_expression
+                (true "true"))
+              body: (statement_block
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "clIdx")
+                    value: (call_expression
+                      function: (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rawBuffer"))
+                        property: (property_identifier "indexOf"))
+                      arguments: (arguments
+                        (string
+                          (string_fragment "Content-Length:"))))))
+                (if_statement
+                  condition: (parenthesized_expression
+                    (binary_expression
+                      left: (identifier "clIdx")
+                      right: (unary_expression
+                        argument: (number "1"))))
+                  consequence: (break_statement))
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "headerEndIdx")
+                    value: (call_expression
+                      function: (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rawBuffer"))
+                        property: (property_identifier "indexOf"))
+                      arguments: (arguments
+                        (identifier "HEADER_END")
+                        (identifier "clIdx")))))
+                (if_statement
+                  condition: (parenthesized_expression
+                    (binary_expression
+                      left: (identifier "headerEndIdx")
+                      right: (unary_expression
+                        argument: (number "1"))))
+                  consequence: (break_statement))
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "headerSection")
+                    value: (call_expression
+                      function: (member_expression
+                        object: (call_expression
+                          function: (member_expression
+                            object: (member_expression
+                              object: (this "this")
+                              property: (property_identifier "rawBuffer"))
+                            property: (property_identifier "subarray"))
+                          arguments: (arguments
+                            (identifier "clIdx")
+                            (identifier "headerEndIdx")))
+                        property: (property_identifier "toString"))
+                      arguments: (arguments
+                        (string
+                          (string_fragment "utf8"))))))
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "clLine")
+                    value: (call_expression
+                      function: (member_expression
+                        object: (call_expression
+                          function: (member_expression
+                            object: (identifier "headerSection")
+                            property: (property_identifier "split"))
+                          arguments: (arguments
+                            (string
+                              (escape_sequence "\\r")
+                              (escape_sequence "\\n"))))
+                        property: (property_identifier "find"))
+                      arguments: (arguments
+                        (arrow_function
+                          parameters: (formal_parameters
+                            (required_parameter
+                              pattern: (identifier "line")))
+                          body: (call_expression
+                            function: (member_expression
+                              object: (identifier "line")
+                              property: (property_identifier "startsWith"))
+                            arguments: (arguments
+                              (string
+                                (string_fragment "Content-Length:")))))))))
+                (if_statement
+                  condition: (parenthesized_expression
+                    (unary_expression
+                      argument: (identifier "clLine")))
+                  consequence: (statement_block
+                    (expression_statement
+                      (call_expression
+                        function: (identifier "logError")
+                        arguments: (arguments
+                          (template_string
+                            (string_fragment "[LSP] Malformed header, skipping: ")
+                            (template_substitution
+                              (identifier "headerSection"))))))
+                    (expression_statement
+                      (assignment_expression
+                        left: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rawBuffer"))
+                        right: (call_expression
+                          function: (member_expression
+                            object: (member_expression
+                              object: (this "this")
+                              property: (property_identifier "rawBuffer"))
+                            property: (property_identifier "subarray"))
+                          arguments: (arguments
+                            (binary_expression
+                              left: (identifier "headerEndIdx")
+                              right: (number "4"))))))
+                    (continue_statement)))
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "contentLength")
+                    value: (call_expression
+                      function: (identifier "parseInt")
+                      arguments: (arguments
+                        (call_expression
+                          function: (member_expression
+                            object: (non_null_expression
+                              (subscript_expression
+                                object: (call_expression
+                                  function: (member_expression
+                                    object: (identifier "clLine")
+                                    property: (property_identifier "split"))
+                                  arguments: (arguments
+                                    (string
+                                      (string_fragment ":"))))
+                                index: (number "1")))
+                            property: (property_identifier "trim"))
+                          arguments: (arguments))
+                        (number "10")))))
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "bodyStart")
+                    value: (binary_expression
+                      left: (identifier "headerEndIdx")
+                      right: (number "4"))))
+                (if_statement
+                  condition: (parenthesized_expression
+                    (binary_expression
+                      left: (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rawBuffer"))
+                        property: (property_identifier "length"))
+                      right: (binary_expression
+                        left: (identifier "bodyStart")
+                        right: (identifier "contentLength"))))
+                  consequence: (statement_block
+                    (comment "// Incomplete message body, wait for next stream chunks")
+                    (break_statement)))
+                (lexical_declaration
+                  (variable_declarator
+                    name: (identifier "body")
+                    value: (call_expression
+                      function: (member_expression
+                        object: (call_expression
+                          function: (member_expression
+                            object: (member_expression
+                              object: (this "this")
+                              property: (property_identifier "rawBuffer"))
+                            property: (property_identifier "subarray"))
+                          arguments: (arguments
+                            (identifier "bodyStart")
+                            (binary_expression
+                              left: (identifier "bodyStart")
+                              right: (identifier "contentLength"))))
+                        property: (property_identifier "toString"))
+                      arguments: (arguments
+                        (string
+                          (string_fragment "utf8"))))))
+                (expression_statement
+                  (assignment_expression
+                    left: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "rawBuffer"))
+                    right: (call_expression
+                      function: (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "rawBuffer"))
+                        property: (property_identifier "subarray"))
+                      arguments: (arguments
+                        (binary_expression
+                          left: (identifier "bodyStart")
+                          right: (identifier "contentLength"))))))
+                (try_statement
+                  body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier "parsed")
+                        value: (call_expression
+                          function: (member_expression
+                            object: (identifier "JSON")
+                            property: (property_identifier "parse"))
+                          arguments: (arguments
+                            (identifier "body")))))
+                    (expression_statement
+                      (call_expression
+                        function: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "handleMessage"))
+                        arguments: (arguments
+                          (identifier "parsed")))))
+                  handler: (catch_clause
+                    parameter: (identifier "err")
+                    body: (statement_block
+                      (expression_statement
+                        (call_expression
+                          function: (identifier "logError")
+                          arguments: (arguments
+                            (string
+                              (string_fragment "[LSP] Failed to parse message body JSON:"))
+                            (identifier "err")
+                            (string
+                              (string_fragment "body:"))
+                            (identifier "body")))))))))))
+        (comment "/** Processes incoming Language Server Protocol (LSP) messages, handling server-initiated requests, notifications, and responses appropriately. */")
+        (method_definition
+          (accessibility_modifier)
+          name: (property_identifier "handleMessage")
+          parameters: (formal_parameters
+            (required_parameter
+              pattern: (identifier "msg")
+              type: (type_annotation
+                (predefined_type))))
+          return_type: (type_annotation
+            (predefined_type))
+          body: (statement_block
+            (comment "// Server-initiated request (has both id and method)")
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (binary_expression
+                    left: (member_expression
+                      object: (identifier "msg")
+                      property: (property_identifier "id"))
+                    right: (undefined "undefined"))
+                  right: (member_expression
+                    object: (identifier "msg")
+                    property: (property_identifier "method"))))
+              consequence: (statement_block
+                (expression_statement
+                  (call_expression
+                    function: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "send"))
+                    arguments: (arguments
+                      (object
+                        (pair
+                          key: (property_identifier "jsonrpc")
+                          value: (string
+                            (string_fragment "2.0")))
+                        (pair
+                          key: (property_identifier "id")
+                          value: (member_expression
+                            object: (identifier "msg")
+                            property: (property_identifier "id")))
+                        (pair
+                          key: (property_identifier "result")
+                          value: (null "null"))))))
+                (return_statement)))
+            (comment "// Server notification (no id, has method)")
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (binary_expression
+                    left: (member_expression
+                      object: (identifier "msg")
+                      property: (property_identifier "id"))
+                    right: (undefined "undefined"))
+                  right: (member_expression
+                    object: (identifier "msg")
+                    property: (property_identifier "method"))))
+              consequence: (statement_block
+                (if_statement
+                  condition: (parenthesized_expression
+                    (binary_expression
+                      left: (binary_expression
+                        left: (member_expression
+                          object: (identifier "msg")
+                          property: (property_identifier "method"))
+                        right: (string
+                          (string_fragment "textDocument/publishDiagnostics")))
+                      right: (member_expression
+                        object: (member_expression
+                          object: (identifier "msg")
+                          property: (property_identifier "params"))
+                        optional_chain: (optional_chain)
+                        property: (property_identifier "uri"))))
+                  consequence: (statement_block
+                    (expression_statement
+                      (call_expression
+                        function: (member_expression
+                          object: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "diagnosticsReceivedUris"))
+                          property: (property_identifier "add"))
+                        arguments: (arguments
+                          (member_expression
+                            object: (member_expression
+                              object: (identifier "msg")
+                              property: (property_identifier "params"))
+                            property: (property_identifier "uri")))))))
+                (return_statement)))
+            (comment "// Response to a client request")
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (member_expression
+                    object: (identifier "msg")
+                    property: (property_identifier "id"))
+                  right: (undefined "undefined")))
+              consequence: (statement_block
+                (if_statement
+                  condition: (parenthesized_expression
+                    (call_expression
+                      function: (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "pendingRequests"))
+                        property: (property_identifier "has"))
+                      arguments: (arguments
+                        (member_expression
+                          object: (identifier "msg")
+                          property: (property_identifier "id")))))
+                  consequence: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier "pending")
+                        value: (non_null_expression
+                          (call_expression
+                            function: (member_expression
+                              object: (member_expression
+                                object: (this "this")
+                                property: (property_identifier "pendingRequests"))
+                              property: (property_identifier "get"))
+                            arguments: (arguments
+                              (member_expression
+                                object: (identifier "msg")
+                                property: (property_identifier "id")))))))
+                    (if_statement
+                      condition: (parenthesized_expression
+                        (member_expression
+                          object: (identifier "msg")
+                          property: (property_identifier "error")))
+                      consequence: (statement_block
+                        (expression_statement
+                          (call_expression
+                            function: (member_expression
+                              object: (identifier "pending")
+                              property: (property_identifier "reject"))
+                            arguments: (arguments
+                              (member_expression
+                                object: (identifier "msg")
+                                property: (property_identifier "error"))))))
+                      alternative: (else_clause
+                        (statement_block
+                          (expression_statement
+                            (call_expression
+                              function: (member_expression
+                                object: (identifier "pending")
+                                property: (property_identifier "resolve"))
+                              arguments: (arguments
+                                (member_expression
+                                  object: (identifier "msg")
+                                  property: (property_identifier "result"))))))))
+                    (expression_statement
+                      (call_expression
+                        function: (member_expression
+                          object: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "pendingRequests"))
+                          property: (property_identifier "delete"))
+                        arguments: (arguments
+                          (member_expression
+                            object: (identifier "msg")
+                            property: (property_identifier "id"))))))
+                  alternative: (else_clause
+                    (statement_block
+                      (expression_statement
+                        (call_expression
+                          function: (identifier "logError")
+                          arguments: (arguments
+                            (template_string
+                              (string_fragment "[LSP] <-- response for unknown id=")
+                              (template_substitution
+                                (member_expression
+                                  object: (identifier "msg")
+                                  property: (property_identifier "id")))
+                              (string_fragment " (no pending request). Pending ids: [")
+                              (template_substitution
+                                (call_expression
+                                  function: (member_expression
+                                    object: (array
+                                      (spread_element
+                                        (call_expression
+                                          function: (member_expression
+                                            object: (member_expression
+                                              object: (this "this")
+                                              property: (property_identifier "pendingRequests"))
+                                            property: (property_identifier "keys"))
+                                          arguments: (arguments))))
+                                    property: (property_identifier "join"))
+                                  arguments: (arguments
+                                    (string
+                                      (string_fragment ", ")))))
+                              (string_fragment "]"))))))))
+                (return_statement)))
+            (expression_statement
+              (call_expression
+                function: (identifier "logError")
+                arguments: (arguments
+                  (template_string
+                    (string_fragment "[LSP] <-- unrecognized message shape:"))
+                  (call_expression
+                    function: (member_expression
+                      object: (identifier "JSON")
+                      property: (property_identifier "stringify"))
+                    arguments: (arguments
+                      (identifier "msg"))))))))
+        (comment "/** Reads and logs any error output generated by the LSP (Language Server Protocol) process. This method monitors the standard error stream of the process to capture and record any issues or errors that occur during its operation. */")
+        (method_definition
+          (accessibility_modifier)
+          name: (property_identifier "readStderr")
+          parameters: (formal_parameters)
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Promise")
+              type_arguments: (type_arguments
+                (predefined_type))))
+          body: (statement_block
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (unary_expression
+                    argument: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "process")))
+                  right: (unary_expression
+                    argument: (member_expression
+                      object: (member_expression
+                        object: (this "this")
+                        property: (property_identifier "process"))
+                      property: (property_identifier "stderr")))))
+              consequence: (statement_block
+                (expression_statement
+                  (call_expression
+                    function: (identifier "logError")
+                    arguments: (arguments
+                      (string
+                        (string_fragment "[LSP] Cannot read stderr: LSP process is not running")))))
+                (return_statement)))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "reader")
+                value: (call_expression
+                  function: (member_expression
+                    object: (parenthesized_expression
+                      (as_expression
+                        (member_expression
+                          object: (member_expression
+                            object: (this "this")
+                            property: (property_identifier "process"))
+                          property: (property_identifier "stderr"))
+                        (generic_type
+                          name: (type_identifier "ReadableStream")
+                          type_arguments: (type_arguments
+                            (type_identifier "Uint8Array")))))
+                    property: (property_identifier "getReader"))
+                  arguments: (arguments))))
+            (try_statement
+              body: (statement_block
+                (while_statement
+                  condition: (parenthesized_expression
+                    (true "true"))
+                  body: (statement_block
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (object_pattern
+                          (shorthand_property_identifier_pattern "done")
+                          (shorthand_property_identifier_pattern "value"))
+                        value: (await_expression
+                          (call_expression
+                            function: (member_expression
+                              object: (identifier "reader")
+                              property: (property_identifier "read"))
+                            arguments: (arguments)))))
+                    (if_statement
+                      condition: (parenthesized_expression
+                        (identifier "done"))
+                      consequence: (break_statement))
+                    (lexical_declaration
+                      (variable_declarator
+                        name: (identifier "text")
+                        value: (call_expression
+                          function: (member_expression
+                            object: (new_expression
+                              constructor: (identifier "TextDecoder")
+                              arguments: (arguments))
+                            property: (property_identifier "decode"))
+                          arguments: (arguments
+                            (identifier "value")))))
+                    (expression_statement
+                      (call_expression
+                        function: (identifier "logDebug")
+                        arguments: (arguments
+                          (template_string
+                            (string_fragment "[LSP Stderr] ")
+                            (template_substitution
+                              (call_expression
+                                function: (member_expression
+                                  object: (identifier "text")
+                                  property: (property_identifier "trim"))
+                                arguments: (arguments))))))))))
+              handler: (catch_clause
+                parameter: (identifier "e")
+                body: (statement_block
+                  (comment "// Process has likely exited"))))))
+        (comment "/** Sends a message to the LSP process. The message is serialized as JSON and sent with appropriate headers. */")
+        (method_definition
+          (accessibility_modifier)
+          name: (property_identifier "send")
+          parameters: (formal_parameters
+            (required_parameter
+              pattern: (identifier "msg")
+              type: (type_annotation
+                (predefined_type))))
+          return_type: (type_annotation
+            (predefined_type))
+          body: (statement_block
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (unary_expression
+                    argument: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "process")))
+                  right: (unary_expression
+                    argument: (member_expression
+                      object: (member_expression
+                        object: (this "this")
+                        property: (property_identifier "process"))
+                      property: (property_identifier "stdin")))))
+              consequence: (statement_block
+                (throw_statement
+                  (new_expression
+                    constructor: (identifier "Error")
+                    arguments: (arguments
+                      (string
+                        (string_fragment "LSP process is not running or stdin is closed")))))))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "json")
+                value: (call_expression
+                  function: (member_expression
+                    object: (identifier "JSON")
+                    property: (property_identifier "stringify"))
+                  arguments: (arguments
+                    (identifier "msg")))))
+            (comment "// Explicitly compute bytes length instead of string length (for UTF-8 safety)")
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "length")
+                value: (call_expression
+                  function: (member_expression
+                    object: (identifier "Buffer")
+                    property: (property_identifier "byteLength"))
+                  arguments: (arguments
+                    (identifier "json")
+                    (string
+                      (string_fragment "utf-8"))))))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "payload")
+                value: (template_string
+                  (string_fragment "Content-Length: ")
+                  (template_substitution
+                    (identifier "length"))
+                  (escape_sequence "\\r")
+                  (escape_sequence "\\n")
+                  (escape_sequence "\\r")
+                  (escape_sequence "\\n")
+                  (template_substitution
+                    (identifier "json")))))
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (parenthesized_expression
+                    (as_expression
+                      (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "process"))
+                        property: (property_identifier "stdin"))
+                      (nested_type_identifier
+                        module: (identifier "Bun")
+                        name: (type_identifier "FileSink"))))
+                  property: (property_identifier "write"))
+                arguments: (arguments
+                  (identifier "payload"))))
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (parenthesized_expression
+                    (as_expression
+                      (member_expression
+                        object: (member_expression
+                          object: (this "this")
+                          property: (property_identifier "process"))
+                        property: (property_identifier "stdin"))
+                      (nested_type_identifier
+                        module: (identifier "Bun")
+                        name: (type_identifier "FileSink"))))
+                  property: (property_identifier "flush"))
+                arguments: (arguments)))))
+        (comment "/** Sends a JSON-RPC notification to the language server. */")
+        (method_definition
+          name: (property_identifier "notify")
+          parameters: (formal_parameters
+            (required_parameter
+              pattern: (identifier "method")
+              type: (type_annotation
+                (predefined_type)))
+            (required_parameter
+              pattern: (identifier "params")
+              type: (type_annotation
+                (predefined_type))))
+          return_type: (type_annotation
+            (predefined_type))
+          body: (statement_block
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (this "this")
+                  property: (property_identifier "send"))
+                arguments: (arguments
+                  (object
+                    (pair
+                      key: (property_identifier "jsonrpc")
+                      value: (string
+                        (string_fragment "2.0")))
+                    (shorthand_property_identifier "method")
+                    (shorthand_property_identifier "params")))))))
+        (comment "/** Drops the \"diagnostics received\" mark for a file, e.g. after it's been re-sent via `didChange`, so a subsequent `waitForDiagnostics` call waits for a fresh analysis pass rather than reusing a stale signal. */")
+        (method_definition
+          name: (property_identifier "invalidateDiagnostics")
+          parameters: (formal_parameters
+            (required_parameter
+              pattern: (identifier "absPath")
+              type: (type_annotation
+                (predefined_type))))
+          return_type: (type_annotation
+            (predefined_type))
+          body: (statement_block
+            (expression_statement
+              (call_expression
+                function: (member_expression
+                  object: (member_expression
+                    object: (this "this")
+                    property: (property_identifier "diagnosticsReceivedUris"))
+                  property: (property_identifier "delete"))
+                arguments: (arguments
+                  (template_string
+                    (string_fragment "file://")
+                    (template_substitution
+                      (identifier "absPath"))))))))
+        (comment "/**\n   * Blocks until the server has published at least one\n   * `textDocument/publishDiagnostics` notification for every given file (or\n   * the timeout elapses).\n   */")
+        (method_definition
+          name: (property_identifier "waitForDiagnostics")
+          parameters: (formal_parameters
+            (required_parameter
+              pattern: (identifier "absPaths")
+              type: (type_annotation
+                (array_type
+                  (predefined_type))))
+            (required_parameter
+              pattern: (identifier "timeoutMs")
+              value: (number "20000")))
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Promise")
+              type_arguments: (type_arguments
+                (predefined_type))))
+          body: (statement_block
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "uris")
+                value: (call_expression
+                  function: (member_expression
+                    object: (identifier "absPaths")
+                    property: (property_identifier "map"))
+                  arguments: (arguments
+                    (arrow_function
+                      parameters: (formal_parameters
+                        (required_parameter
+                          pattern: (identifier "p")))
+                      body: (template_string
+                        (string_fragment "file://")
+                        (template_substitution
+                          (identifier "p"))))))))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "pollIntervalMs")
+                value: (number "50")))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "deadline")
+                value: (binary_expression
+                  left: (call_expression
+                    function: (member_expression
+                      object: (identifier "Date")
+                      property: (property_identifier "now"))
+                    arguments: (arguments))
+                  right: (identifier "timeoutMs"))))
+            (while_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (call_expression
+                    function: (member_expression
+                      object: (identifier "Date")
+                      property: (property_identifier "now"))
+                    arguments: (arguments))
+                  right: (identifier "deadline")))
+              body: (statement_block
+                (if_statement
+                  condition: (parenthesized_expression
+                    (call_expression
+                      function: (member_expression
+                        object: (identifier "uris")
+                        property: (property_identifier "every"))
+                      arguments: (arguments
+                        (arrow_function
+                          parameters: (formal_parameters
+                            (required_parameter
+                              pattern: (identifier "uri")))
+                          body: (call_expression
+                            function: (member_expression
+                              object: (member_expression
+                                object: (this "this")
+                                property: (property_identifier "diagnosticsReceivedUris"))
+                              property: (property_identifier "has"))
+                            arguments: (arguments
+                              (identifier "uri")))))))
+                  consequence: (return_statement))
+                (expression_statement
+                  (await_expression
+                    (new_expression
+                      constructor: (identifier "Promise")
+                      arguments: (arguments
+                        (arrow_function
+                          parameters: (formal_parameters
+                            (required_parameter
+                              pattern: (identifier "resolve")))
+                          body: (call_expression
+                            function: (identifier "setTimeout")
+                            arguments: (arguments
+                              (identifier "resolve")
+                              (identifier "pollIntervalMs"))))))))))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "missing")
+                value: (call_expression
+                  function: (member_expression
+                    object: (identifier "uris")
+                    property: (property_identifier "filter"))
+                  arguments: (arguments
+                    (arrow_function
+                      parameters: (formal_parameters
+                        (required_parameter
+                          pattern: (identifier "uri")))
+                      body: (unary_expression
+                        argument: (call_expression
+                          function: (member_expression
+                            object: (member_expression
+                              object: (this "this")
+                              property: (property_identifier "diagnosticsReceivedUris"))
+                            property: (property_identifier "has"))
+                          arguments: (arguments
+                            (identifier "uri")))))))))
+            (if_statement
+              condition: (parenthesized_expression
+                (binary_expression
+                  left: (member_expression
+                    object: (identifier "missing")
+                    property: (property_identifier "length"))
+                  right: (number "0")))
+              consequence: (statement_block
+                (expression_statement
+                  (call_expression
+                    function: (identifier "logDebug")
+                    arguments: (arguments
+                      (template_string
+                        (string_fragment "[LSP] Timed out after ")
+                        (template_substitution
+                          (identifier "timeoutMs"))
+                        (string_fragment "ms waiting for diagnostics on ")
+                        (template_substitution
+                          (member_expression
+                            object: (identifier "missing")
+                            property: (property_identifier "length")))
+                        (string_fragment "/")
+                        (template_substitution
+                          (member_expression
+                            object: (identifier "uris")
+                            property: (property_identifier "length")))
+                        (string_fragment " file(s); proceeding anyway.")))))))))
+        (comment "/** Sends a JSON-RPC request to the language server and returns a promise for the result. */")
+        (method_definition
+          name: (property_identifier "request")
+          parameters: (formal_parameters
+            (required_parameter
+              pattern: (identifier "method")
+              type: (type_annotation
+                (predefined_type)))
+            (required_parameter
+              pattern: (identifier "params")
+              type: (type_annotation
+                (predefined_type)))
+            (optional_parameter
+              pattern: (identifier "timeoutMs")
+              type: (type_annotation
+                (predefined_type))))
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Promise")
+              type_arguments: (type_arguments
+                (predefined_type))))
+          body: (statement_block
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "id")
+                value: (update_expression
+                  argument: (member_expression
+                    object: (this "this")
+                    property: (property_identifier "messageId")))))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "requestPromise")
+                value: (new_expression
+                  constructor: (identifier "Promise")
+                  arguments: (arguments
+                    (arrow_function
+                      parameters: (formal_parameters
+                        (required_parameter
+                          pattern: (identifier "resolve"))
+                        (required_parameter
+                          pattern: (identifier "reject")))
+                      body: (statement_block
+                        (expression_statement
+                          (call_expression
+                            function: (member_expression
+                              object: (member_expression
+                                object: (this "this")
+                                property: (property_identifier "pendingRequests"))
+                              property: (property_identifier "set"))
+                            arguments: (arguments
+                              (identifier "id")
+                              (object
+                                (shorthand_property_identifier "resolve")
+                                (shorthand_property_identifier "reject")
+                                (shorthand_property_identifier "method")))))
+                        (try_statement
+                          body: (statement_block
+                            (expression_statement
+                              (call_expression
+                                function: (member_expression
+                                  object: (this "this")
+                                  property: (property_identifier "send"))
+                                arguments: (arguments
+                                  (object
+                                    (pair
+                                      key: (property_identifier "jsonrpc")
+                                      value: (string
+                                        (string_fragment "2.0")))
+                                    (shorthand_property_identifier "id")
+                                    (shorthand_property_identifier "method")
+                                    (shorthand_property_identifier "params"))))))
+                          handler: (catch_clause
+                            parameter: (identifier "err")
+                            body: (statement_block
+                              (expression_statement
+                                (call_expression
+                                  function: (identifier "logError")
+                                  arguments: (arguments
+                                    (template_string
+                                      (string_fragment "[LSP] --> request send failed: ")
+                                      (template_substitution
+                                        (identifier "method"))
+                                      (string_fragment " (id=")
+                                      (template_substitution
+                                        (identifier "id"))
+                                      (string_fragment "):"))
+                                    (identifier "err"))))
+                              (expression_statement
+                                (call_expression
+                                  function: (member_expression
+                                    object: (member_expression
+                                      object: (this "this")
+                                      property: (property_identifier "pendingRequests"))
+                                    property: (property_identifier "delete"))
+                                  arguments: (arguments
+                                    (identifier "id"))))
+                              (expression_statement
+                                (call_expression
+                                  function: (identifier "reject")
+                                  arguments: (arguments
+                                    (identifier "err")))))))))))))
+            (if_statement
+              condition: (parenthesized_expression
+                (unary_expression
+                  argument: (identifier "timeoutMs")))
+              consequence: (return_statement
+                (identifier "requestPromise")))
+            (lexical_declaration
+              (variable_declarator
+                name: (identifier "timeoutPromise")
+                value: (new_expression
+                  constructor: (identifier "Promise")
+                  type_arguments: (type_arguments
+                    (predefined_type))
+                  arguments: (arguments
+                    (arrow_function
+                      parameters: (formal_parameters
+                        (required_parameter
+                          pattern: (identifier "_"))
+                        (required_parameter
+                          pattern: (identifier "reject")))
+                      body: (call_expression
+                        function: (identifier "setTimeout")
+                        arguments: (arguments
+                          (arrow_function
+                            parameters: (formal_parameters)
+                            body: (statement_block
+                              (if_statement
+                                condition: (parenthesized_expression
+                                  (unary_expression
+                                    argument: (call_expression
+                                      function: (member_expression
+                                        object: (member_expression
+                                          object: (this "this")
+                                          property: (property_identifier "pendingRequests"))
+                                        property: (property_identifier "has"))
+                                      arguments: (arguments
+                                        (identifier "id")))))
+                                consequence: (return_statement))
+                              (expression_statement
+                                (call_expression
+                                  function: (member_expression
+                                    object: (member_expression
+                                      object: (this "this")
+                                      property: (property_identifier "pendingRequests"))
+                                    property: (property_identifier "delete"))
+                                  arguments: (arguments
+                                    (identifier "id"))))
+                              (expression_statement
+                                (call_expression
+                                  function: (identifier "logError")
+                                  arguments: (arguments
+                                    (template_string
+                                      (string_fragment "[LSP] Request timed out: ")
+                                      (template_substitution
+                                        (identifier "method"))
+                                      (string_fragment " (id=")
+                                      (template_substitution
+                                        (identifier "id"))
+                                      (string_fragment ") after ")
+                                      (template_substitution
+                                        (identifier "timeoutMs"))
+                                      (string_fragment "ms — server may be stuck on type inference")))))
+                              (expression_statement
+                                (call_expression
+                                  function: (identifier "reject")
+                                  arguments: (arguments
+                                    (new_expression
+                                      constructor: (identifier "Error")
+                                      arguments: (arguments
+                                        (template_string
+                                          (string_fragment "LSP request timeout after ")
+                                          (template_substitution
+                                            (identifier "timeoutMs"))
+                                          (string_fragment "ms: ")
+                                          (template_substitution
+                                            (identifier "method"))))))))))
+                          (identifier "timeoutMs"))))))))
+            (return_statement
+              (call_expression
+                function: (member_expression
+                  object: (identifier "Promise")
+                  property: (property_identifier "race"))
+                arguments: (arguments
+                  (array
+                    (identifier "requestPromise")
+                    (identifier "timeoutPromise")))))))
+        (comment "/** Gracefully terminates the language server. */")
+        (method_definition
+          name: (property_identifier "stop")
+          parameters: (formal_parameters)
+          return_type: (type_annotation
+            (generic_type
+              name: (type_identifier "Promise")
+              type_arguments: (type_arguments
+                (predefined_type))))
+          body: (statement_block
+            (if_statement
+              condition: (parenthesized_expression
+                (unary_expression
+                  argument: (member_expression
+                    object: (this "this")
+                    property: (property_identifier "process"))))
+              consequence: (return_statement))
+            (try_statement
+              body: (statement_block
+                (expression_statement
+                  (await_expression
+                    (call_expression
+                      function: (member_expression
+                        object: (this "this")
+                        property: (property_identifier "request"))
+                      arguments: (arguments
+                        (string
+                          (string_fragment "shutdown"))
+                        (object)))))
+                (expression_statement
+                  (call_expression
+                    function: (member_expression
+                      object: (this "this")
+                      property: (property_identifier "notify"))
+                    arguments: (arguments
+                      (string
+                        (string_fragment "exit"))
+                      (object))))
+                (expression_statement
+                  (call_expression
+                    function: (member_expression
+                      object: (member_expression
+                        object: (this "this")
+                        property: (property_identifier "process"))
+                      property: (property_identifier "kill"))
+                    arguments: (arguments))))
+              handler: (catch_clause
+                parameter: (identifier "e")
+                body: (statement_block
+                  (if_statement
+                    condition: (parenthesized_expression
+                      (member_expression
+                        object: (this "this")
+                        property: (property_identifier "process")))
+                    consequence: (statement_block
+                      (expression_statement
+                        (call_expression
+                          function: (member_expression
+                            object: (member_expression
+                              object: (this "this")
+                              property: (property_identifier "process"))
+                            property: (property_identifier "kill"))
+                          arguments: (arguments))))))))))))))

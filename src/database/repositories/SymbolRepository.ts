@@ -268,6 +268,7 @@ export class SymbolRepository {
         and(
           eq(schema.symbols.file_path, relativePath),
           inArray(schema.symbols.kind, targetKinds),
+          ne(schema.symbols.name, '<module>'),
           or(
             isNull(schema.symbols.docstring),
             eq(schema.symbols.docstring, ''),

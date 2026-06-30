@@ -14,7 +14,11 @@ import { hashSymbol } from 'src/utils/hashers'
 /** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
 export class TypescriptAdapter implements LanguageAdapter {
   /** Extracts and organizes symbols, docstrings, calls, imports, exceptions, and environment variables from the given query matches in a file, returning a structured ExtractionResult containing all extracted information. */
-  extract(matches: QueryMatch[], file_path: string, rootNode: Node): ExtractionResult {
+  extract(
+    matches: QueryMatch[],
+    file_path: string,
+    rootNode: Node,
+  ): ExtractionResult {
     const result: ExtractionResult = {
       symbols: [],
       imports: [],
@@ -433,13 +437,20 @@ export class TypescriptAdapter implements LanguageAdapter {
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
   ) {
+    const lexicalKinds = [SymbolKind.const, SymbolKind.let, SymbolKind.var]
+
     // find caller
     let caller_id: string | null = null
     let p = node.parent
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
-        caller_id = nodeToSymbolId.get(p.id)!
-        break
+        const capturedSymbol = result.symbols.find(
+          (s) => s.id === nodeToSymbolId.get(p!.id),
+        )
+        if (capturedSymbol && !lexicalKinds.includes(capturedSymbol.kind)) {
+          caller_id = nodeToSymbolId.get(p.id)!
+          break
+        }
       }
       p = p.parent
     }
