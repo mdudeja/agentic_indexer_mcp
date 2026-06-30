@@ -229,8 +229,8 @@ describe('MCP Tools Integration Tests', () => {
     const readSnippetTool = mockServer.tools.get('read_file_snippet')!
     const response = await readSnippetTool.handler({
       file_path: 'math.ts',
-      start_line: 2,
-      end_line: 4,
+      start_line: 4,
+      end_line: 6,
     })
 
     expect(response.isError).toBeFalsy()
