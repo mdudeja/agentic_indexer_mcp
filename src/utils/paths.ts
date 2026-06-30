@@ -1,6 +1,5 @@
 import { fileURLToPath } from 'bun'
 import { statSync } from 'node:fs'
-import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve, relative } from 'path'
 import { AppStateManager } from 'src/state'

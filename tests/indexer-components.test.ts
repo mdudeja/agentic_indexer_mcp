@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'bun:test'
-import { formatComment, getCommentText } from '../src/indexer/docstrings/formatComment'
+import { describe, expect, test } from 'bun:test'
+import {
+  formatComment,
+  getCommentText,
+} from '../src/indexer/docstrings/formatComment'
 import { createProvider } from '../src/indexer/docstrings/providers'
 import { ClaudeProvider } from '../src/indexer/docstrings/providers/ClaudeProvider'
 import { GeminiProvider } from '../src/indexer/docstrings/providers/GeminiProvider'
@@ -11,7 +14,7 @@ import { PythonLspEnhancer } from '../src/indexer/enhancers/PythonLspEnhancer'
 import { TypescriptLspEnhancer } from '../src/indexer/enhancers/TypescriptLspEnhancer'
 
 describe('Indexer Components Unit Tests', () => {
-  it('should format comments correctly using formatComment and getCommentText', () => {
+  test('should format comments correctly using formatComment and getCommentText', () => {
     const rawComment = '/**\n * This is a comment\n * @param x description\n */'
     const formatted = formatComment(rawComment, 'typescript')
     expect(formatted).toContain('* This is a comment')
@@ -20,42 +23,50 @@ describe('Indexer Components Unit Tests', () => {
     expect(cleanText).toContain('This is a comment')
   })
 
-  it('should instantiate docstring providers correctly via factory', () => {
+  test('should instantiate docstring providers correctly via factory', () => {
     const claude = createProvider({
       enabled: true,
       provider: 'claude',
-      claude: { api_key: 'test', model: 'claude-haiku-4-5' },
+      write_to_file: false,
+      claude: { api_key: 'dummy_key', model: 'dummy_model' },
     })
     expect(claude).toBeInstanceOf(ClaudeProvider)
 
     const gemini = createProvider({
       enabled: true,
       provider: 'gemini',
-      gemini: { api_key: 'test', model: 'gemini-3-flash-preview' },
+      write_to_file: false,
+      gemini: { api_key: 'dummy_key', model: 'dummy_model' },
     })
     expect(gemini).toBeInstanceOf(GeminiProvider)
 
     const openai = createProvider({
       enabled: true,
       provider: 'openai',
-      openai: { api_key: 'test', model: 'gpt-4o-mini' },
+      write_to_file: false,
+      openai: { api_key: 'dummy_key', model: 'dummy_model' },
     })
     expect(openai).toBeInstanceOf(OpenAIProvider)
 
     const ollama = createProvider({
       enabled: true,
       provider: 'ollama',
-      ollama: { base_url: 'http://localhost:11434', model: 'deepcoder' },
+      write_to_file: false,
+      ollama: { model: 'dummy_model', base_url: 'http://localhost:11434' },
     })
     expect(ollama).toBeInstanceOf(OllamaProvider)
   })
 
-  it('should instantiate DocstringGenerationStep and LSP enhancers safely', async () => {
+  test('should instantiate DocstringGenerationStep and LSP enhancers safely', async () => {
     const step = new DocstringGenerationStep('/workspace')
     expect(step).toBeDefined()
 
     // Test LSP Enhancers handling empty commands gracefully
-    const genericEnhancer = new GenericLspEnhancer('/workspace', [], 'typescript')
+    const genericEnhancer = new GenericLspEnhancer(
+      '/workspace',
+      [],
+      'typescript',
+    )
     const initGeneric = await genericEnhancer.init()
     expect(initGeneric).toBe(false) // should fail to init with empty cmd
 

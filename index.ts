@@ -21,6 +21,7 @@ declare module 'bun' {
     CLAUDE_API_KEY?: string
     GEMINI_API_KEY?: string
     OPENAI_API_KEY?: string
+    TEST_FIXTURES_DIR?: string
   }
 }
 

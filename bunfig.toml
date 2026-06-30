@@ -1,0 +1,6 @@
+[test]
+timeout = 30000
+preload = ["./scripts/test_setup.ts"]
+
+coverage = true
+coveragePathIgnorePatterns = ["tests/**/*"]

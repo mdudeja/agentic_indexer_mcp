@@ -1,8 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
-import { IndexPipeline } from '../src/indexer/IndexPipeline'
+import { describe, expect, beforeAll, test } from 'bun:test'
 import { IndexerDB } from '../src/database/IndexerDB'
-import { AppStateManager } from '../src/state'
-import { loadConfig } from '../src/config/loader'
 import { registerSearchSymbolsTool } from '../src/server/tools/search_symbols'
 import { registerSemanticSearchSymbolsTool } from '../src/server/tools/semantic_search_symbols'
 import { registerGetTypeAtLocationTool } from '../src/server/tools/get_type_at_location'
@@ -33,9 +30,9 @@ import { registerAuditAgentConfigTool } from '../src/server/tools/audit_agent_co
 import { registerExploreCodebaseTool } from '../src/server/tools/explore_codebase'
 import { registerGetTokenSavingsTool } from '../src/server/tools/get_token_savings'
 
-import * as path from 'path'
 import * as schema from '../src/database/schemas'
 import { eq } from 'drizzle-orm'
+import { getStoreForTests } from '../scripts/test_setup'
 
 /** A mock server implementation for MCP (Message Communication Protocol), providing functionality to register tools with specified schemas and handler functions. */
 class MockMcpServer {
@@ -44,9 +41,10 @@ class MockMcpServer {
   /** Registers a new tool with a specified name, schema, and handler function. */
   registerTool(name: string, schema: any, handler: Function) {
     const wrappedHandler = async (args: any) => {
-      const parsedArgs = (schema.inputSchema && typeof schema.inputSchema.parse === 'function')
-        ? schema.inputSchema.parse(args)
-        : args
+      const parsedArgs =
+        schema.inputSchema && typeof schema.inputSchema.parse === 'function'
+          ? schema.inputSchema.parse(args)
+          : args
       return handler(parsedArgs)
     }
     this.tools.set(name, { schema, handler: wrappedHandler })
@@ -56,43 +54,9 @@ class MockMcpServer {
 describe('MCP Tools Integration Tests', () => {
   let store: IndexerDB
   let mockServer: MockMcpServer
-  const fixturePath = path.join(import.meta.dir, 'fixtures/test-project')
 
   beforeAll(async () => {
-    // 1. Setup AppState config
-    const config = await loadConfig(fixturePath)
-    AppStateManager.getInstance().setItem('config', config)
-    AppStateManager.getInstance().setItem('root', fixturePath)
-
-    // 2. Initialize In-Memory DB and index the test project
-    store = IndexerDB.getInstance(':memory:')
-    await store.init()
-
-    const pipeline = new IndexPipeline({
-      cwd: fixturePath,
-      store,
-      includeGitIgnored: true,
-    })
-    await pipeline.run()
-
-    // Manually resolve call graph references in the mock database because LSP is disabled during tests
-    const db = store.getDb()
-    const allSymbols = await db.select().from(schema.symbols)
-    const multiplySym = allSymbols.find((s) => s.name === 'multiply')
-    const addSym = allSymbols.find((s) => s.name === 'add')
-
-    if (multiplySym) {
-      await db
-        .update(schema.symbol_calls)
-        .set({ callee_id: multiplySym.id })
-        .where(eq(schema.symbol_calls.callee_name, 'multiply'))
-    }
-    if (addSym) {
-      await db
-        .update(schema.symbol_calls)
-        .set({ callee_id: addSym.id })
-        .where(eq(schema.symbol_calls.callee_name, 'add'))
-    }
+    store = getStoreForTests()
 
     // 3. Register tools on Mock MCP Server
     mockServer = new MockMcpServer()
@@ -127,12 +91,7 @@ describe('MCP Tools Integration Tests', () => {
     registerGetTokenSavingsTool(mockServer as any)
   })
 
-  afterAll(async () => {
-    await store.clear()
-    store.close()
-  })
-
-  it('should register all tools correctly', () => {
+  test('should register all tools correctly', () => {
     expect(mockServer.tools.size).toBe(29)
     expect(mockServer.tools.has('search_symbols')).toBe(true)
     expect(mockServer.tools.has('get_definition')).toBe(true)
@@ -141,7 +100,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(mockServer.tools.has('get_required_env_vars')).toBe(true)
   })
 
-  it('should search symbols via search_symbols tool', async () => {
+  test('should search symbols via search_symbols tool', async () => {
     const searchTool = mockServer.tools.get('search_symbols')!
     const response = await searchTool.handler({ query: 'add' })
 
@@ -149,7 +108,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('[FUNCTION] add')
   })
 
-  it('should fetch definition via get_definition tool', async () => {
+  test('should fetch definition via get_definition tool', async () => {
     const db = store.getDb()
     const [symbol] = await db
       .select()
@@ -166,7 +125,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('export function add(')
   })
 
-  it('should fetch imports via get_imports_for_file tool', async () => {
+  test('should fetch imports via get_imports_for_file tool', async () => {
     const getImportsTool = mockServer.tools.get('get_imports_for_file')!
     const response = await getImportsTool.handler({ filePath: 'app.ts' })
 
@@ -177,7 +136,7 @@ describe('MCP Tools Integration Tests', () => {
     )
   })
 
-  it('should list files via list_files tool', async () => {
+  test('should list files via list_files tool', async () => {
     const listFilesTool = mockServer.tools.get('list_files')!
     const response = await listFilesTool.handler({})
 
@@ -186,7 +145,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('app.ts')
   })
 
-  it('should trace call graph via trace_call_graph tool', async () => {
+  test('should trace call graph via trace_call_graph tool', async () => {
     const traceCallGraphTool = mockServer.tools.get('trace_call_graph')!
     const response = await traceCallGraphTool.handler({
       symbol_name: 'runCalculation',
@@ -198,7 +157,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('multiply')
   })
 
-  it('should trace exceptions via trace_error_flow tool', async () => {
+  test('should trace exceptions via trace_error_flow tool', async () => {
     const traceErrorFlowTool = mockServer.tools.get('trace_error_flow')!
     const response = await traceErrorFlowTool.handler({
       symbol_name: 'runCalculation',
@@ -208,7 +167,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Error')
   })
 
-  it('should get required environment variables via get_required_env_vars tool', async () => {
+  test('should get required environment variables via get_required_env_vars tool', async () => {
     const getEnvVarsTool = mockServer.tools.get('get_required_env_vars')!
     const response = await getEnvVarsTool.handler({
       symbol_name: 'runCalculation',
@@ -218,7 +177,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('APP_TOKEN')
   })
 
-  it('should audit agent configuration via audit_agent_config tool', async () => {
+  test('should audit agent configuration via audit_agent_config tool', async () => {
     const auditConfigTool = mockServer.tools.get('audit_agent_config')!
     const response = await auditConfigTool.handler({})
 
@@ -226,7 +185,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Agent config audit')
   })
 
-  it('should return token savings via get_token_savings tool', async () => {
+  test('should return token savings via get_token_savings tool', async () => {
     const getSavingsTool = mockServer.tools.get('get_token_savings')!
     const response = await getSavingsTool.handler({})
 
@@ -234,7 +193,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Token Savings Report')
   })
 
-  it('should fetch single import by ID via get_import_by_id tool', async () => {
+  test('should fetch single import by ID via get_import_by_id tool', async () => {
     const db = store.getDb()
     const [imported] = await db.select().from(schema.imports).limit(1)
     expect(imported).toBeDefined()
@@ -246,7 +205,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain(imported!.imported_name!)
   })
 
-  it('should search symbols semantically via semantic_search_symbols tool', async () => {
+  test('should search symbols semantically via semantic_search_symbols tool', async () => {
     const semanticSearchTool = mockServer.tools.get('semantic_search_symbols')!
     const response = await semanticSearchTool.handler({ query: 'add' })
 
@@ -254,7 +213,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('[FUNCTION] add')
   })
 
-  it('should attempt to get type at location via get_type_at_location tool', async () => {
+  test('should attempt to get type at location via get_type_at_location tool', async () => {
     const getTypeTool = mockServer.tools.get('get_type_at_location')!
     const response = await getTypeTool.handler({
       file_path: 'math.ts',
@@ -263,10 +222,10 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Type hover is not supported or not initialized')
+    expect(response.content[0].text).toContain('Could not resolve type')
   })
 
-  it('should read file snippet via read_file_snippet tool', async () => {
+  test('should read file snippet via read_file_snippet tool', async () => {
     const readSnippetTool = mockServer.tools.get('read_file_snippet')!
     const response = await readSnippetTool.handler({
       file_path: 'math.ts',
@@ -275,10 +234,10 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('export function add(')
+    expect(response.content[0].text).toContain('return a + b')
   })
 
-  it('should handle get_symbol_history tool gracefully when git fails or is absent', async () => {
+  test('should handle get_symbol_history tool gracefully when git fails or is absent', async () => {
     const historyTool = mockServer.tools.get('get_symbol_history')!
     const response = await historyTool.handler({
       name: 'add',
@@ -289,7 +248,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toBeDefined()
   })
 
-  it('should fetch file details via get_file_details tool', async () => {
+  test('should fetch file details via get_file_details tool', async () => {
     const detailsTool = mockServer.tools.get('get_file_details')!
     const response = await detailsTool.handler({
       file_path_or_file_name: 'math.ts',
@@ -300,7 +259,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Calculator')
   })
 
-  it('should trace blast radius via get_blast_radius tool', async () => {
+  test('should trace blast radius via get_blast_radius tool', async () => {
     const blastRadiusTool = mockServer.tools.get('get_blast_radius')!
     const response = await blastRadiusTool.handler({
       symbol_name: 'multiply',
@@ -311,7 +270,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('prod')
   })
 
-  it('should find symbol references via find_symbol_references tool', async () => {
+  test('should find symbol references via find_symbol_references tool', async () => {
     const refsTool = mockServer.tools.get('find_symbol_references')!
     const response = await refsTool.handler({
       symbol_name: 'multiply',
@@ -322,7 +281,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Called at')
   })
 
-  it('should trace data flow via trace_data_flow tool', async () => {
+  test('should trace data flow via trace_data_flow tool', async () => {
     const dataFlowTool = mockServer.tools.get('trace_data_flow')!
     const response = await dataFlowTool.handler({
       symbol_name: 'runCalculation',
@@ -333,7 +292,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Data flows OUT to')
   })
 
-  it('should get codebase map via get_codebase_map tool', async () => {
+  test('should get codebase map via get_codebase_map tool', async () => {
     const mapTool = mockServer.tools.get('get_codebase_map')!
     const response = await mapTool.handler({
       depth: 1,
@@ -344,7 +303,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Architecture')
   })
 
-  it('should fetch entry points via get_entry_points tool', async () => {
+  test('should fetch entry points via get_entry_points tool', async () => {
     const entryPointsTool = mockServer.tools.get('get_entry_points')!
     const response = await entryPointsTool.handler({
       only_unreferenced: false,
@@ -354,7 +313,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Entry Points')
   })
 
-  it('should search related tests via find_related_tests tool', async () => {
+  test('should search related tests via find_related_tests tool', async () => {
     const relatedTestsTool = mockServer.tools.get('find_related_tests')!
     const response = await relatedTestsTool.handler({
       target: 'runCalculation',
@@ -364,7 +323,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('No test files found')
   })
 
-  it('should resolve types via resolve_type tool', async () => {
+  test('should resolve types via resolve_type tool', async () => {
     const resolveTypeTool = mockServer.tools.get('resolve_type')!
     const response = await resolveTypeTool.handler({
       type_name: 'Calculator',
@@ -374,7 +333,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Type: Calculator')
   })
 
-  it('should search similar patterns via find_similar_patterns tool', async () => {
+  test('should search similar patterns via find_similar_patterns tool', async () => {
     const patternsTool = mockServer.tools.get('find_similar_patterns')!
     const response = await patternsTool.handler({
       symbol_name: 'add',
@@ -385,7 +344,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Symbols similar to: add')
   })
 
-  it('should find dead code via find_dead_code tool', async () => {
+  test('should find dead code via find_dead_code tool', async () => {
     const deadCodeTool = mockServer.tools.get('find_dead_code')!
     const response = await deadCodeTool.handler({
       exclude_tests: false,
@@ -395,7 +354,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('potentially dead symbol')
   })
 
-  it('should search untested symbols via get_untested_symbols tool', async () => {
+  test('should search untested symbols via get_untested_symbols tool', async () => {
     const untestedTool = mockServer.tools.get('get_untested_symbols')!
     const response = await untestedTool.handler({})
 
@@ -403,17 +362,19 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('No test files found')
   })
 
-  it('should get symbol importance via get_symbol_importance tool', async () => {
+  test('should get symbol importance via get_symbol_importance tool', async () => {
     const importanceTool = mockServer.tools.get('get_symbol_importance')!
     const response = await importanceTool.handler({
       limit: 5,
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('symbols by call-graph importance')
+    expect(response.content[0].text).toContain(
+      'symbols by call-graph importance',
+    )
   })
 
-  it('should trace dependency cycles via get_dependency_cycles tool', async () => {
+  test('should trace dependency cycles via get_dependency_cycles tool', async () => {
     const cyclesTool = mockServer.tools.get('get_dependency_cycles')!
     const response = await cyclesTool.handler({})
 
@@ -421,7 +382,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('No circular dependencies found')
   })
 
-  it('should fetch coupling metrics via get_coupling_metrics tool', async () => {
+  test('should fetch coupling metrics via get_coupling_metrics tool', async () => {
     const couplingTool = mockServer.tools.get('get_coupling_metrics')!
     const response = await couplingTool.handler({})
 
@@ -429,7 +390,7 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Coupling metrics')
   })
 
-  it('should explore codebase via explore_codebase tool', async () => {
+  test('should explore codebase via explore_codebase tool', async () => {
     const exploreTool = mockServer.tools.get('explore_codebase')!
     const response = await exploreTool.handler({
       max_nodes: 50,

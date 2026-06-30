@@ -12,6 +12,7 @@ import {
   not,
   isNotNull,
   sql,
+  ne,
 } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedSymbol } from '../schemas'
@@ -244,6 +245,7 @@ export class SymbolRepository {
       .where(
         and(
           inArray(schema.symbols.kind, targetKinds),
+          ne(schema.symbols.name, '<module>'),
           or(
             isNull(schema.symbols.docstring),
             eq(schema.symbols.docstring, ''),

@@ -4,6 +4,7 @@ import {
   type LanguageAdapter,
   type ExtractionResult,
   extractCallDocstring,
+  seedModuleSymbol,
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
 import { resolveImportedModulePath } from '../../utils/paths'
@@ -13,7 +14,7 @@ import { hashSymbol } from 'src/utils/hashers'
 /** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
 export class TypescriptAdapter implements LanguageAdapter {
   /** Extracts and organizes symbols, docstrings, calls, imports, exceptions, and environment variables from the given query matches in a file, returning a structured ExtractionResult containing all extracted information. */
-  extract(matches: QueryMatch[], file_path: string): ExtractionResult {
+  extract(matches: QueryMatch[], file_path: string, rootNode: Node): ExtractionResult {
     const result: ExtractionResult = {
       symbols: [],
       imports: [],
@@ -31,6 +32,8 @@ export class TypescriptAdapter implements LanguageAdapter {
     // ends up null even though they are local, so cleanUpLexicals needs this
     // set to handle them correctly.
     const anonScopeSymbols = new Set<string>()
+
+    seedModuleSymbol(rootNode, file_path, 'typescript', nodeToSymbolId, result)
 
     // sort matches
     matches.sort((a, b) => a.patternIndex - b.patternIndex)

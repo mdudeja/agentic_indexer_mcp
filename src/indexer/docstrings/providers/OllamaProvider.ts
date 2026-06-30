@@ -11,16 +11,21 @@ export class OllamaProvider implements DocstringProvider {
 
   /** Generates a response to the given prompt by interacting with an AI model through an API. Returns the generated text or null if no valid response is received. */
   async generate(prompt: string): Promise<string | null> {
-    const res = await fetch(`${this.baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.model, prompt, stream: false }),
-    })
-    if (!res.ok) {
-      logWarning(`[DocstringProvider] ollama API error: ${res.status}`)
+    try {
+      const res = await fetch(`${this.baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: this.model, prompt, stream: false }),
+      })
+      if (!res.ok) {
+        logWarning(`[DocstringProvider] ollama API error: ${res.status}`)
+        return null
+      }
+      const data = (await res.json()) as { response?: string }
+      return data.response?.trim() ?? null
+    } catch (error) {
+      logWarning(`[DocstringProvider] ollama API error: ${error}`)
       return null
     }
-    const data = (await res.json()) as { response?: string }
-    return data.response?.trim() ?? null
   }
 }

@@ -14,7 +14,7 @@
     "serve": "bun run --env-file .env index.ts serve",
     "inspect": "mcp-inspector bun run --env-file .env index.ts serve",
     "lint": "bun tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test --env-file .env.test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -23,7 +23,7 @@
     "simple-git": "^3.36.0",
     "sqlite-vec": "^0.1.9",
     "temporal-polyfill": "^0.3.2",
-    "tree-sitter-wasms": "^0.1.13",
+    "tree-sitter-wasm": "^1.1.1",
     "typebox": "^1.1.5",
     "web-tree-sitter": "0.25.3",
     "zod": "^4.3.6"

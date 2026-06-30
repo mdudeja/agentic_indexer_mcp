@@ -1,27 +1,19 @@
 import { describe, it, expect, beforeAll } from 'bun:test'
 import { TreeSitterIndexer } from '../src/indexer/TreeSitterIndexer'
-import { AppStateManager } from '../src/state'
-import { loadConfig } from '../src/config/loader'
 import * as path from 'path'
 import * as fs from 'fs'
 import { SymbolKind } from 'src/database/schemas'
-
 describe('TreeSitterIndexer Unit Tests', () => {
   let indexer: TreeSitterIndexer
-  const fixturePath = path.join(import.meta.dir, 'fixtures/test-project')
+  const fixturePath = path.resolve(process.env.TEST_FIXTURES_DIR as string)
 
   beforeAll(async () => {
-    // Load config from the mock test-project directory
-    const config = await loadConfig(fixturePath)
-    AppStateManager.getInstance().setItem('config', config)
-    AppStateManager.getInstance().setItem('root', fixturePath)
-
     indexer = new TreeSitterIndexer()
     await indexer.init()
   })
 
   it('should parse TS file math.ts and extract functions and classes', async () => {
-    const mathTsPath = path.join(fixturePath, 'math.ts')
+    const mathTsPath = `${fixturePath}/math.ts`
     const content = fs.readFileSync(mathTsPath, 'utf-8')
 
     const result = await indexer.parse(content, 'ts', 'math.ts')
@@ -46,7 +38,7 @@ describe('TreeSitterIndexer Unit Tests', () => {
   })
 
   it('should parse TS file app.ts and extract imports, calls, exceptions, and env vars', async () => {
-    const appTsPath = path.join(fixturePath, 'app.ts')
+    const appTsPath = `${fixturePath}/app.ts`
     const content = fs.readFileSync(appTsPath, 'utf-8')
 
     const result = await indexer.parse(content, 'ts', 'app.ts')
@@ -76,7 +68,7 @@ describe('TreeSitterIndexer Unit Tests', () => {
   })
 
   it('should parse Python file auth.py and extract decorators, classes, exceptions, and env vars', async () => {
-    const authPyPath = path.join(fixturePath, 'auth.py')
+    const authPyPath = `${fixturePath}/auth.py`
     const content = fs.readFileSync(authPyPath, 'utf-8')
 
     const result = await indexer.parse(content, 'py', 'auth.py')
@@ -100,18 +92,5 @@ describe('TreeSitterIndexer Unit Tests', () => {
     // Verify exceptions
     const valError = result.exceptions.find((e) => e.exception_type === 'Error')
     expect(valError).toBeDefined()
-  })
-
-  it('should parse Lua file utils.lua and extract functions', async () => {
-    const luaPath = path.join(fixturePath, 'utils.lua')
-    const content = fs.readFileSync(luaPath, 'utf-8')
-
-    const result = await indexer.parse(content, 'lua', 'utils.lua')
-
-    expect(result).toBeDefined()
-    expect(result.symbols.length).toBeGreaterThanOrEqual(1)
-
-    const addSymbol = result.symbols.find((s) => s.name === 'add')
-    expect(addSymbol).toBeDefined()
   })
 })

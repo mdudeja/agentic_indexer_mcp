@@ -8,13 +8,25 @@
             "type": "bun",
             "internalConsoleOptions": "openOnSessionStart",
             "request": "launch",
+            "name": "Debug Tests",
+            "runtime": "bun",
+            "runtimeArgs": [
+                "run",
+                "test",
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "watchMode": false
+        },
+        {
+            "type": "bun",
+            "internalConsoleOptions": "openOnSessionStart",
+            "request": "launch",
             "name": "Debug Index",
             "runtime": "bun",
             "runtimeArgs": [
                 "run",
-                "index",
-                "--cwd",
-                "/home/md/Projects/ECN/ashiyana_mis/repo"
+                "index"
             ],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false,

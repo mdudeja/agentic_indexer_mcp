@@ -27,7 +27,7 @@ export async function startMcpServer() {
   )
 
   const cwd = AppStateManager.getInstance().getItem('root')
-  if (cwd) {
+  if (cwd && process.env.NODE_ENV !== 'test') {
     const watcher = new Watcher(cwd as string)
     AppStateManager.getInstance().setItem('watcher', watcher)
     watcher.start()

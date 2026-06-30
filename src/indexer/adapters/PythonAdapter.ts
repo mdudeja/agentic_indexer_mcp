@@ -4,6 +4,7 @@ import {
   type LanguageAdapter,
   type ExtractionResult,
   extractCallDocstring,
+  seedModuleSymbol,
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
@@ -12,7 +13,11 @@ import { resolveImportedModulePath } from 'src/utils/paths'
 /** An adapter class for extracting and categorizing symbols, imports, calls, exceptions, environment variables, and docstrings from Python code. It processes source files to gather metadata about code elements and organizes them into structured results. */
 export class PythonAdapter implements LanguageAdapter {
   /** Extracts and categorizes symbols, imports, calls, exceptions, environment variables, and docstrings from a file based on query matches. Returns an object containing the extracted elements organized by type. */
-  extract(matches: QueryMatch[], file_path: string): ExtractionResult {
+  extract(
+    matches: QueryMatch[],
+    file_path: string,
+    rootNode: Node,
+  ): ExtractionResult {
     const result: ExtractionResult = {
       symbols: [],
       imports: [],
@@ -24,6 +29,8 @@ export class PythonAdapter implements LanguageAdapter {
 
     const nodeToSymbolId = new Map<number, string>()
     const anonScopeSymbols = new Set<string>()
+
+    seedModuleSymbol(rootNode, file_path, 'python', nodeToSymbolId, result)
 
     matches.sort((a, b) => a.patternIndex - b.patternIndex)
 
@@ -249,7 +256,9 @@ export class PythonAdapter implements LanguageAdapter {
     }
 
     const exported =
-      targetNode.parent?.type === 'module' && !nameNode.text.startsWith('_')
+      (targetNode.parent?.type === 'module' &&
+        !nameNode.text.startsWith('_')) ||
+      result.explicitExports.some((e) => e.name === nameNode!.text)
 
     result.symbols.push({
       id,

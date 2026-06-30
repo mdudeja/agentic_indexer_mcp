@@ -6,6 +6,7 @@ import { AppStateManager } from 'src/state'
 import { extractSymbols } from './steps/s1_symbol_extractor'
 import type { ExtractionResult } from './adapters/LanguageAdapter'
 import type { IndexerConfig } from 'src/config/types'
+import { getWasmPath, type SupportedLanguage } from 'tree-sitter-wasm'
 
 /** A utility class for managing code parsing and indexing using TreeSitter. It handles initialization of parsers, loading language grammars from WebAssembly modules, and extracting code elements like symbols and imports from source files based on file extensions and configured language settings. */
 export class TreeSitterIndexer {
@@ -34,17 +35,13 @@ export class TreeSitterIndexer {
   }
 
   /** Load and return the language grammar for the specified language name. If the language is not already loaded, it will fetch and initialize it from a .wasm file. */
-  async loadLanguage(langName: string): Promise<any> {
+  async loadLanguage(langName: SupportedLanguage): Promise<any> {
     if (this.languages.has(langName)) {
       return this.languages.get(langName)!
     }
 
     try {
-      // Find the .wasm file mapped by tree-sitter-wasms
-      // Needs dynamic resolution because package paths might differ
-      const wasmPath = require.resolve(
-        `tree-sitter-wasms/out/tree-sitter-${langName}.wasm`,
-      )
+      const wasmPath = getWasmPath(langName)
       const lang = await Language.load(wasmPath)
       this.languages.set(langName, lang)
 
@@ -140,7 +137,10 @@ export class TreeSitterIndexer {
   }
 
   /** Parse the given source code using the specified programming language, returning the parsed result. */
-  async parseFile(sourceCode: string, langName: string): Promise<any> {
+  async parseFile(
+    sourceCode: string,
+    langName: SupportedLanguage,
+  ): Promise<any> {
     const lang = await this.loadLanguage(langName)
 
     if (!this.parser) {

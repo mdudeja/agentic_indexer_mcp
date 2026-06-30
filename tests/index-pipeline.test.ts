@@ -1,52 +1,29 @@
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
+import { describe, expect, beforeAll, test } from 'bun:test'
 import { IndexPipeline } from '../src/indexer/IndexPipeline'
 import { IndexerDB } from '../src/database/IndexerDB'
-import { AppStateManager } from '../src/state'
-import { loadConfig } from '../src/config/loader'
-import * as path from 'path'
 import * as schema from '../src/database/schemas'
+import { getPipelineForTests, getStoreForTests } from '../scripts/test_setup'
 
 describe('IndexPipeline Integration Tests', () => {
   let store: IndexerDB
   let pipeline: IndexPipeline
-  const fixturePath = path.join(import.meta.dir, 'fixtures/test-project')
 
   beforeAll(async () => {
-    // 1. Setup AppState config
-    const config = await loadConfig(fixturePath)
-    AppStateManager.getInstance().setItem('config', config)
-    AppStateManager.getInstance().setItem('root', fixturePath)
-
-    // 2. Initialize In-Memory DB
-    store = IndexerDB.getInstance(':memory:')
-    await store.init()
-
-    // 3. Create Pipeline
-    pipeline = new IndexPipeline({
-      cwd: fixturePath,
-      store,
-      includeGitIgnored: true,
-    })
+    store = getStoreForTests()
+    pipeline = getPipelineForTests()
   })
 
-  afterAll(async () => {
-    await store.clear()
-    store.close()
-  })
-
-  it('should execute the indexing pipeline and populate the database', async () => {
-    // Run the pipeline
-    await pipeline.run()
-
+  test('should populate the database correctly', async () => {
     const db = store.getDb()
 
     // Check files table
     const dbFiles = await db.select().from(schema.files)
-    expect(dbFiles.length).toBeGreaterThanOrEqual(3)
+    expect(dbFiles.length).toBeGreaterThanOrEqual(4)
 
     const filePaths = dbFiles.map((f) => f.path)
     expect(filePaths).toContain('math.ts')
     expect(filePaths).toContain('app.ts')
+    expect(filePaths).toContain('app.py')
     expect(filePaths).toContain('auth.py')
 
     // Check symbols table
@@ -57,9 +34,11 @@ describe('IndexPipeline Integration Tests', () => {
     expect(symbolNames).toContain('add')
     expect(symbolNames).toContain('subtract')
     expect(symbolNames).toContain('Calculator')
+    expect(symbolNames).toContain('runCalculation')
     expect(symbolNames).toContain('multiply')
     expect(symbolNames).toContain('Authenticator')
     expect(symbolNames).toContain('authenticate')
+    expect(symbolNames).toContain('login_required')
 
     // Check imports table
     const dbImports = await db.select().from(schema.imports)
@@ -86,5 +65,5 @@ describe('IndexPipeline Integration Tests', () => {
     const envNames = dbEnvVars.map((e) => e.name)
     expect(envNames).toContain('APP_TOKEN')
     expect(envNames.some((name) => name.includes('AUTH_SECRET'))).toBe(true)
-  }, 10000) // Increase timeout to 10s as it sleeps for 3s during execution
+  })
 })

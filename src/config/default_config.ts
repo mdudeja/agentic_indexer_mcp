@@ -19,6 +19,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       'venv',
       'poetry',
       'docker',
+      'doc/',
     ],
     extnToLangMap: {
       tsx: 'tsx',
@@ -27,7 +28,6 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       jsx: 'javascript',
       json: 'json',
       py: 'python',
-      lua: 'lua',
     },
     testFilePatterns: [
       /\.(test|spec)\.(ts|tsx|js|jsx)$/,
@@ -81,15 +81,6 @@ export const default_config: Record<'indexer', IndexerConfig> = {
         lang_features_paths: ['/usr/lib/python', 'typeshed', 'django'],
         treesitter: {
           language_name: 'python',
-          signature_max_length: 400,
-        },
-      },
-      lua: {
-        extensions: ['.lua'],
-        lsp_command: ['/home/md/.local/share/nvim/mason/bin/stylua', '--stdio'],
-        lang_features_paths: ['lib/lua', 'luajit'],
-        treesitter: {
-          language_name: 'lua',
           signature_max_length: 400,
         },
       },

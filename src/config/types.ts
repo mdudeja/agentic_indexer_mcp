@@ -8,6 +8,7 @@ export type {
 } from '../database/schemas'
 export { SymbolKind } from '../database/schemas'
 
+import type { SupportedLanguage } from 'tree-sitter-wasm'
 import { SymbolKind } from '../database/schemas'
 
 export enum DocstringStrategy {
@@ -68,7 +69,7 @@ export type EmbedderConfig = {
 export type IndexerConfig = {
   enabled: boolean
   ignore_patterns: string[]
-  extnToLangMap: Record<string, string>
+  extnToLangMap: Record<string, SupportedLanguage>
   testFilePatterns: RegExp[]
   entryPointPatterns: RegExp[]
   languages: Record<string, LanguageConfig>
