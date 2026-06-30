@@ -7,6 +7,7 @@ import { default_config } from '../src/config/default_config'
 
 let tempDirs: string[] = []
 
+/** Creates a unique temporary directory for configuration testing purposes. The function generates a new directory each time its called, ensuring uniqueness by using a specific naming convention. It also tracks the created directories for potential cleanup. */
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'agentic-cfg-test-'))
   tempDirs.push(dir)

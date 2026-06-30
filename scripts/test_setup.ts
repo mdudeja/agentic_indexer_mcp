@@ -11,6 +11,7 @@ import { resolvePath } from 'src/utils/paths'
 let store: IndexerDB
 let pipeline: IndexPipeline
 
+/** Clears all test database files and ensures a clean testing environment by removing associated data files and directories. */
 export function clearDB() {
   const testDbPath = join(
     resolve(process.env.TEST_FIXTURES_DIR as string),
@@ -34,6 +35,7 @@ export function clearDB() {
   }
 }
 
+/** Runs the index script in the specified directory using Bun. */
 async function runIndex(cwd: string) {
   const proc = spawn(['bun', 'run', 'index.ts', 'index', '--cwd', cwd], {
     env: process.env,
@@ -44,6 +46,7 @@ async function runIndex(cwd: string) {
   await proc.exited
 }
 
+/** Prepares the test environment by initializing required configurations, clearing the database, running indexes, and setting up the testing pipeline. */
 async function prepareTestEnvironment() {
   const fixturePath = resolvePath(process.env.TEST_FIXTURES_DIR as string)
   clearDB()
@@ -66,10 +69,12 @@ async function prepareTestEnvironment() {
   })
 }
 
+/** Retrieves a predefined IndexPipeline optimized for testing purposes. */
 export function getPipelineForTests(): IndexPipeline {
   return pipeline
 }
 
+/** Retrieves the store instance for use in test environments. */
 export function getStoreForTests(): IndexerDB {
   return store
 }

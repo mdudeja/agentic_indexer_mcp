@@ -3,6 +3,7 @@ import * as path from 'path'
 import { TreeSitterIndexer } from 'src/indexer/TreeSitterIndexer'
 import { default_config } from 'src/config/default_config'
 
+/** Generates a formatted string representation of a node and its children, useful for debugging or visualizing tree structures. The output includes indentation based on depth and parentheses to denote nested nodes. */
 function printNode(node: any, source: string, depth: number, fieldName?: string): string {
   if (!node.isNamed) return ''
 
@@ -26,6 +27,7 @@ function printNode(node: any, source: string, depth: number, fieldName?: string)
   return result + ')'
 }
 
+/** Prints the abstract syntax tree (AST) of a given source code file to the console. */
 export async function printTree(filePath: string): Promise<void> {
   const absPath = path.resolve(filePath)
   const ext = path.extname(absPath).slice(1)

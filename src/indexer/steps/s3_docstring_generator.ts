@@ -27,6 +27,15 @@ export class DocstringGenerationStep {
 
     logInfo('[Indexer] Running Step 3: Docstring Generation...')
 
+    const TESTRE =
+      docCfg.exclude_generation_patterns
+        .map((p) => {
+          if (p instanceof RegExp) return p
+          if (typeof p === 'string') return new RegExp(p)
+          return null
+        })
+        .filter((p): p is RegExp => p !== null) ?? null
+
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
@@ -36,8 +45,18 @@ export class DocstringGenerationStep {
       return
     }
 
-    logDebug(`[Indexer] Found ${symbols.length} symbols needing docstrings.`)
-    symbols.forEach((s) =>
+    const relevantSymbols = symbols.filter(
+      (s) => !TESTRE?.some((re) => re.test(s.file_path)),
+    )
+    if (relevantSymbols.length === 0) {
+      logInfo('[Indexer] No symbols need docstrings. Step 3 complete.')
+      return
+    }
+
+    logDebug(
+      `[Indexer] Found ${relevantSymbols.length} symbols needing docstrings.`,
+    )
+    relevantSymbols.forEach((s) =>
       logDebug(
         `[Indexer] Symbol needing docstring: ${s.name} (${s.kind}) in ${s.file_path}:${s.line}`,
       ),
@@ -49,7 +68,7 @@ export class DocstringGenerationStep {
     let generated = 0
 
     const byFile = new Map<string, IndexedSymbol['Select'][]>()
-    for (const sym of symbols) {
+    for (const sym of relevantSymbols) {
       const list = byFile.get(sym.file_path) ?? []
       list.push(sym)
       byFile.set(sym.file_path, list)
@@ -79,6 +98,24 @@ export class DocstringGenerationStep {
 
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
+
+    const TESTRE =
+      docCfg.exclude_generation_patterns
+        .map((p) => {
+          if (p instanceof RegExp) return p
+          if (typeof p === 'string') return new RegExp(p)
+          return null
+        })
+        .filter((p): p is RegExp => p !== null) ?? null
+
+    const isExcluded = TESTRE?.some((re) => re.test(relativePath))
+
+    if (isExcluded) {
+      logInfo(
+        `[Indexer] File ${relativePath} is excluded from docstring generation.`,
+      )
+      return
+    }
 
     const fileSymbols = await store.symbols.getSymbolsNeedingDocstringsForFile(
       relativePath,

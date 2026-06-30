@@ -107,6 +107,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       enabled: true,
       provider: 'ollama',
       write_to_file: true,
+      exclude_generation_patterns: ['tests/fixtures'],
       claude: {
         api_key: process.env.CLAUDE_API_KEY || '',
         model: 'claude-haiku-4-5',

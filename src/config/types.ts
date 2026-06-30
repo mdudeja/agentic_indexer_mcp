@@ -45,6 +45,7 @@ export type DocstringConfig = {
   enabled: boolean
   provider: DocstringProviderName
   write_to_file: boolean
+  exclude_generation_patterns: RegExp[]
   claude?: { api_key: string; model?: string }
   gemini?: { api_key: string; model?: string }
   openai?: { api_key: string; model?: string }

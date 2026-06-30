@@ -78,4 +78,163 @@ describe('Indexer Components Unit Tests', () => {
     const initTs = await tsEnhancer.init()
     expect(initTs).toBe(false)
   })
+
+  test('should format comments correctly for Python and other languages', () => {
+    const pySingle = formatComment('single line', 'python')
+    expect(pySingle).toBe('""" single line """')
+
+    const pyMulti = formatComment('line one\nline two', 'python')
+    expect(pyMulti).toBe('"""\nline one\nline two\n"""')
+
+    const rubySingle = formatComment('single line', 'ruby')
+    expect(rubySingle).toBe('# single line')
+
+    const rubyMulti = formatComment('line one\nline two', 'ruby')
+    expect(rubyMulti).toBe('# line one\n# line two')
+  })
+
+  test('should return null and log warnings when provider config is incomplete', () => {
+    const claude = createProvider({
+      enabled: true,
+      provider: 'claude',
+      write_to_file: false,
+      claude: { api_key: '', model: 'dummy_model' },
+    })
+    expect(claude).toBeNull()
+
+    const gemini = createProvider({
+      enabled: true,
+      provider: 'gemini',
+      write_to_file: false,
+      gemini: { api_key: '', model: 'dummy_model' },
+    })
+    expect(gemini).toBeNull()
+
+    const openai = createProvider({
+      enabled: true,
+      provider: 'openai',
+      write_to_file: false,
+      openai: { api_key: '', model: 'dummy_model' },
+    })
+    expect(openai).toBeNull()
+
+    const ollama = createProvider({
+      enabled: true,
+      provider: 'ollama',
+      write_to_file: false,
+      ollama: { model: '', base_url: 'http://localhost:11434' },
+    })
+    expect(ollama).toBeNull()
+  })
+
+  test('should generate docstrings from ClaudeProvider', async () => {
+    const originalFetch = globalThis.fetch
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({
+        content: [{ type: 'text', text: 'Claude docstring' }]
+      }), { status: 200 })
+    }) as any
+    const provider = new ClaudeProvider({ api_key: 'key', model: 'model' })
+    const res = await provider.generate('prompt')
+    expect(res).toBe('Claude docstring')
+
+    globalThis.fetch = (async () => {
+      return new Response('Claude API error message', { status: 400 })
+    }) as any
+    const resError = await provider.generate('prompt')
+    expect(resError).toBeNull()
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({
+        content: [{ type: 'image', text: 'ignored' }]
+      }), { status: 200 })
+    }) as any
+    const resNoText = await provider.generate('prompt')
+    expect(resNoText).toBeNull()
+
+    globalThis.fetch = originalFetch
+  })
+
+  test('should generate docstrings from GeminiProvider', async () => {
+    const originalFetch = globalThis.fetch
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'Gemini docstring' }] } }]
+      }), { status: 200 })
+    }) as any
+    const provider = new GeminiProvider({ api_key: 'key', model: 'model' })
+    const res = await provider.generate('prompt')
+    expect(res).toBe('Gemini docstring')
+
+    globalThis.fetch = (async () => {
+      return new Response('Gemini API error', { status: 500 })
+    }) as any
+    const resError = await provider.generate('prompt')
+    expect(resError).toBeNull()
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({
+        candidates: []
+      }), { status: 200 })
+    }) as any
+    const resNoParts = await provider.generate('prompt')
+    expect(resNoParts).toBeNull()
+
+    globalThis.fetch = originalFetch
+  })
+
+  test('should generate docstrings from OpenAIProvider', async () => {
+    const originalFetch = globalThis.fetch
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({
+        output: [{ content: [{ text: 'OpenAI docstring' }] }]
+      }), { status: 200 })
+    }) as any
+    const provider = new OpenAIProvider({ api_key: 'key', model: 'model' })
+    const res = await provider.generate('prompt')
+    expect(res).toBe('OpenAI docstring')
+
+    globalThis.fetch = (async () => {
+      return new Response('OpenAI API error', { status: 401 })
+    }) as any
+    const resError = await provider.generate('prompt')
+    expect(resError).toBeNull()
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({}), { status: 200 })
+    }) as any
+    const resNoParts = await provider.generate('prompt')
+    expect(resNoParts).toBeNull()
+
+    globalThis.fetch = originalFetch
+  })
+
+  test('should generate docstrings from OllamaProvider', async () => {
+    const originalFetch = globalThis.fetch
+
+    globalThis.fetch = (async () => {
+      return new Response(JSON.stringify({ response: 'Ollama docstring' }), { status: 200 })
+    }) as any
+    const provider = new OllamaProvider('model', 'http://localhost')
+    const res = await provider.generate('prompt')
+    expect(res).toBe('Ollama docstring')
+
+    globalThis.fetch = (async () => {
+      return new Response('Ollama API error', { status: 500 })
+    }) as any
+    const resError = await provider.generate('prompt')
+    expect(resError).toBeNull()
+
+    globalThis.fetch = (async () => {
+      throw new Error('connection refused')
+    }) as any
+    const resThrow = await provider.generate('prompt')
+    expect(resThrow).toBeNull()
+
+    globalThis.fetch = originalFetch
+  })
 })
+
