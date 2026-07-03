@@ -75,17 +75,19 @@ export function registerGetBlastRadiusTool(server: McpServer) {
           callerName: string
           line: number
         }> = []
-        const queue: Array<{ name: string }> = [{ name: startSymbol!.name }]
+        const queue = new Set<string>([startSymbol!.name])
 
-        while (queue.length > 0) {
-          const current = queue.shift()!
-          if (visited.has(current.name)) continue
-          visited.add(current.name)
+        while (queue.size > 0) {
+          const current = queue.values().next().value
+          if (!current) break
+          queue.delete(current)
+          if (visited.has(current)) continue
+          visited.add(current)
 
-          const callers = await store.calls.getCallersNested(current.name)
+          const callers = await store.calls.getCallersNested(current)
           for (const c of callers) {
             allCallers.push(c)
-            queue.push({ name: c.callerName })
+            queue.add(c.callerName)
           }
         }
 
@@ -104,7 +106,9 @@ export function registerGetBlastRadiusTool(server: McpServer) {
           (c) => `  - ${c.callerName} (${c.callerFile}:${c.line + 1})`,
         )
 
-        const output = `Blast radius for '${name}' (${allCallers.length} caller${allCallers.length !== 1 ? 's' : ''})\n${lines.join('\n')}\n\nEnsure testing covers these paths. Use trace_call_graph(direction=inbound) for a full traversal tree.`
+        const dedupedLines = Array.from(new Set(lines)).sort()
+
+        const output = `Blast radius for '${name}' (${dedupedLines.length} caller${dedupedLines.length !== 1 ? 's' : ''})\n${dedupedLines.join('\n')}\n\nEnsure testing covers these paths. Use trace_call_graph(direction=inbound) for a full traversal tree.`
 
         // usage computation
         const filePaths = (

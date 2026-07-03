@@ -85,7 +85,6 @@ describe('MCP Tools Integration Tests', () => {
   beforeAll(async () => {
     store = getStoreForTests()
 
-    // 3. Register tools on Mock MCP Server
     mockServer = new MockMcpServer()
     registerSearchSymbolsTool(mockServer as any)
     registerSemanticSearchSymbolsTool(mockServer as any)
@@ -294,7 +293,7 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain("Blast radius for 'multiply'")
-    expect(response.content[0].text).toContain('prod')
+    expect(response.content[0].text).toContain('runCalculation')
   })
 
   test('should find symbol references via find_symbol_references tool', async () => {

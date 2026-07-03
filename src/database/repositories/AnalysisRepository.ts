@@ -76,6 +76,56 @@ export class AnalysisRepository {
     })()
   }
 
+  /** Retrieves all exceptions from the database, including their associated symbol names, file paths, line numbers, and exception types. */
+  async getAllExceptions(): Promise<
+    Array<{
+      symbol_name: string
+      file_path: string
+      line: number
+      exception_type: string
+    }>
+  > {
+    const exceptions = this.sqlite
+      .prepare(`SELECT * from exceptions ORDER BY file_path, line`)
+      .all() as Array<schema.IndexedException['Select']>
+
+    const symbolIds = [...new Set(exceptions.map((e) => e.symbol_id))]
+    const symbols = await this.symbols.getSymbolsByIds(symbolIds)
+    const symbolMap = new Map(symbols.map((s) => [s.id, s.name]))
+
+    return exceptions.map((e) => ({
+      symbol_name: symbolMap.get(e.symbol_id) ?? 'Unknown',
+      file_path: e.file_path,
+      line: e.line,
+      exception_type: e.exception_type,
+    }))
+  }
+
+  /** Retrieves all environment variables from the database, including their associated symbol names, file paths, line numbers, and variable names. */
+  async getAllEnvVars(): Promise<
+    Array<{
+      symbol_name: string
+      file_path: string
+      line: number
+      env_var_name: string
+    }>
+  > {
+    const envVars = this.sqlite
+      .prepare(`SELECT * from env_vars ORDER BY file_path, line`)
+      .all() as Array<schema.IndexedEnvVar['Select']>
+
+    const symbolIds = [...new Set(envVars.map((e) => e.symbol_id))]
+    const symbols = await this.symbols.getSymbolsByIds(symbolIds)
+    const symbolMap = new Map(symbols.map((s) => [s.id, s.name]))
+
+    return envVars.map((e) => ({
+      symbol_name: symbolMap.get(e.symbol_id) ?? 'Unknown',
+      file_path: e.file_path,
+      line: e.line,
+      env_var_name: e.name,
+    }))
+  }
+
   /** Retrieves all exceptions associated with a specific symbol, detailing their occurrence locations and types. */
   async getExceptionsBubbleUp(symbolName: string): Promise<
     Array<{
@@ -137,9 +187,18 @@ export class AnalysisRepository {
     const startSymbols = await this.symbols.getSymbolsByNames([symbolName])
     if (!startSymbols.length) return []
 
+    const subtree = (
+      await Promise.all(
+        startSymbols.map(async (s) => this.symbols.getSubtree(s.id)),
+      )
+    ).flat()
+
     const visited = new Set<string>()
-    const queue = startSymbols.map((s) => s.id)
-    const allIds = [...queue]
+    const queue = startSymbols
+      .map((s) => [s.id, s.parent_id])
+      .flat()
+      .filter(Boolean) as string[]
+    const allIds = [...queue, ...subtree.map((s) => s.id)]
 
     while (queue.length > 0) {
       const currentId = queue.shift()!

@@ -12,7 +12,7 @@
     "remove-docstrings": "bun run --env-file .env index.ts remove-docstrings",
     "query": "bun run --env-file .env index.ts query",
     "serve": "bun run --env-file .env index.ts serve",
-    "inspect": "mcp-inspector bun run --env-file .env index.ts serve",
+    "inspect": "bun run index && mcp-inspector bun run --env-file .env index.ts serve",
     "lint": "bun tsc --noEmit",
     "test": "bun test --env-file .env.test"
   },

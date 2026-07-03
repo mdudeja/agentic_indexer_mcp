@@ -126,7 +126,7 @@ export class CallRepository {
 
   /** Retrieves all nested callers of a given symbol, including their direct and indirect call relationships. */
   async getCallersNested(symbolName: string): Promise<NestedCaller[]> {
-    return this.sqlite
+    const callers = this.sqlite
       .prepare(
         `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line,
                 child.name AS childName, child.file_path AS childFilePath, child.line AS childLine
@@ -140,5 +140,7 @@ export class CallRepository {
          ORDER BY s.file_path, s.line`,
       )
       .all(symbolName) as NestedCaller[]
+
+    return callers.filter((caller) => caller.callerName !== '<module>') // Exclude self-calls
   }
 }

@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { IndexerConfig } from 'src/config/types'
+import type { Enhancer } from 'src/indexer/steps/s2_Enhancer'
 import type { Watcher } from 'src/watcher/Watcher'
 
 export type AppState = {
@@ -7,7 +8,7 @@ export type AppState = {
   config?: IndexerConfig
   server?: McpServer
   watcher?: Watcher
-  lspEnhancers?: Map<string, any>
+  lspEnhancers?: Map<string, Enhancer>
 }
 
 export interface IStateManager {

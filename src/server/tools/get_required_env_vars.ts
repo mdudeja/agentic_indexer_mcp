@@ -18,8 +18,9 @@ export function registerGetRequiredEnvVarsTool(server: McpServer) {
       inputSchema: z.object({
         symbol_name: z
           .string()
+          .optional()
           .describe(
-            'The name of the function or method to analyze (e.g. "startServer")',
+            'The name of the function or method to analyze (e.g. "startServer"). If not provided, the tool will return all environment variable reads in the codebase.',
           ),
       }),
     },
@@ -27,16 +28,16 @@ export function registerGetRequiredEnvVarsTool(server: McpServer) {
       const store = IndexerDB.getInstance()
 
       try {
-        const results = await store.analysis.getEnvVarsBubbleUp(
-          symbol_name as string,
-        )
+        const results = symbol_name
+          ? await store.analysis.getEnvVarsBubbleUp(symbol_name)
+          : await store.analysis.getAllEnvVars()
 
-        if (results.length === 0) {
+        if (!results || results.length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: `No environment variable reads found in the call tree starting from: ${symbol_name}`,
+                text: `No environment variable reads found ${symbol_name ? `in the call tree starting from: ${symbol_name}` : 'in the codebase'}`,
               },
             ],
           }
@@ -45,18 +46,18 @@ export function registerGetRequiredEnvVarsTool(server: McpServer) {
         const direct = results.filter(
           (r) =>
             r.symbol_name.toLowerCase() ===
-            (symbol_name as string).toLowerCase(),
+            ((symbol_name ?? '') as string).toLowerCase(),
         )
         const indirect = results.filter(
           (r) =>
             r.symbol_name.toLowerCase() !==
-            (symbol_name as string).toLowerCase(),
+            ((symbol_name ?? '') as string).toLowerCase(),
         )
 
-        let output = `Environment variables accessed downstream of "${symbol_name}":\n\n`
+        let output = `Environment variables accessed downstream of "${symbol_name ?? 'all symbols'}":\n\n`
 
         if (direct.length > 0) {
-          output += `### Directly Accessed (inside "${symbol_name}"):\n`
+          output += `### Directly Accessed (inside "${symbol_name ?? 'all symbols'}"):\n`
           output += direct
             .map(
               (r) =>

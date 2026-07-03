@@ -38,6 +38,11 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
         write_to_file:
           userConfig.indexer?.docstring_generation?.write_to_file ??
           default_config.indexer.docstring_generation!.write_to_file,
+        exclude_generation_patterns:
+          userConfig.indexer?.docstring_generation
+            ?.exclude_generation_patterns ??
+          default_config.indexer.docstring_generation!
+            .exclude_generation_patterns,
         ...(userConfig.indexer?.docstring_generation?.claude && {
           claude: userConfig.indexer.docstring_generation.claude,
         }),

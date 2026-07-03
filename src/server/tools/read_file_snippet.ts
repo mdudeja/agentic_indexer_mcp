@@ -15,8 +15,12 @@ export function registerReadFileSnippetTool(server: McpServer) {
         'Read a specific range of lines (1-based, inclusive) from a file. ' +
         'Use this to view raw source segments, configs, imports, or boilerplate code that are not bound to named symbols.',
       inputSchema: z.object({
-        file_path: z.string().describe('File path relative to the workspace root'),
-        start_line: z.number().describe('1-based start line number (inclusive)'),
+        file_path: z
+          .string()
+          .describe('File path relative to the workspace root'),
+        start_line: z
+          .number()
+          .describe('1-based start line number (inclusive)'),
         end_line: z.number().describe('1-based end line number (inclusive)'),
       }),
     },
@@ -52,16 +56,24 @@ export function registerReadFileSnippetTool(server: McpServer) {
 
         const snippet = lines.slice(start, end).join('\n')
         const ext = (file_path as string).split('.').pop() || ''
-        const output = `Lines ${start_line}-${end_line} of ${file_path}:\n\`\`\`${ext}\n${snippet}\n\`\`\``
+        const exntToLangMap =
+          AppStateManager.getInstance().getItem('config')?.extnToLangMap ?? {}
+        const output = `Lines ${start_line}-${end_line} of ${file_path}:\n\`\`\`${exntToLangMap[ext] || ext}\n${snippet}\n\`\`\``
 
-        await updateUsage('read_file_snippet', [file_path as string], output.length)
+        await updateUsage(
+          'read_file_snippet',
+          [file_path as string],
+          output.length,
+        )
 
         return {
           content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error reading file snippet: ${err}` }],
+          content: [
+            { type: 'text', text: `Error reading file snippet: ${err}` },
+          ],
           isError: true,
         }
       }

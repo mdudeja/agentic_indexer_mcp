@@ -18,8 +18,9 @@ export function registerTraceErrorFlowTool(server: McpServer) {
       inputSchema: z.object({
         symbol_name: z
           .string()
+          .optional()
           .describe(
-            'The name of the function or method to analyze (e.g. "parseConfig")',
+            'The name of the function or method to analyze (e.g. "parseConfig"). If not provided, the tool will return all exceptions in the codebase.',
           ),
       }),
     },
@@ -27,16 +28,16 @@ export function registerTraceErrorFlowTool(server: McpServer) {
       const store = IndexerDB.getInstance()
 
       try {
-        const results = await store.analysis.getExceptionsBubbleUp(
-          symbol_name as string,
-        )
+        const results = symbol_name
+          ? await store.analysis.getExceptionsBubbleUp(symbol_name)
+          : await store.analysis.getAllExceptions()
 
-        if (results.length === 0) {
+        if (!results || results.length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: `No exceptions found throwing or bubbling up from: ${symbol_name}`,
+                text: `No exceptions found ${symbol_name ? `throwing or bubbling up from: ${symbol_name}` : 'in the codebase'}`,
               },
             ],
           }
@@ -45,18 +46,18 @@ export function registerTraceErrorFlowTool(server: McpServer) {
         const direct = results.filter(
           (r) =>
             r.symbol_name.toLowerCase() ===
-            (symbol_name as string).toLowerCase(),
+            ((symbol_name ?? '') as string).toLowerCase(),
         )
         const indirect = results.filter(
           (r) =>
             r.symbol_name.toLowerCase() !==
-            (symbol_name as string).toLowerCase(),
+            ((symbol_name ?? '') as string).toLowerCase(),
         )
 
-        let output = `Error flow analysis for "${symbol_name}":\n\n`
+        let output = `Error flow analysis for "${symbol_name ?? 'all symbols'}":\n\n`
 
         if (direct.length > 0) {
-          output += `### Direct Exceptions (thrown inside "${symbol_name}"):\n`
+          output += `### Direct Exceptions (thrown inside "${symbol_name ?? 'all symbols'}"):\n`
           output += direct
             .map(
               (r) =>

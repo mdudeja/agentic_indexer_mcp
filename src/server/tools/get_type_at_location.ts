@@ -13,7 +13,7 @@ export function registerGetTypeAtLocationTool(server: McpServer) {
     {
       title: 'Get Type at Location',
       description:
-        "Retrieve the fully-resolved type of a variable, parameter, property, or expression " +
+        'Retrieve the fully-resolved type of a variable, parameter, property, or expression ' +
         'at a specific line and column (1-based index) in a file. ' +
         '\n\n' +
         'WHEN TO USE: When you need to understand the type context of a variable, especially if it uses ' +
@@ -22,39 +22,34 @@ export function registerGetTypeAtLocationTool(server: McpServer) {
         '\n\n' +
         'INPUT FORMAT: `line` and `column` must be 1-based editor coordinates.',
       inputSchema: z.object({
-        file_path: z.string().describe('The file path relative to the workspace root'),
+        file_path: z
+          .string()
+          .describe('The file path relative to the workspace root'),
         line: z.number().describe('The 1-based line number'),
         column: z.number().describe('The 1-based column number'),
       }),
     },
     async ({ file_path, line, column }) => {
       const cwd = AppStateManager.getInstance().getItem('root') ?? process.cwd()
+      const exntToLangMap =
+        AppStateManager.getInstance().getItem('config')?.extnToLangMap ?? {}
       const absPath = join(cwd, file_path as string)
       const ext = (file_path as string).split('.').pop() || ''
 
       try {
         let enhancerMap = AppStateManager.getInstance().getItem('lspEnhancers')
         if (!enhancerMap) {
-          enhancerMap = new Map()
-          AppStateManager.getInstance().setItem('lspEnhancers', enhancerMap)
-        }
-
-        let enhancer = enhancerMap.get(ext) as Enhancer | undefined
-
-        if (!enhancer) {
-          const config = AppStateManager.getInstance().getItem('config')
-          const language = config?.extnToLangMap[ext]
-          const lspCommand = language ? config?.languages[language]?.lsp_command : null
-
-          if (lspCommand && lspCommand.length > 0) {
-            const lspEnhancer = new GenericLspEnhancer(cwd, lspCommand, language!)
-            const initialized = await lspEnhancer.init()
-            if (initialized) {
-              enhancer = lspEnhancer
-              enhancerMap.set(ext, lspEnhancer)
-            }
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'LSP enhancers are not initialized. Please ensure the server is properly configured.',
+              },
+            ],
           }
         }
+
+        let enhancer = enhancerMap.get(ext)
 
         if (!enhancer) {
           return {
@@ -68,7 +63,11 @@ export function registerGetTypeAtLocationTool(server: McpServer) {
         }
 
         // Convert 1-based editor coordinates to 0-based compiler coordinates
-        const typeStr = await enhancer.getTypeAtLocation(absPath, (line as number) - 1, (column as number) - 1)
+        const typeStr = await enhancer.getTypeAtLocation(
+          absPath,
+          (line as number) - 1,
+          (column as number) - 1,
+        )
 
         if (!typeStr) {
           return {
@@ -81,17 +80,23 @@ export function registerGetTypeAtLocationTool(server: McpServer) {
           }
         }
 
-        const output = `Type at ${file_path}:${line}:${column}:\n\`\`\`${ext === 'ts' || ext === 'tsx' ? 'typescript' : ext}\n${typeStr}\n\`\`\``
+        const output = `Type at ${file_path}:${line}:${column}:\n\`\`\`${exntToLangMap[ext] || ext}\n${typeStr}\n\`\`\``
 
         // usage computation
-        await updateUsage('get_type_at_location', [file_path as string], output.length)
+        await updateUsage(
+          'get_type_at_location',
+          [file_path as string],
+          output.length,
+        )
 
         return {
           content: [{ type: 'text', text: output }],
         }
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Error getting type at location: ${err}` }],
+          content: [
+            { type: 'text', text: `Error getting type at location: ${err}` },
+          ],
           isError: true,
         }
       }

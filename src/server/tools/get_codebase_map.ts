@@ -1,7 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, isNull, sql, inArray, notInArray, or, not } from 'drizzle-orm'
+import {
+  eq,
+  and,
+  isNull,
+  sql,
+  inArray,
+  notInArray,
+  or,
+  not,
+  notLike,
+} from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
 
@@ -114,6 +124,7 @@ export function registerGetCodebaseMapTool(server: McpServer) {
                       where parent.id = ${schema.symbols.parent_id}
                         and parent.exported = true
                     )`,
+                    notLike(schema.symbols.signature, 'private%'),
                   ),
                 ),
                 inArray(schema.symbols.file_path, filePaths),

@@ -50,7 +50,6 @@ async function runIndex(cwd: string) {
 async function prepareTestEnvironment() {
   const fixturePath = resolvePath(process.env.TEST_FIXTURES_DIR as string)
   clearDB()
-  await runIndex(fixturePath)
 
   // 1. Setup AppState config
   const config = await loadConfig(fixturePath)
@@ -67,6 +66,8 @@ async function prepareTestEnvironment() {
     store,
     includeGitIgnored: true,
   })
+
+  await pipeline.run()
 }
 
 /** Retrieves a predefined IndexPipeline optimized for testing purposes. */

@@ -6,7 +6,7 @@ import { IndexerDB } from '../../database/IndexerDB.ts'
 import * as schema from '../../database/schemas/index.ts'
 import { SymbolKind } from '../../database/schemas/symbols.schema.ts'
 import { InheritenceType } from '../../database/schemas/common.schema.ts'
-import { eq, and, isNull, inArray, or } from 'drizzle-orm'
+import { eq, and, isNull, inArray, or, sql } from 'drizzle-orm'
 import { join, relative } from 'path'
 import { AppStateManager } from 'src/state/index.ts'
 import { allCallableKinds } from '../../utils/allCallableKinds.ts'
@@ -598,6 +598,12 @@ export class GenericLspEnhancer implements Enhancer {
         and(
           eq(schema.symbols.language, this.languageId),
           inArray(schema.symbols.kind, callableKinds),
+          sql`NOT EXISTS (
+            SELECT 1
+            FROM ${schema.symbols} AS parent_sym, json_each(parent_sym.inheritence)
+            WHERE parent_sym.id = ${schema.symbols.parent_id}
+            AND json_extract(json_each.value, '$.inheritence_type') = ${InheritenceType.implements}
+          )`,
         ),
       )
 
@@ -902,7 +908,7 @@ export class GenericLspEnhancer implements Enhancer {
     const typeNames = parseTypeNames(
       typeStr
         .join(',')
-        .replaceAll(/(\s+|\s+[A-Za-z0-9_])/g, '')
+        .replaceAll(/(\s+[|]\s+[A-Za-z0-9_]+)/g, '')
         .trim(),
     )
     if (typeNames.length === 0) return

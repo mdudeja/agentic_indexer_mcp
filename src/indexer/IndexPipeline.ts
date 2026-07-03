@@ -30,7 +30,6 @@ export class IndexPipeline {
   private indexer: TreeSitterIndexer
   private config: IndexerConfig
   private ignoreRegexPatterns: Set<RegExp> = new Set()
-  private enhancers: Record<string, Enhancer> = {}
   private embedders: Record<string, EmbeddingGenerator> = {}
 
   /** Constructs a new IndexPipeline instance using provided configuration options. Initializes necessary components for indexing operations. */
@@ -244,8 +243,16 @@ export class IndexPipeline {
 
   /** Load an enhancer for files of a given type. This method retrieves or creates an enhancer instance based on the provided file extension, initializes it if necessary, and returns the enhancer if successful. If no enhancer is found or initialization fails, it returns null. */
   private async loadEnhancerForFileType(ext: string): Promise<Enhancer | null> {
-    if (this.enhancers[ext]) {
-      return this.enhancers[ext]
+    const enhancerMap =
+      AppStateManager.getInstance().getItem('lspEnhancers') ??
+      new Map<string, Enhancer>()
+
+    if (enhancerMap.size === 0) {
+      AppStateManager.getInstance().setItem('lspEnhancers', enhancerMap)
+    }
+
+    if (enhancerMap && enhancerMap.has(ext)) {
+      return enhancerMap.get(ext) as Enhancer
     }
 
     const language = this.config.extnToLangMap[ext]
@@ -280,7 +287,8 @@ export class IndexPipeline {
     }
     const initialized = await enhancer.init()
     if (initialized) {
-      this.enhancers[ext] = enhancer
+      enhancerMap!.set(ext, enhancer)
+      AppStateManager.getInstance().setItem('lspEnhancers', enhancerMap!)
       logInfo(`[Indexer] Loaded GenericLspEnhancer for .${ext} files.`)
       return enhancer
     } else {

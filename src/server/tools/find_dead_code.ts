@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, isNull, isNotNull, inArray } from 'drizzle-orm'
+import { eq, and, isNull, isNotNull, inArray, sql } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { SymbolKind } from '../../database/schemas'
 import { AppStateManager } from 'src/state'
@@ -128,6 +128,12 @@ export function registerFindDeadCodeTool(server: McpServer) {
             and(
               eq(schema.symbols.exported, false),
               inArray(schema.symbols.kind, callableKinds),
+              sql`NOT EXISTS (
+                SELECT 1
+                FROM ${schema.symbols} AS parent_sym
+                WHERE parent_sym.id = ${schema.symbols.parent_id}
+                AND parent_sym.exported = 1
+              )`,
             ),
           )
           .orderBy(schema.symbols.file_path, schema.symbols.line)
