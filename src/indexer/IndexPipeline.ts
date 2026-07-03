@@ -128,7 +128,7 @@ export class IndexPipeline {
 
     await this.runEnhancementStep(processedFiles)
     await this.runDocstringStep()
-    // await this.runEmbeddingStep(processedFiles)
+    await this.runEmbeddingStep(processedFiles)
   }
 
   /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
