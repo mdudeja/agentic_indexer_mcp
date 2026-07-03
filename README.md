@@ -2,7 +2,7 @@
 
 A powerful Model Context Protocol (MCP) server that provides structured, symbol-level code retrieval and codebase analysis for AI agents. Built with Bun, Tree-sitter, Drizzle ORM, and SQLite, it allows AI models to efficiently explore, search, and parse codebases without wasting context window tokens by reading entire files.
 
-*Inspired by projects like [jCodeMunch MCP](https://github.com/jgravelle/jcodemunch-mcp).*
+_Inspired by projects like [jCodeMunch MCP](https://github.com/jgravelle/jcodemunch-mcp)._
 
 ![Bun](https://img.shields.io/badge/Bun-1.0+-black?logo=bun)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript)
@@ -25,6 +25,7 @@ When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context
 ## Architecture
 
 The system operates across three distinct layers:
+
 1. **Parser & Extractor Layer (Tree-Sitter):** Uses `web-tree-sitter` and compiled `.wasm` grammars to parse source files, identifying symbol kinds, imports, and call sites.
 2. **Enhancement Layer (ts-morph):** Resolves full type information, interfaces/type inheritance, and connects call sites to their concrete definitions.
 3. **Database Layer (Drizzle + Bun SQLite):** Persists metadata, signatures, dependencies, and file hashes to optimize subsequent runs.
@@ -33,9 +34,10 @@ The system operates across three distinct layers:
 
 ## MCP Server Tools
 
-The server registers 28 specialized tools over `stdio`. They are grouped logically below:
+The server registers 29 specialized tools over `stdio`. They are grouped logically below:
 
 ### 1. Codebase Navigation & Search
+
 - `list_files`: Lists all indexed files in the workspace, with optional path pattern and language filtering.
 - `get_file_details`: Lists all symbols (functions, classes, variables, types, interfaces) defined in a specific file.
 - `search_symbols`: Searches for symbols globally by name or wildcard pattern.
@@ -45,20 +47,25 @@ The server registers 28 specialized tools over `stdio`. They are grouped logical
 - `read_file_snippet`: Reads a specific range of lines from a file.
 
 ### 2. Dependency & Call Graph Traversal
+
 - `trace_call_graph`: Generates an indented ASCII tree of inbound (who calls X) or outbound (what X calls) call chains up to a configured depth.
 - `get_blast_radius`: Finds all transitive callers (BFS) affected by modifying a symbol, helping assess refactoring risks.
 - `find_symbol_references`: Returns direct call sites, named imports, and module-level importers for a symbol.
 - `trace_data_flow`: Maps out the I/O boundary of a function/method (parameters, returns, caller inputs, and callee outputs).
 - `trace_error_flow`: Recursively traces and lists all exceptions that can bubble up from a symbol.
 - `get_required_env_vars`: Traces environment variables accessed downstream inside the call tree of a symbol.
+- `get_imports_for_file`: Lists all module imports defined in a specific file.
+- `get_import_by_id`: Retrieves details about a specific imported symbol or module import.
 
 ### 3. Structure & Pattern Discovery
+
 - `get_codebase_map`: Generates a topological overview of files grouped by directory, sorting them from entry-points down to foundation layers.
 - `get_entry_points`: Lists top-level exported symbols representing the public API surface.
 - `explore_codebase`: Renders a comprehensive Mermaid call-graph highlighting entry-point paths, subgraphs for files/containers, and reachability.
 - `find_similar_patterns`: Searches for symbols sharing a reference symbol's structural shape (matching on kind, return type, param count, or decorators).
 
 ### 4. Quality & Analytics Metrics
+
 - `find_dead_code`: Detects unreachable code (exported unreferenced symbols and internal callables with no callers).
 - `get_untested_symbols`: Lists exported symbols inside files that are not imported by any test file.
 - `find_related_tests`: Locates test files exercising a specific symbol or module.
@@ -68,6 +75,7 @@ The server registers 28 specialized tools over `stdio`. They are grouped logical
 - `get_symbol_history`: Fetches the git commit history and changes for a specific symbol using line-bound git log queries.
 
 ### 5. Auditing & Diagnostics
+
 - `audit_agent_config`: Audits AI agent configuration rules (`.cursorrules`, `CLAUDE.md`, etc.) for stale paths and symbol references.
 - `get_token_savings`: Reports context tokens saved by using MCP tools instead of loading raw source files.
 
@@ -81,12 +89,7 @@ Custom configuration can be specified in `.agentic/config.json` at the root of y
 {
   "indexer": {
     "enabled": true,
-    "ignore_patterns": [
-      ".git",
-      "node_modules",
-      "dist",
-      "*.lock"
-    ],
+    "ignore_patterns": [".git", "node_modules", "dist", "*.lock"],
     "docstring_generation": {
       "enabled": false,
       "provider": "openai",
@@ -96,17 +99,20 @@ Custom configuration can be specified in `.agentic/config.json` at the root of y
 }
 ```
 
-Refer to [src/config/default_config.ts](file:///home/md/Projects/nvim_plugins/agentic_indexer_mcp/src/config/default_config.ts) for default settings, including supported language extensions, ignore paths, test file regexes, and entry point patterns.
+Refer to [src/config/default_config.ts] for default settings, including supported language extensions, ignore paths, test file regexes, and entry point patterns.
 
 ---
 
 ## How to Use It
 
 ### Prerequisites
+
 - [Bun](https://bun.sh/) (latest version)
 
 ### Installation
+
 Clone the repository and install dependencies:
+
 ```bash
 git clone https://github.com/your-username/agentic_indexer_mcp.git
 cd agentic_indexer_mcp
@@ -119,30 +125,35 @@ The core commands leverage `index.ts` to manage your environment:
 
 1. **Index a workspace (One-off Build):**
    Run the initial parser pass on your codebase.
+
    ```bash
    bun run index --cwd /path/to/your/project
    ```
 
 2. **Index a Single File:**
    Re-index only a specific file.
+
    ```bash
    bun run index-file --cwd /path/to/your/project --file /path/to/your/file.ts
    ```
 
 3. **Remove Generated Docstrings:**
    Delete all generated docstrings from source files and database.
+
    ```bash
    bun run remove-docstrings --cwd /path/to/your/project
    ```
 
 4. **Query the Index locally:**
    Search for symbols via the CLI.
+
    ```bash
    bun run query --cwd /path/to/your/project -q "auth*" -k "function"
    ```
 
 5. **Start the MCP Server:**
    Start the stdio MCP server for agent integration.
+
    ```bash
    bun run serve --cwd /path/to/your/project
    ```
@@ -153,3 +164,83 @@ The core commands leverage `index.ts` to manage your environment:
    bun run inspect
    ```
 
+---
+
+### Integrating with MCP Clients
+
+Since this server runs over standard I/O (stdio), it can easily be configured as an MCP server in your favorite AI agent client.
+
+#### 1. Claude Desktop
+
+Add the server definition to your Claude Desktop configuration file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "agentic-indexer": {
+      "command": "bun",
+      "args": [
+        "run",
+        "--env-file",
+        "/absolute/path/to/agentic_indexer_mcp/.env",
+        "/absolute/path/to/agentic_indexer_mcp/index.ts",
+        "serve",
+        "--cwd",
+        "/absolute/path/to/your/project/to/index"
+      ]
+    }
+  }
+}
+```
+
+> [!IMPORTANT]
+> Make sure to replace `/absolute/path/to/agentic_indexer_mcp` with the actual path to where you cloned this repository, and `/absolute/path/to/your/project/to/index` with the project directory you want the agent to index and analyze.
+> Ensure `bun` is available globally in your path, or use the absolute path to your `bun` executable (e.g. `/usr/local/bin/bun`).
+
+#### 2. Cursor
+
+To use the Agentic Indexer in Cursor:
+
+1. Open Cursor Settings.
+2. Navigate to **Features** -> **MCP**.
+3. Click **+ Add New MCP Server**.
+4. Fill in the following details:
+   - **Name:** `agentic-indexer`
+   - **Type:** `command`
+   - **Command:** `bun run --env-file /absolute/path/to/agentic_indexer_mcp/.env /absolute/path/to/agentic_indexer_mcp/index.ts serve --cwd /absolute/path/to/your/project/to/index`
+5. Click **Save**.
+
+#### 3. Cline / VS Code (Roo Code, Windsurf, etc.)
+
+If you are using VS Code extensions like Cline, Windsurf, or Roo Code, you can add it to their MCP settings configuration file (e.g., `cline_mcp_settings.json` located in your OS global app storage directory):
+
+```json
+{
+  "mcpServers": {
+    "agentic-indexer": {
+      "command": "bun",
+      "args": [
+        "run",
+        "--env-file",
+        "/absolute/path/to/agentic_indexer_mcp/.env",
+        "/absolute/path/to/agentic_indexer_mcp/index.ts",
+        "serve",
+        "--cwd",
+        "/absolute/path/to/your/project/to/index"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+### Tips for Best Performance & Setup
+
+1. **Pre-Indexing:** Before starting your agent, run a one-off index via `bun run index --cwd /path/to/your/project`. This builds the initial SQLite database and resolves symbols so that the MCP server is fully populated and starts immediately.
+2. **Environment Variables:** If you plan on using AI docstring generation or semantic search (embedding-based), ensure your API keys (e.g. `CLAUDE_API_KEY`, `OPENAI_API_KEY`, etc.) are configured in the cloned server's `.env` file.
+3. **File Watching:** When the MCP server starts, it initializes a file system watcher on the target project directory (using `chokidar`). It will automatically detect additions, modifications, and deletions, and update the SQLite symbol index incrementally in real-time.
