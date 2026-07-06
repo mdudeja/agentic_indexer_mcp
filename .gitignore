@@ -1,5 +1,6 @@
 node_modules/
 .agentic/
 .env*
+!.env.template
 dist/
 build/

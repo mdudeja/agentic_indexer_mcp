@@ -5,7 +5,7 @@ import { dirname, isAbsolute, resolve, relative } from 'path'
 import { AppStateManager } from 'src/state'
 
 /** "Resolves a given path by converting relative and tilde-based paths to absolute paths." */
-export const resolvePath = (inputPath: string): string => {
+export const resolvePath = (inputPath: string, fromDir?: string): string => {
   let resolvedPath = inputPath
   if (inputPath.startsWith('~/')) {
     resolvedPath = inputPath.replace('~', homedir())
@@ -16,7 +16,7 @@ export const resolvePath = (inputPath: string): string => {
   }
 
   const root = AppStateManager.getInstance().getItem('root')
-  const baseDir = root || resolve(import.meta.dir, '../../')
+  const baseDir = fromDir || root || resolve(import.meta.dir, '../../')
   resolvedPath = resolve(baseDir, resolvedPath)
   return resolvedPath
 }

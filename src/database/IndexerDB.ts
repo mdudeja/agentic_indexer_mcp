@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite'
 import { drizzle, type SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 import * as schema from './schemas'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { dirname } from 'path'
+import { dirname, resolve } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 import { resolvePath } from 'src/utils/paths'
 import { logDebug, logError } from 'src/utils/logger'
@@ -97,8 +97,13 @@ export class IndexerDB {
   async init() {
     if (this.dbInited) return
 
+    console.log(`import.meta.dir: ${import.meta.dir}`)
+    console.log(`resolved import.meta.dir: ${resolve(import.meta.dir)}`)
+    console.log(`cwd: ${process.cwd()}`)
+
     const migrationsDir = resolvePath(
       process.env.DB_MIGRATIONS_DIR || './drizzle_migrations',
+      resolve(import.meta.dir, '../../'),
     )
     migrate(this.db, { migrationsFolder: migrationsDir })
 

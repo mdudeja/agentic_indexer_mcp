@@ -38,10 +38,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
     languages: {
       typescript: {
         extensions: ['.ts'],
-        lsp_command: [
-          '/home/md/.local/share/nvim/mason/bin/typescript-language-server',
-          '--stdio',
-        ],
+        lsp_command: ['typescript-language-server', '--stdio'],
         lang_features_paths: [
           'node_modules/typescript/lib',
           'node_modules/@types/node',
@@ -56,10 +53,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       tsx: {
         extensions: ['.tsx'],
-        lsp_command: [
-          '/home/md/.local/share/nvim/mason/bin/typescript-language-server',
-          '--stdio',
-        ],
+        lsp_command: ['typescript-language-server', '--stdio'],
         lang_features_paths: [
           'node_modules/typescript/lib',
           'node_modules/@types/node',
@@ -74,10 +68,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       python: {
         extensions: ['.py'],
-        lsp_command: [
-          '/home/md/.local/share/nvim/mason/bin/basedpyright-langserver',
-          '--stdio',
-        ],
+        lsp_command: ['basedpyright-langserver', '--stdio'],
         lang_features_paths: ['/usr/lib/python', 'typeshed', 'django'],
         treesitter: {
           language_name: 'python',
@@ -86,10 +77,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
       javascript: {
         extensions: ['.js'],
-        lsp_command: [
-          '/home/md/.local/share/nvim/mason/bin/typescript-language-server',
-          '--stdio',
-        ],
+        lsp_command: ['typescript-language-server', '--stdio'],
         lang_features_paths: [
           'node_modules/typescript/lib',
           'node_modules/@types/node',
@@ -104,7 +92,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
     },
     docstring_generation: {
-      enabled: true,
+      enabled: false,
       provider: 'ollama',
       write_to_file: true,
       exclude_generation_patterns: [/tests\/fixtures\//],
@@ -136,7 +124,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       '.windsurfrules',
     ],
     embedder: {
-      enabled: true,
+      enabled: false,
       provider: 'ollama',
       ollama: {
         base_url: 'http://localhost:11434',

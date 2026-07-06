@@ -8,14 +8,15 @@ import { updateUsage } from 'src/utils/updateUsage'
 
 /**
  * Extract file-path-like tokens from content.
- * Matches strings that look like relative paths with an extension, e.g. src/utils/foo.ts
+ * Matches strings that look like relative paths with or without an extension,
+ * e.g. src/utils/foo.ts or src/utils
  */
 function extractPathRefs(content: string): string[] {
   const seen = new Set<string>()
   const results: string[] = []
-  // Match word/slash sequences that contain a dot-extension and at least one slash
+  // Match word/slash sequences that look like paths, optionally ending with a dot and 1-6 letter extension
   const re =
-    /(?:^|[\s`'"(])([a-zA-Z][\w./\-]*\/[\w./\-]+\.\w{1,6})(?:$|[\s`'")\]:,])/gm
+    /(?:^|[\s`'"(])([a-zA-Z][\w./\-]*\/[\w./\-]+(\.\w{1,6})?)(?:$|[\s`'")\]:,])/gm
   let m: RegExpExecArray | null
   while ((m = re.exec(content)) !== null) {
     const ref = m[1]!.trim()

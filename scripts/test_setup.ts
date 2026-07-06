@@ -48,7 +48,10 @@ async function runIndex(cwd: string) {
 
 /** Prepares the test environment by initializing required configurations, clearing the database, running indexes, and setting up the testing pipeline. */
 async function prepareTestEnvironment() {
-  const fixturePath = resolvePath(process.env.TEST_FIXTURES_DIR as string)
+  const fixturePath = resolvePath(
+    process.env.TEST_FIXTURES_DIR as string,
+    resolve(import.meta.dir, '../'),
+  )
   clearDB()
 
   // 1. Setup AppState config

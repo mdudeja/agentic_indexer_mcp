@@ -8,6 +8,7 @@ import { logWarning } from 'src/utils/logger'
 import { resolvePath } from 'src/utils/paths'
 import { loadConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
+import { version } from './package.json'
 
 /** The module 'bun' provides a set of environment variables for configuring application settings, including logging, database access, and API keys for services like Claude, Gemini, and OpenAI. */
 declare module 'bun' {
@@ -17,6 +18,7 @@ declare module 'bun' {
     NODE_ENV?: string
     LOG_LEVEL?: string
     DB_FILE_URL?: string
+    BUILD_VERSION?: string
     DB_MIGRATIONS_DIR?: string
     CLAUDE_API_KEY?: string
     GEMINI_API_KEY?: string
@@ -54,6 +56,9 @@ const { values, positionals } = parseArgs({
       type: 'boolean',
       short: 'f',
     },
+    version: {
+      type: 'boolean',
+    },
   },
   strict: true,
   allowPositionals: true,
@@ -62,6 +67,11 @@ const { values, positionals } = parseArgs({
 const command = positionals[2] // e.g. bun run index.ts <command>
 
 const cwd = resolvePath(values.cwd ?? process.cwd())
+
+if (values.version) {
+  console.log(`agentic-indexer version: ${version}`)
+  process.exit(0)
+}
 
 if (values.help || !command) {
   logWarning(`
@@ -84,6 +94,7 @@ Options:
   -h,   --help                Show this help message
   -g,  --include-gitignored   Include files ignored by .gitignore (default: false)
   --file                      Path to a single file to index (required for index-file command)
+  --version                   Show the version of the agentic-indexer and exit
   `)
   process.exit(values.help ? 0 : 1)
 }

@@ -1,10 +1,15 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { TreeSitterIndexer } from 'src/indexer/TreeSitterIndexer'
-import { default_config } from 'src/config/default_config'
+import { loadConfig } from 'src/config/loader'
 
 /** Generates a formatted string representation of a node and its children, useful for debugging or visualizing tree structures. The output includes indentation based on depth and parentheses to denote nested nodes. */
-function printNode(node: any, source: string, depth: number, fieldName?: string): string {
+function printNode(
+  node: any,
+  source: string,
+  depth: number,
+  fieldName?: string,
+): string {
   if (!node.isNamed) return ''
 
   const indent = '  '.repeat(depth)
@@ -12,7 +17,10 @@ function printNode(node: any, source: string, depth: number, fieldName?: string)
 
   if (node.childCount === 0) {
     const text = source.slice(node.startIndex, node.endIndex)
-    const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
+    const escaped = text
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
     return `${indent}${label}(${node.type} "${escaped}")`
   }
 
@@ -21,7 +29,12 @@ function printNode(node: any, source: string, depth: number, fieldName?: string)
     const child = node.child(i)
     if (!child?.isNamed) continue
     const childField: string | null = node.fieldNameForChild(i)
-    const childStr = printNode(child, source, depth + 1, childField ?? undefined)
+    const childStr = printNode(
+      child,
+      source,
+      depth + 1,
+      childField ?? undefined,
+    )
     if (childStr) result += '\n' + childStr
   }
   return result + ')'
@@ -32,8 +45,11 @@ export async function printTree(filePath: string): Promise<void> {
   const absPath = path.resolve(filePath)
   const ext = path.extname(absPath).slice(1)
   const sourceCode = fs.readFileSync(absPath, 'utf-8')
+  const dir = path.dirname(absPath)
 
-  const langName = default_config.indexer.extnToLangMap[ext]
+  const langName = await loadConfig(dir).then(
+    (config) => config.extnToLangMap[ext],
+  )
   if (!langName) {
     console.error(`No language mapping for extension: .${ext}`)
     process.exit(1)

@@ -16,9 +16,24 @@ _Inspired by projects like [jCodeMunch MCP](https://github.com/jgravelle/jcodemu
 
 Agentic Indexer indexes your local codebase using native AST parsing (via [web-tree-sitter](https://github.com/tree-sitter/tree-sitter)). It extracts symbols—such as functions, classes, methods, and variables—and stores their structured metadata (signatures, docstrings, parameters, return types, and byte offsets) into a local SQLite database along with file hashes.
 
-For TypeScript projects, a post-extraction enhancement step leverages `ts-morph` to resolve parameter types, return types, inheritance, and exact call-graph links. It also features an AI-based docstring generation step to automatically document undocumented symbols using Claude, Gemini, OpenAI, or Ollama.
+It then uses LSP to enhance those symbols with additional type information, interfaces/type inheritance, and call-graph links. It also features an AI-based docstring generation step to automatically document undocumented symbols using Claude, Gemini, OpenAI, or Ollama.
 
 When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context, it can use this MCP server to query, navigate, and analyze the codebase at symbol-level resolution instead of loading thousands of lines into the context window.
+
+---
+
+## Installation and Usage
+
+### Dependencies and setup
+- [Bun](https://bun.sh/) (latest version)
+- Language Servers for the languages you want to index (e.g., `typescript-language-server`, `based-pyright`, etc.). The language servers must be available in your system's PATH, or you can specify their absolute paths in `.agentic/config.json` file in your repo.
+- Docstring Generation and Embedder need AI Providers to generate docstrings and embeddings. Currently, the following providers are supported:
+  - Ollama (local LLMs)
+  - OpenAI (GPT-3.5, GPT-4)
+  - Claude (Anthropic)
+  - Gemini (Google)
+- Providers can be configured in `.agentic/config.json` with their respective API keys or local endpoints. You don't need to store API keys in the json file for every repo. Those can be stored in the `.env` file in the root of the cloned repo. Similarly, for any config parameters that you want applied globally, you can change the default config in `src/config/default_config.ts` and rebuild the MCP server. Any local repo config will override the default config.
+
 
 ---
 
@@ -27,7 +42,7 @@ When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context
 The system operates across three distinct layers:
 
 1. **Parser & Extractor Layer (Tree-Sitter):** Uses `web-tree-sitter` and compiled `.wasm` grammars to parse source files, identifying symbol kinds, imports, and call sites.
-2. **Enhancement Layer (ts-morph):** Resolves full type information, interfaces/type inheritance, and connects call sites to their concrete definitions.
+2. **Enhancement Layer (LSP):** Uses Language Server Protocol (LSP) to enhance symbols with additional type information, interfaces/type inheritance, and call-graph links.
 3. **Database Layer (Drizzle + Bun SQLite):** Persists metadata, signatures, dependencies, and file hashes to optimize subsequent runs.
 
 ---
