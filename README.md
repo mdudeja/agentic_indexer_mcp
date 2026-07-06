@@ -237,10 +237,6 @@ Add the server definition to your Claude Desktop configuration file:
 }
 ```
 
-> [!IMPORTANT]
-> Make sure to replace `/absolute/path/to/agentic_indexer_mcp` with the actual path to where you cloned this repository, and `/absolute/path/to/your/project/to/index` with the project directory you want the agent to index and analyze.
-> Ensure `bun` is available globally in your path, or use the absolute path to your `bun` executable (e.g. `/usr/local/bin/bun`).
-
 #### 2. Cursor
 
 To use the Agentic Indexer in Cursor:
