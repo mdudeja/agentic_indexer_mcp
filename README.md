@@ -1,14 +1,23 @@
 # Agentic Indexer MCP
 
-A powerful Model Context Protocol (MCP) server that provides structured, symbol-level code retrieval and codebase analysis for AI agents. Built with Bun, Tree-sitter, Drizzle ORM, and SQLite, it allows AI models to efficiently explore, search, and parse codebases without wasting context window tokens by reading entire files.
+A local code intelligence MCP server for agents. It builds a symbol graph from Tree-sitter and language-server signals, then exposes agent-friendly tools for finding definitions, tracing calls, estimating blast radius, locating tests, and reducing context-window waste.
 
-_Inspired by projects like [jCodeMunch MCP](https://github.com/jgravelle/jcodemunch-mcp)._
+_Inspired by projects like [jCodeMunch MCP](https://github.com/jgravelle/jcodemunch-mcp)._ but customized for my own workflows, codebases and preferred AI agents.
 
 ![Bun](https://img.shields.io/badge/Bun-1.0+-black?logo=bun)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript)
 ![SQLite](https://img.shields.io/badge/SQLite-blue?logo=sqlite)
 ![Tree-sitter](https://img.shields.io/badge/Tree--sitter-green)
 ![MCP](https://img.shields.io/badge/MCP-compatible-purple)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Experimental](https://img.shields.io/badge/Experimental-yellow)
+
+## Current Status
+![Active Development](https://img.shields.io/badge/Status-Active%20Development-blue)
+
+### Supported Languages
+- TypeScript / JavaScript / TSX
+- Python
 
 ---
 
@@ -24,7 +33,7 @@ When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context
 
 ## Installation and Usage
 
-### Dependencies and setup
+### Dependencies and Config
 - [Bun](https://bun.sh/) (latest version)
 - Language Servers for the languages you want to index (e.g., `typescript-language-server`, `based-pyright`, etc.). The language servers must be available in your system's PATH, or you can specify their absolute paths in `.agentic/config.json` file in your repo.
 - Docstring Generation and Embedder need AI Providers to generate docstrings and embeddings. Currently, the following providers are supported:
@@ -34,6 +43,68 @@ When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context
   - Gemini (Google)
 - Providers can be configured in `.agentic/config.json` with their respective API keys or local endpoints. You don't need to store API keys in the json file for every repo. Those can be stored in the `.env` file in the root of the cloned repo. Similarly, for any config parameters that you want applied globally, you can change the default config in `src/config/default_config.ts` and rebuild the MCP server. Any local repo config will override the default config.
 
+### Setup
+- Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/mdudeja/agentic_indexer_mcp.git
+cd agentic_indexer_mcp
+bun install
+```
+
+- Copy `.env.template` to `.env` and fill in your API keys for the AI providers you want to use.
+- Run the build command to generate an executable in the `dist` folder:
+
+```bash
+bun run build
+```
+
+- Run bun link to make the MCP server available globally:
+
+```bash
+bun link
+```
+
+- Go to your project directory and run the index command to build the initial SQLite database:
+
+```bash
+cd /path/to/your/project
+agentic-indexer index [--cwd /path/to/your/project]
+```
+
+- Use the `serve` command in the config file of your preferred AI agent client (Claude Desktop, Cursor, Cline, Windsurf, etc.) to start the MCP server:
+
+```json
+{
+  "mcpServers": {
+    "agentic-indexer": {
+      "command": "agentic-indexer",
+      "args": ["serve", "--cwd", "/path/to/your/project"]
+    }
+  }
+}
+```
+---
+
+## Configuration
+
+Custom configuration can be specified in `.agentic/config.json` at the root of your workspace:
+
+```json
+{
+  "indexer": {
+    "enabled": true,
+    "ignore_patterns": [".git", "node_modules", "dist", "*.lock"],
+    "docstring_generation": {
+      "enabled": false,
+      "provider": "openai",
+      "write_to_file": false
+    }
+  }
+}
+```
+
+Refer to [src/config/default_config.ts] for default settings, including supported language extensions, ignore paths, test file regexes, and entry point patterns.
 
 ---
 
@@ -95,44 +166,6 @@ The server registers 29 specialized tools over `stdio`. They are grouped logical
 - `get_token_savings`: Reports context tokens saved by using MCP tools instead of loading raw source files.
 
 ---
-
-## Configuration
-
-Custom configuration can be specified in `.agentic/config.json` at the root of your workspace:
-
-```json
-{
-  "indexer": {
-    "enabled": true,
-    "ignore_patterns": [".git", "node_modules", "dist", "*.lock"],
-    "docstring_generation": {
-      "enabled": false,
-      "provider": "openai",
-      "write_to_file": false
-    }
-  }
-}
-```
-
-Refer to [src/config/default_config.ts] for default settings, including supported language extensions, ignore paths, test file regexes, and entry point patterns.
-
----
-
-## How to Use It
-
-### Prerequisites
-
-- [Bun](https://bun.sh/) (latest version)
-
-### Installation
-
-Clone the repository and install dependencies:
-
-```bash
-git clone https://github.com/your-username/agentic_indexer_mcp.git
-cd agentic_indexer_mcp
-bun install
-```
 
 ### CLI Commands
 
@@ -197,16 +230,8 @@ Add the server definition to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "agentic-indexer": {
-      "command": "bun",
-      "args": [
-        "run",
-        "--env-file",
-        "/absolute/path/to/agentic_indexer_mcp/.env",
-        "/absolute/path/to/agentic_indexer_mcp/index.ts",
-        "serve",
-        "--cwd",
-        "/absolute/path/to/your/project/to/index"
-      ]
+      "command": "agentic-indexer",
+      "args": ["serve", "--cwd", "/path/to/your/project"]
     }
   }
 }
@@ -226,7 +251,7 @@ To use the Agentic Indexer in Cursor:
 4. Fill in the following details:
    - **Name:** `agentic-indexer`
    - **Type:** `command`
-   - **Command:** `bun run --env-file /absolute/path/to/agentic_indexer_mcp/.env /absolute/path/to/agentic_indexer_mcp/index.ts serve --cwd /absolute/path/to/your/project/to/index`
+   - **Command:** `agentic-indexer serve --cwd /path/to/your/project`
 5. Click **Save**.
 
 #### 3. Cline / VS Code (Roo Code, Windsurf, etc.)
@@ -237,18 +262,8 @@ If you are using VS Code extensions like Cline, Windsurf, or Roo Code, you can a
 {
   "mcpServers": {
     "agentic-indexer": {
-      "command": "bun",
-      "args": [
-        "run",
-        "--env-file",
-        "/absolute/path/to/agentic_indexer_mcp/.env",
-        "/absolute/path/to/agentic_indexer_mcp/index.ts",
-        "serve",
-        "--cwd",
-        "/absolute/path/to/your/project/to/index"
-      ],
-      "disabled": false,
-      "autoApprove": []
+      "command": "agentic-indexer",
+      "args": ["serve", "--cwd", "/path/to/your/project"]
     }
   }
 }

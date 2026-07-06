@@ -1,4 +1,3 @@
-import { spawn } from 'bun'
 import { afterAll, beforeAll } from 'bun:test'
 import { existsSync, unlinkSync, rmSync } from 'fs'
 import { dirname, join, resolve } from 'path'
@@ -35,17 +34,6 @@ export function clearDB() {
   }
 }
 
-/** Runs the index script in the specified directory using Bun. */
-async function runIndex(cwd: string) {
-  const proc = spawn(['bun', 'run', 'index.ts', 'index', '--cwd', cwd], {
-    env: process.env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-
-  await proc.exited
-}
-
 /** Prepares the test environment by initializing required configurations, clearing the database, running indexes, and setting up the testing pipeline. */
 async function prepareTestEnvironment() {
   const fixturePath = resolvePath(
@@ -56,6 +44,7 @@ async function prepareTestEnvironment() {
 
   // 1. Setup AppState config
   const config = await loadConfig(fixturePath)
+
   AppStateManager.getInstance().setItem('config', config)
   AppStateManager.getInstance().setItem('root', fixturePath)
 

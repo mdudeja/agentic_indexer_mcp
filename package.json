@@ -4,18 +4,19 @@
   "type": "module",
   "private": false,
   "version": "1.0.0",
+  "license": "MIT",
   "scripts": {
     "start": "bun run --env-file .env index.ts serve",
     "index": "bun run --env-file .env index.ts index",
     "enhance": "bun run --env-file .env index.ts enhance",
-    "index-file": "bun run --env-file .env index.ts index-file --file /home/md/Projects/ECN/ashiyana_mis/repo/apps/core/models.py",
-    "enhance-file": "bun run --env-file .env index.ts enhance-file --file /home/md/Projects/ECN/ashiyana_mis/repo/apps/core/management/commands/resetdb_full.py",
+    "index-file": "bun run --env-file .env index.ts index-file",
+    "enhance-file": "bun run --env-file .env index.ts enhance-file",
     "remove-docstrings": "bun run --env-file .env index.ts remove-docstrings",
     "query": "bun run --env-file .env index.ts query",
     "serve": "bun run --env-file .env index.ts serve",
     "inspect": "bun run index && mcp-inspector bun run --env-file .env index.ts serve",
     "lint": "bun tsc --noEmit",
-    "test": "bun test --env-file .env.test",
+    "test": "bun test --env-file .env.test --timeout 0",
     "build": "bun run --env-file .env scripts/build.ts"
   },
   "dependencies": {

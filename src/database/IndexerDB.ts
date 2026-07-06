@@ -97,10 +97,6 @@ export class IndexerDB {
   async init() {
     if (this.dbInited) return
 
-    console.log(`import.meta.dir: ${import.meta.dir}`)
-    console.log(`resolved import.meta.dir: ${resolve(import.meta.dir)}`)
-    console.log(`cwd: ${process.cwd()}`)
-
     const migrationsDir = resolvePath(
       process.env.DB_MIGRATIONS_DIR || './drizzle_migrations',
       resolve(import.meta.dir, '../../'),

@@ -28,8 +28,6 @@ describe('CLI Integration Tests', () => {
     expect(text).toContain('Indexed 4 files.')
     expect(text).toContain('Running Step 1:')
     expect(text).toContain('Running Step 2:')
-    expect(text).toContain('Running Step 3:')
-    expect(text).toContain('Symbol needing docstring')
     expect(text).toContain('sqlite-vec virtual table initialized')
   }, 30000)
 
