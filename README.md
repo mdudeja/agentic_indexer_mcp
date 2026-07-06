@@ -175,38 +175,38 @@ The core commands leverage `index.ts` to manage your environment:
    Run the initial parser pass on your codebase.
 
    ```bash
-   bun run index --cwd /path/to/your/project
+   agentic-indexer index --cwd /path/to/your/project
    ```
 
 2. **Index a Single File:**
    Re-index only a specific file.
 
    ```bash
-   bun run index-file --cwd /path/to/your/project --file /path/to/your/file.ts
+   agentic-indexer index-file --cwd /path/to/your/project --file /path/to/your/file.ts
    ```
 
 3. **Remove Generated Docstrings:**
-   Delete all generated docstrings from source files and database.
+   Delete all generated docstrings from and database (optionally) source files.
 
    ```bash
-   bun run remove-docstrings --cwd /path/to/your/project
+   agentic-indexer remove-docstrings --cwd /path/to/your/project
    ```
 
 4. **Query the Index locally:**
    Search for symbols via the CLI.
 
    ```bash
-   bun run query --cwd /path/to/your/project -q "auth*" -k "function"
+   agentic-indexer query --cwd /path/to/your/project -q "auth*" -k "function"
    ```
 
 5. **Start the MCP Server:**
    Start the stdio MCP server for agent integration.
 
    ```bash
-   bun run serve --cwd /path/to/your/project
+   agentic-indexer serve --cwd /path/to/your/project
    ```
 
-6. **Inspect the MCP Server:**
+6. **Inspect the MCP Server (while debugging, from within the cloned repo only):**
    Launch the MCP Inspector to debug tools.
    ```bash
    bun run inspect
