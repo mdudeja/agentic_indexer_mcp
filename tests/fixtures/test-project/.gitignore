@@ -1,0 +1,25 @@
+# root gitignore for FileManager tests
+
+debug.log
+*.log
+!important.log
+
+node_modules
+dist/
+
+/build
+
+file[0-9].txt
+
+**/*.cache
+
+spaced.txt   
+keepme\ 
+
+logs
+
+!logs/keep.log
+
+
+
+ca?.txt

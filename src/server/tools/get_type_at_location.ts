@@ -2,9 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { join } from 'path'
 import { AppStateManager } from 'src/state/index.ts'
-import { GenericLspEnhancer } from '../../indexer/enhancers/GenericLspEnhancer.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
-import type { Enhancer } from '../../indexer/steps/s2_Enhancer.ts'
 
 /** Registers a tool to get the inferred or explicit type of an identifier at a specific line and column. */
 export function registerGetTypeAtLocationTool(server: McpServer) {

@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'path'
 import { logDebug } from 'src/utils/logger'
 
+/** Builds and prepares a distributable version of the application by generating an executable script and ensuring all necessary directories exist. */
 export async function build() {
   const currentDir = import.meta.dir
   const distDir = resolve(currentDir, '../dist')

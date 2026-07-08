@@ -27,7 +27,7 @@ export type DocstringConfig = {
   enabled: boolean
   provider: DocstringProviderName
   write_to_file: boolean
-  exclude_generation_patterns: RegExp[]
+  exclude_generation_patterns: string[]
   claude?: { api_key: string; model?: string }
   gemini?: { api_key: string; model?: string }
   openai?: { api_key: string; model?: string }
@@ -49,8 +49,8 @@ export type IndexerConfig = {
   enabled: boolean
   ignore_patterns: string[]
   extnToLangMap: Record<string, SupportedLanguage>
-  testFilePatterns: RegExp[]
-  entryPointPatterns: RegExp[]
+  testFilePatterns: string[]
+  entryPointPatterns: string[]
   languages: Record<string, LanguageConfig>
   docstring_generation?: DocstringConfig
   agent_config_candidates: string[]

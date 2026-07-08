@@ -3,29 +3,37 @@ import { IndexPipeline } from '../indexer/IndexPipeline'
 import { IndexerDB } from '../database/IndexerDB'
 import { relative } from 'path'
 import { logInfo, logError } from 'src/utils/logger'
+import { FileManager } from 'src/indexer/FileManager'
 
 /** A class that monitors a specified directory for file system changes. It tracks additions, modifications, and deletions of files within the directory, triggering corresponding actions such as reindexing or cleaning up associated data. */
 export class Watcher {
   private watcher: FSWatcher | null = null
+  private fileManager: FileManager | null = null
 
   /** Initializes a new instance of the Watcher with the specified current working directory. */
   constructor(private cwd: string) {}
 
   /** Starts monitoring a directory for file changes, triggering corresponding actions for added, modified, or removed files. */
-  start() {
+  async start() {
     logInfo(`[watcher] Starting file watcher for ${this.cwd}`)
 
+    if (!this.fileManager) {
+      this.fileManager = await FileManager.getInstance()
+    }
+
     this.watcher = watch(this.cwd, {
-      ignored: /(^|[\/\\])(\..+|node_modules|dist|build)/,
+      ignored: (path) => this.fileManager!.isPathIgnored(path),
       persistent: true,
       ignoreInitial: true,
+      atomic: true,
+      awaitWriteFinish: true,
+      cwd: this.cwd,
     })
 
     const db = IndexerDB.getInstance()
     const pipeline = new IndexPipeline({
       cwd: this.cwd,
       store: db,
-      includeGitIgnored: false,
     })
 
     this.watcher

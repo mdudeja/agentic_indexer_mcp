@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { isNotNull, inArray } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
-import { AppStateManager } from 'src/state'
 import { updateUsage } from 'src/utils/updateUsage'
+import { doesPathMatch, getTestFileGlobs } from 'src/utils/pathGlobs'
 
 const ALL_KINDS = Object.keys(
   schema.SymbolKind,
@@ -126,22 +126,14 @@ export function registerGetSymbolImportanceTool(server: McpServer) {
         const symbolMap = new Map(symbols.map((s) => [s.id, s]))
 
         // Apply filters and take top N
-        const TEST_RE =
-          AppStateManager.getInstance()
-            .getItem('config')
-            ?.testFilePatterns.map((p) => {
-              if (p instanceof RegExp) return p
-              if (typeof p === 'string') return new RegExp(p)
-              return null
-            })
-            .filter((p): p is RegExp => p !== null) ?? null
+        const testFileGlobs = getTestFileGlobs()
         const results: Array<{ symbol: (typeof symbols)[0]; score: number }> =
           []
         for (const [id, score] of sorted) {
           if (results.length >= maxLimit) break
           const sym = symbolMap.get(id)
           if (!sym) continue
-          if (exclude_tests && TEST_RE?.some((re) => re.test(sym.file_path))) {
+          if (exclude_tests && doesPathMatch(testFileGlobs, sym.file_path)) {
             continue
           }
           if (

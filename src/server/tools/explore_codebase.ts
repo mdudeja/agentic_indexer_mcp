@@ -3,10 +3,10 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { isNotNull, inArray, isNull } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
-import { AppStateManager } from 'src/state'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
 import { allContainerKinds } from 'src/utils/allContainerKinds'
 import { updateUsage } from 'src/utils/updateUsage'
+import { doesPathMatch, getEntryPointGlobs } from 'src/utils/pathGlobs'
 
 /** Transforms an input string into a valid node ID by removing any non-alphanumeric and non-underscore characters, replacing them with underscores. */
 function toNodeId(id: string): string {
@@ -88,12 +88,7 @@ export async function registerExploreCodebaseTool(server: McpServer) {
         const maxNodes = (max_nodes as number) ?? 80
         const includeUnresolved = (include_unresolved as boolean) ?? false
 
-        const entryPatterns =
-          AppStateManager.getInstance()
-            .getItem('config')
-            ?.entryPointPatterns.map((p) =>
-              p instanceof RegExp ? p : new RegExp(p),
-            ) ?? []
+        const entryPointGlobs = getEntryPointGlobs()
 
         const activeKinds: (keyof typeof schema.SymbolKind)[] = kind?.length
           ? kind
@@ -107,7 +102,7 @@ export async function registerExploreCodebaseTool(server: McpServer) {
 
         const entryPointFiles = new Set(
           allFiles
-            .filter((f) => entryPatterns.some((re) => re.test(f.path)))
+            .filter((f) => doesPathMatch(entryPointGlobs, f.path))
             .map((f) => f.path),
         )
 

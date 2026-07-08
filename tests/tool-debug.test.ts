@@ -1,5 +1,4 @@
 import { describe, expect, beforeAll, test } from 'bun:test'
-import { IndexerDB } from '../src/database/IndexerDB'
 import { registerSearchSymbolsTool } from '../src/server/tools/search_symbols'
 import { registerSemanticSearchSymbolsTool } from '../src/server/tools/semantic_search_symbols'
 import { registerGetTypeAtLocationTool } from '../src/server/tools/get_type_at_location'
@@ -29,7 +28,6 @@ import { registerGetCouplingMetricsTool } from '../src/server/tools/get_coupling
 import { registerAuditAgentConfigTool } from '../src/server/tools/audit_agent_config'
 import { registerExploreCodebaseTool } from '../src/server/tools/explore_codebase'
 import { registerGetTokenSavingsTool } from '../src/server/tools/get_token_savings'
-import { getStoreForTests } from '../scripts/test_setup'
 
 /** A mock server implementation for MCP (Message Communication Protocol), providing functionality to register tools with specified schemas and handler functions. */
 class MockMcpServer {
@@ -50,12 +48,9 @@ class MockMcpServer {
 }
 
 describe('MCP Tool debugging setup', () => {
-  let store: IndexerDB
   let mockServer: MockMcpServer
 
   beforeAll(async () => {
-    store = getStoreForTests()
-
     mockServer = new MockMcpServer()
     registerSearchSymbolsTool(mockServer as any)
     registerSemanticSearchSymbolsTool(mockServer as any)
@@ -92,6 +87,6 @@ describe('MCP Tool debugging setup', () => {
     const tool = mockServer.tools.get('get_blast_radius')
     expect(tool).toBeDefined()
 
-    const result = await tool?.handler({ symbol_name: 'IndexerDB' })
+    await tool?.handler({ symbol_name: 'IndexerDB' })
   })
 })

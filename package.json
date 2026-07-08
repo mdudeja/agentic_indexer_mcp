@@ -16,7 +16,7 @@
     "serve": "bun run --env-file .env index.ts serve",
     "inspect": "bun run index && mcp-inspector bun run --env-file .env index.ts serve",
     "lint": "bun tsc --noEmit",
-    "test": "bun test --env-file .env.test --timeout 0",
+    "test": "bun test --env-file .env.test",
     "build": "bun run --env-file .env scripts/build.ts"
   },
   "dependencies": {

@@ -104,6 +104,10 @@ async function main() {
   const config = await loadConfig(cwd)
   AppStateManager.getInstance().setItem('config', config)
   AppStateManager.getInstance().setItem('root', cwd)
+  AppStateManager.getInstance().setItem(
+    'includeGitIgnored',
+    values.includeGitIgnored ?? false,
+  )
 
   const store = IndexerDB.getInstance()
   await store.init()
@@ -122,7 +126,6 @@ async function main() {
       const pipeline = new IndexPipeline({
         cwd,
         store,
-        includeGitIgnored: values.includeGitIgnored ?? false,
       })
 
       await pipeline.run()
@@ -134,7 +137,6 @@ async function main() {
       const pipeline = new IndexPipeline({
         cwd,
         store,
-        includeGitIgnored: values.includeGitIgnored ?? false,
       })
 
       await pipeline.runEnhancementStep([])
@@ -152,7 +154,6 @@ async function main() {
       const pipeline = new IndexPipeline({
         cwd,
         store,
-        includeGitIgnored: true, // For single file indexing, we should include it even if it's gitignored
       })
 
       await pipeline.runOnFile(absPath)
@@ -170,7 +171,6 @@ async function main() {
       const pipeline = new IndexPipeline({
         cwd,
         store,
-        includeGitIgnored: true, // For single file enhancement, we should include it even if it's gitignored
       })
 
       await pipeline.enhanceFile(absPath)
@@ -181,7 +181,6 @@ async function main() {
       const pipeline = new IndexPipeline({
         cwd,
         store,
-        includeGitIgnored: true,
       })
       await pipeline.removeAllDocstrings(store)
       break

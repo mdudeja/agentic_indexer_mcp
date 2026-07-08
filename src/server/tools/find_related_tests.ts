@@ -1,8 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { AppStateManager } from 'src/state'
 import { updateUsage } from 'src/utils/updateUsage'
+import { doesPathMatch, getTestFileGlobs } from 'src/utils/pathGlobs'
 
 /** Registers a tool to find test files that exercise a given symbol or file. */
 export function registerFindRelatedTestsTool(server: McpServer) {
@@ -34,15 +34,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
       }),
     },
     async ({ target }) => {
-      const TEST_RE =
-        AppStateManager.getInstance()
-          .getItem('config')
-          ?.testFilePatterns.map((p) => {
-            if (p instanceof RegExp) return p
-            if (typeof p === 'string') return new RegExp(p)
-            return null
-          })
-          .filter((p): p is RegExp => p !== null) ?? null
+      const testFileGlobs = getTestFileGlobs()
 
       const store = IndexerDB.getInstance()
       try {
@@ -51,7 +43,7 @@ export function registerFindRelatedTestsTool(server: McpServer) {
         const allFiles = await store.files.getAll()
         const testFilePaths = new Set(
           allFiles
-            .filter((f) => TEST_RE?.some((re) => re.test(f.path)))
+            .filter((f) => doesPathMatch(testFileGlobs, f.path))
             .map((f) => f.path),
         )
 

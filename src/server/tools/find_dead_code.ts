@@ -4,9 +4,9 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { eq, and, isNull, isNotNull, inArray, sql } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { SymbolKind } from '../../database/schemas'
-import { AppStateManager } from 'src/state'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
 import { updateUsage } from 'src/utils/updateUsage'
+import { doesPathMatch, getTestFileGlobs } from 'src/utils/pathGlobs'
 
 const ALL_KINDS = Object.keys(SymbolKind) as (keyof typeof SymbolKind)[]
 
@@ -50,15 +50,7 @@ export function registerFindDeadCodeTool(server: McpServer) {
     },
     async ({ kind, exclude_tests, limit }) => {
       const store = IndexerDB.getInstance()
-      const TEST_RE =
-        AppStateManager.getInstance()
-          .getItem('config')
-          ?.testFilePatterns.map((p) => {
-            if (p instanceof RegExp) return p
-            if (typeof p === 'string') return new RegExp(p)
-            return null
-          })
-          .filter((p): p is RegExp => p !== null) ?? null
+      const testFileGlobs = getTestFileGlobs()
       try {
         const db = store.getDb()
         const kinds = (kind as string[] | undefined) ?? [...ALL_KINDS]
@@ -110,8 +102,9 @@ export function registerFindDeadCodeTool(server: McpServer) {
           .orderBy(schema.symbols.file_path, schema.symbols.line)
 
         const deadExports = exportedSymbols.filter((s) => {
-          if (exclude_tests && TEST_RE?.some((re) => re.test(s.file_path)))
+          if (exclude_tests && doesPathMatch(testFileGlobs, s.file_path)) {
             return false
+          }
           return (
             !importedNameSet.has(s.name) &&
             !calledIdSet.has(s.id) &&
@@ -139,8 +132,9 @@ export function registerFindDeadCodeTool(server: McpServer) {
           .orderBy(schema.symbols.file_path, schema.symbols.line)
 
         const deadInternal = internalSymbols.filter((s) => {
-          if (exclude_tests && TEST_RE?.some((re) => re.test(s.file_path)))
+          if (exclude_tests && doesPathMatch(testFileGlobs, s.file_path)) {
             return false
+          }
           return !calledIdSet.has(s.id) && !inheritanceCoveredIdSet.has(s.id)
         })
 

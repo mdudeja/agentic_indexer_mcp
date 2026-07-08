@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, isNull, inArray } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
-import { AppStateManager } from 'src/state'
 import { SymbolKind } from '../../database/schemas'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
 import { updateUsage } from 'src/utils/updateUsage'
+import { doesPathMatch, getTestFileGlobs } from 'src/utils/pathGlobs'
 
 /** Registers a tool to identify exported callable symbols that have no evidence of test coverage. */
 export async function registerGetUntestedSymbolsTool(server: McpServer) {
@@ -52,21 +52,13 @@ export async function registerGetUntestedSymbolsTool(server: McpServer) {
         const maxLimit = (limit as number) ?? 50
 
         // Resolve test file patterns from config
-        const TEST_RE =
-          AppStateManager.getInstance()
-            .getItem('config')
-            ?.testFilePatterns.map((p) => {
-              if (p instanceof RegExp) return p
-              if (typeof p === 'string') return new RegExp(p)
-              return null
-            })
-            .filter((p): p is RegExp => p !== null) ?? null
+        const testFileGlobs = getTestFileGlobs()
 
         // Get all indexed files
         const allFiles = await store.files.getAll()
         const testFilePaths = new Set(
           allFiles
-            .filter((f) => TEST_RE?.some((re) => re.test(f.path)))
+            .filter((f) => doesPathMatch(testFileGlobs, f.path))
             .map((f) => f.path),
         )
 

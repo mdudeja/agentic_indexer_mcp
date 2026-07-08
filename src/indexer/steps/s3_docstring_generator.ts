@@ -8,6 +8,10 @@ import { logDebug, logInfo, logWarning } from 'src/utils/logger'
 import { createProvider } from '../docstrings/providers'
 import { formatComment, getCommentText } from '../docstrings/formatComment'
 import type { DocstringProvider } from '../docstrings/providers/DocStringProvider'
+import {
+  doesPathMatch,
+  getExcludeDocstringGenerationGlobs,
+} from 'src/utils/pathGlobs'
 
 /** Generates and manages docstrings for code symbols based on configured settings, including generation of new docstrings and removal of existing ones. */
 export class DocstringGenerationStep {
@@ -27,14 +31,7 @@ export class DocstringGenerationStep {
 
     logInfo('[Indexer] Running Step 3: Docstring Generation...')
 
-    const TESTRE =
-      docCfg.exclude_generation_patterns
-        .map((p) => {
-          if (p instanceof RegExp) return p
-          if (typeof p === 'string') return new RegExp(p)
-          return null
-        })
-        .filter((p): p is RegExp => p !== null) ?? null
+    const excludeDocstringGenerationGlobs = getExcludeDocstringGenerationGlobs()
 
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
@@ -46,7 +43,7 @@ export class DocstringGenerationStep {
     }
 
     const relevantSymbols = symbols.filter(
-      (s) => !TESTRE?.some((re) => re.test(s.file_path)),
+      (s) => !doesPathMatch(excludeDocstringGenerationGlobs, s.file_path),
     )
     if (relevantSymbols.length === 0) {
       logInfo('[Indexer] No symbols need docstrings. Step 3 complete.')
@@ -99,16 +96,12 @@ export class DocstringGenerationStep {
     const targetKinds = await this.collectTargetKinds()
     if (targetKinds.length === 0) return
 
-    const TESTRE =
-      docCfg.exclude_generation_patterns
-        .map((p) => {
-          if (p instanceof RegExp) return p
-          if (typeof p === 'string') return new RegExp(p)
-          return null
-        })
-        .filter((p): p is RegExp => p !== null) ?? null
+    const excludeDocstringGenerationGlobs = getExcludeDocstringGenerationGlobs()
 
-    const isExcluded = TESTRE?.some((re) => re.test(relativePath))
+    const isExcluded = doesPathMatch(
+      excludeDocstringGenerationGlobs,
+      relativePath,
+    )
 
     if (isExcluded) {
       logInfo(

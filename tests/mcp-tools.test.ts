@@ -346,7 +346,7 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('No test files found')
+    expect(response.content[0].text).toContain('tests/sample.test.ts')
   })
 
   test('should resolve types via resolve_type tool', async () => {
@@ -385,7 +385,9 @@ describe('MCP Tools Integration Tests', () => {
     const response = await untestedTool.handler({})
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('No test files found')
+    expect(response.content[0].text).toContain(
+      'No untested exported symbols found',
+    )
   })
 
   test('should get symbol importance via get_symbol_importance tool', async () => {
@@ -618,12 +620,12 @@ describe('MCP Tools Integration Tests', () => {
     // B. All files covered by tests
     AppStateManager.getInstance().setItem('config', {
       ...originalConfig!,
-      testFilePatterns: [/.*/],
+      testFilePatterns: ['**/*.test.*', '**/*.spec.*'],
     })
     const resAllCovered = await tool.handler({})
     expect(resAllCovered.isError).toBeFalsy()
     expect(resAllCovered.content[0].text).toContain(
-      'All non-test files are imported by test files',
+      'No untested exported symbols found.',
     )
 
     AppStateManager.getInstance().setItem('config', originalConfig)
@@ -1377,14 +1379,15 @@ describe('MCP Tools Integration Tests', () => {
   test('find_dead_code edge cases and branches', async () => {
     const tool = mockServer.tools.get('find_dead_code')!
 
-    // Setup custom testFilePatterns to cover regex, string, and invalid config mapping branches
+    // Setup custom testFilePatterns to cover different glob patterns and invalid configuration for testing edge cases
     const originalConfig = AppStateManager.getInstance().getItem('config')
     AppStateManager.getInstance().setItem('config', {
       ...originalConfig!,
       testFilePatterns: [
-        /\.test\.ts$/, // regex
-        '\\.spec\\.ts$', // string pattern
-        12345 as any, // invalid configuration
+        '**/*.test.*',
+        '**/*.spec.*',
+        '**/tests/**',
+        '**/invalid[**', // Invalid glob pattern to test error handling
       ],
     })
 

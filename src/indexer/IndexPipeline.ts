@@ -14,6 +14,7 @@ import { OllamaEmbeddingGenerator } from './embedders/OllamaEmbeddingGenerator.t
 import { hashFileContent } from 'src/utils/hashers.ts'
 import { PythonLspEnhancer } from './enhancers/PythonLspEnhancer.ts'
 import { TypescriptLspEnhancer } from './enhancers/TypescriptLspEnhancer.ts'
+import { FileManager } from './FileManager.ts'
 
 const embedderNameToClass: Record<string, new () => EmbeddingGenerator> = {
   ollama: OllamaEmbeddingGenerator,
@@ -22,15 +23,14 @@ const embedderNameToClass: Record<string, new () => EmbeddingGenerator> = {
 interface IndexPipelineOptions {
   cwd: string
   store: IndexerDB
-  includeGitIgnored: boolean
 }
 
 /** Manages the overall indexing process, orchestrating symbol extraction, enhancement, and docstring processing for a project. */
 export class IndexPipeline {
   private indexer: TreeSitterIndexer
   private config: IndexerConfig
-  private ignoreRegexPatterns: Set<RegExp> = new Set()
   private embedders: Record<string, EmbeddingGenerator> = {}
+  private fileManager?: FileManager
 
   /** Constructs a new IndexPipeline instance using provided configuration options. Initializes necessary components for indexing operations. */
   constructor(private options: IndexPipelineOptions) {
@@ -46,81 +46,9 @@ export class IndexPipeline {
     }
   }
 
-  /** Finds all `.gitignore` files in the specified directory and its subdirectories, returning their absolute paths. */
-  async findGitignoreFiles(
-    dir: string,
-    foundFiles: string[] = [],
-  ): Promise<string[]> {
-    const files = await readdir(dir)
-
-    for (const file of files) {
-      const absPath = join(dir, file)
-      const stats = await stat(absPath)
-
-      if (stats.isDirectory()) {
-        await this.findGitignoreFiles(absPath, foundFiles)
-      } else if (file === '.gitignore') {
-        foundFiles.push(absPath)
-      }
-    }
-
-    return foundFiles
-  }
-
-  /** Populates a set of regular expression patterns based on configured ignore patterns and Gitignore files, enabling file matching for exclusion purposes. */
-  async populateIgnorePatterns() {
-    for (const pattern of this.config.ignore_patterns) {
-      const regex = new RegExp(
-        pattern
-          .split('*')
-          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-          .join('.*'),
-      )
-      this.ignoreRegexPatterns.add(regex)
-    }
-
-    if (this.options.includeGitIgnored) {
-      return
-    }
-
-    // get all gitignore files from the workspace and add their patterns to the ignore list
-    const gitignoreFiles = await this.findGitignoreFiles(this.options.cwd)
-
-    for (const gitignoreFile of gitignoreFiles) {
-      if (
-        [...this.ignoreRegexPatterns].some((pattern) =>
-          pattern.test(gitignoreFile),
-        )
-      ) {
-        continue
-      }
-      const content = await Bun.file(gitignoreFile).text()
-      const patterns = content
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith('#'))
-
-      for (const pattern of patterns) {
-        const regex = new RegExp(
-          pattern
-            .split('*')
-            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-            .join('.*'),
-        )
-        this.ignoreRegexPatterns.add(regex)
-      }
-    }
-  }
-
   /** Runs the indexing pipeline, orchestrating symbol extraction, enhancement, docstring, and embedding processing for the project. */
   async run() {
     logInfo(`[Indexer] Starting index pipeline in ${this.options.cwd}...`)
-    if (
-      this.config.ignore_patterns.length > 0 &&
-      this.ignoreRegexPatterns.size === 0
-    ) {
-      await this.populateIgnorePatterns()
-    }
 
     const processedFiles = await this.runSymbolExtractionStep()
 
@@ -133,15 +61,13 @@ export class IndexPipeline {
 
   /** Processes a file at the specified absolute path, checks for changes, parses content, updates store with new data, and returns the relative path if successful. Returns null if the file is ignored or processing fails. */
   async runOnFile(absPath: string): Promise<string | null> {
-    if (
-      this.config.ignore_patterns.length > 0 &&
-      this.ignoreRegexPatterns.size === 0
-    ) {
-      await this.populateIgnorePatterns()
+    const relPath = relative(this.options.cwd, absPath)
+
+    if (!this.fileManager) {
+      this.fileManager = await FileManager.getInstance()
     }
 
-    const relPath = relative(this.options.cwd, absPath)
-    if ([...this.ignoreRegexPatterns].some((regex) => regex.test(relPath))) {
+    if (this.fileManager.isPathIgnored(absPath)) {
       return null
     }
 
@@ -199,13 +125,17 @@ export class IndexPipeline {
   ): Promise<string[]> {
     const files = await readdir(dir)
 
+    if (!this.fileManager) {
+      this.fileManager = await FileManager.getInstance()
+    }
+
     for (const file of files) {
-      const relPath = relative(this.options.cwd, join(dir, file))
-      if ([...this.ignoreRegexPatterns].some((regex) => regex.test(relPath))) {
+      const absPath = join(dir, file)
+
+      if (this.fileManager.isPathIgnored(absPath)) {
         continue
       }
 
-      const absPath = join(dir, file)
       const stats = await stat(absPath)
 
       if (stats.isDirectory()) {
@@ -335,7 +265,6 @@ export class IndexPipeline {
   /** Runs an enhancement step to improve symbol information in processed files by leveraging type-specific enhancers for better indexing and analysis. */
   async runEnhancementStep(processedFiles: string[]): Promise<void> {
     if (!processedFiles || processedFiles.length === 0) {
-      await this.populateIgnorePatterns()
       const files = await this.findFiles(this.options.cwd)
       processedFiles = files.map((absPath) =>
         relative(this.options.cwd, absPath),

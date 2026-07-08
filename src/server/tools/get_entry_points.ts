@@ -2,11 +2,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, and, isNull, inArray, SQL } from 'drizzle-orm'
+import { eq, and, inArray, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import type { SymbolKind } from '../../database/schemas'
-import { AppStateManager } from 'src/state'
 import { updateUsage } from 'src/utils/updateUsage'
+import { doesPathMatch, getTestFileGlobs } from 'src/utils/pathGlobs'
 
 const ALL_KINDS = [
   'function',
@@ -82,17 +82,9 @@ export function registerGetEntryPointsTool(server: McpServer) {
           .orderBy(schema.symbols.file_path, schema.symbols.line)
 
         if (exclude_tests) {
-          const TEST_RE =
-            AppStateManager.getInstance()
-              .getItem('config')
-              ?.testFilePatterns.map((p) => {
-                if (p instanceof RegExp) return p
-                if (typeof p === 'string') return new RegExp(p)
-                return null
-              })
-              .filter((p): p is RegExp => p !== null) ?? null
+          const testFileGlobs = getTestFileGlobs()
           results = results.filter(
-            (s) => !TEST_RE?.some((re) => re.test(s.file_path)),
+            (s) => !doesPathMatch(testFileGlobs, s.file_path),
           )
         }
 

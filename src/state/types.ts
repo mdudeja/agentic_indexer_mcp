@@ -6,6 +6,7 @@ import type { Watcher } from 'src/watcher/Watcher'
 export type AppState = {
   root?: string
   config?: IndexerConfig
+  includeGitIgnored?: boolean
   server?: McpServer
   watcher?: Watcher
   lspEnhancers?: Map<string, Enhancer>

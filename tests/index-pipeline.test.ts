@@ -1,16 +1,13 @@
 import { describe, expect, beforeAll, test } from 'bun:test'
-import { IndexPipeline } from '../src/indexer/IndexPipeline'
 import { IndexerDB } from '../src/database/IndexerDB'
 import * as schema from '../src/database/schemas'
-import { getPipelineForTests, getStoreForTests } from '../scripts/test_setup'
+import { getStoreForTests } from '../scripts/test_setup'
 
 describe('IndexPipeline Integration Tests', () => {
   let store: IndexerDB
-  let pipeline: IndexPipeline
 
   beforeAll(async () => {
     store = getStoreForTests()
-    pipeline = getPipelineForTests()
   })
 
   test('should populate the database correctly', async () => {

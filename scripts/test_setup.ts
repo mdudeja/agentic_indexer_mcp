@@ -9,6 +9,7 @@ import { resolvePath } from 'src/utils/paths'
 
 let store: IndexerDB
 let pipeline: IndexPipeline
+let appStateManager: AppStateManager
 
 /** Clears all test database files and ensures a clean testing environment by removing associated data files and directories. */
 export function clearDB() {
@@ -45,8 +46,10 @@ async function prepareTestEnvironment() {
   // 1. Setup AppState config
   const config = await loadConfig(fixturePath)
 
-  AppStateManager.getInstance().setItem('config', config)
-  AppStateManager.getInstance().setItem('root', fixturePath)
+  appStateManager = AppStateManager.getInstance()
+  appStateManager.setItem('config', config)
+  appStateManager.setItem('root', fixturePath)
+  appStateManager.setItem('includeGitIgnored', false)
 
   // 2. Initialize In-Memory DB
   store = IndexerDB.getInstance()
@@ -56,7 +59,6 @@ async function prepareTestEnvironment() {
   pipeline = new IndexPipeline({
     cwd: fixturePath,
     store,
-    includeGitIgnored: true,
   })
 
   await pipeline.run()
@@ -70,6 +72,11 @@ export function getPipelineForTests(): IndexPipeline {
 /** Retrieves the store instance for use in test environments. */
 export function getStoreForTests(): IndexerDB {
   return store
+}
+
+/** Retrieves the application state manager instance, intended for use in test environments. */
+export function getAppStateManagerForTests(): AppStateManager {
+  return appStateManager
 }
 
 beforeAll(async () => {

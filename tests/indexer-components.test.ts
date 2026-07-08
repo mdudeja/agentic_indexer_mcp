@@ -12,6 +12,7 @@ import { DocstringGenerationStep } from '../src/indexer/steps/s3_docstring_gener
 import { GenericLspEnhancer } from '../src/indexer/enhancers/GenericLspEnhancer'
 import { PythonLspEnhancer } from '../src/indexer/enhancers/PythonLspEnhancer'
 import { TypescriptLspEnhancer } from '../src/indexer/enhancers/TypescriptLspEnhancer'
+import type { DocstringConfig } from 'src/config/types'
 
 describe('Indexer Components Unit Tests', () => {
   test('should format comments correctly using formatComment and getCommentText', () => {
@@ -29,6 +30,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'claude',
       write_to_file: false,
       claude: { api_key: 'dummy_key', model: 'dummy_model' },
+      exclude_generation_patterns: [],
     })
     expect(claude).toBeInstanceOf(ClaudeProvider)
 
@@ -37,6 +39,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'gemini',
       write_to_file: false,
       gemini: { api_key: 'dummy_key', model: 'dummy_model' },
+      exclude_generation_patterns: [],
     })
     expect(gemini).toBeInstanceOf(GeminiProvider)
 
@@ -45,6 +48,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'openai',
       write_to_file: false,
       openai: { api_key: 'dummy_key', model: 'dummy_model' },
+      exclude_generation_patterns: [],
     })
     expect(openai).toBeInstanceOf(OpenAIProvider)
 
@@ -53,6 +57,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'ollama',
       write_to_file: false,
       ollama: { model: 'dummy_model', base_url: 'http://localhost:11434' },
+      exclude_generation_patterns: [],
     })
     expect(ollama).toBeInstanceOf(OllamaProvider)
   })
@@ -99,7 +104,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'claude',
       write_to_file: false,
       claude: { api_key: '', model: 'dummy_model' },
-    })
+    } as unknown as DocstringConfig)
     expect(claude).toBeNull()
 
     const gemini = createProvider({
@@ -107,7 +112,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'gemini',
       write_to_file: false,
       gemini: { api_key: '', model: 'dummy_model' },
-    })
+    } as unknown as DocstringConfig)
     expect(gemini).toBeNull()
 
     const openai = createProvider({
@@ -115,7 +120,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'openai',
       write_to_file: false,
       openai: { api_key: '', model: 'dummy_model' },
-    })
+    } as unknown as DocstringConfig)
     expect(openai).toBeNull()
 
     const ollama = createProvider({
@@ -123,7 +128,7 @@ describe('Indexer Components Unit Tests', () => {
       provider: 'ollama',
       write_to_file: false,
       ollama: { model: '', base_url: 'http://localhost:11434' },
-    })
+    } as unknown as DocstringConfig)
     expect(ollama).toBeNull()
   })
 
@@ -131,9 +136,12 @@ describe('Indexer Components Unit Tests', () => {
     const originalFetch = globalThis.fetch
 
     globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        content: [{ type: 'text', text: 'Claude docstring' }]
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          content: [{ type: 'text', text: 'Claude docstring' }],
+        }),
+        { status: 200 },
+      )
     }) as any
     const provider = new ClaudeProvider({ api_key: 'key', model: 'model' })
     const res = await provider.generate('prompt')
@@ -146,9 +154,12 @@ describe('Indexer Components Unit Tests', () => {
     expect(resError).toBeNull()
 
     globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        content: [{ type: 'image', text: 'ignored' }]
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          content: [{ type: 'image', text: 'ignored' }],
+        }),
+        { status: 200 },
+      )
     }) as any
     const resNoText = await provider.generate('prompt')
     expect(resNoText).toBeNull()
@@ -160,9 +171,12 @@ describe('Indexer Components Unit Tests', () => {
     const originalFetch = globalThis.fetch
 
     globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        candidates: [{ content: { parts: [{ text: 'Gemini docstring' }] } }]
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'Gemini docstring' }] } }],
+        }),
+        { status: 200 },
+      )
     }) as any
     const provider = new GeminiProvider({ api_key: 'key', model: 'model' })
     const res = await provider.generate('prompt')
@@ -175,9 +189,12 @@ describe('Indexer Components Unit Tests', () => {
     expect(resError).toBeNull()
 
     globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        candidates: []
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          candidates: [],
+        }),
+        { status: 200 },
+      )
     }) as any
     const resNoParts = await provider.generate('prompt')
     expect(resNoParts).toBeNull()
@@ -189,9 +206,12 @@ describe('Indexer Components Unit Tests', () => {
     const originalFetch = globalThis.fetch
 
     globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        output: [{ content: [{ text: 'OpenAI docstring' }] }]
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          output: [{ content: [{ text: 'OpenAI docstring' }] }],
+        }),
+        { status: 200 },
+      )
     }) as any
     const provider = new OpenAIProvider({ api_key: 'key', model: 'model' })
     const res = await provider.generate('prompt')
@@ -216,7 +236,9 @@ describe('Indexer Components Unit Tests', () => {
     const originalFetch = globalThis.fetch
 
     globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({ response: 'Ollama docstring' }), { status: 200 })
+      return new Response(JSON.stringify({ response: 'Ollama docstring' }), {
+        status: 200,
+      })
     }) as any
     const provider = new OllamaProvider('model', 'http://localhost')
     const res = await provider.generate('prompt')
@@ -237,4 +259,3 @@ describe('Indexer Components Unit Tests', () => {
     globalThis.fetch = originalFetch
   })
 })
-

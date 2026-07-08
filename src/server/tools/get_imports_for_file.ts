@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
-import { eq, like } from 'drizzle-orm'
+import { like } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
 
