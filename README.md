@@ -41,7 +41,7 @@ When an AI agent (like Claude Desktop, Cursor, Cline, or Windsurf) needs context
   - OpenAI (GPT-3.5, GPT-4)
   - Claude (Anthropic)
   - Gemini (Google)
-- Providers can be configured in `.agentic/config.json` with their respective API keys or local endpoints. You don't need to store API keys in the json file for every repo. Those can be stored in the `.env` file in the root of the cloned repo. Similarly, for any config parameters that you want applied globally, you can change the default config in `src/config/default_config.ts` and rebuild the MCP server. Any local repo config will override the default config.
+- Providers can be configured in `.agentic/config.json` with their respective API keys or local endpoints. For more information about configuring providers and other config parameters, see the [Configuration](#configuration) section below.
 
 ### Setup
 - Clone the repository and install dependencies:
@@ -84,11 +84,24 @@ agentic-indexer index [--cwd /path/to/your/project]
   }
 }
 ```
+
+### Uninstallation
+- To uninstall the MCP server, run:
+```bash
+cd /path/to/agentic_indexer_mcp
+bun unlink
+```
 ---
 
 ## Configuration
 
-Custom configuration can be specified in `.agentic/config.json` at the root of your workspace:
+Custom configuration can be specified in `.agentic/config.json` at the root of your workspace. In a new project, you can run the `init` command to generate a default config file:
+
+```bash
+agentic-indexer init [--cwd /path/to/your/project]
+```
+
+This will create a `.agentic/config.json` file with default settings. You can then edit this file to customize the behavior of the indexer, including enabling or disabling features, specifying ignore patterns, and configuring docstring generation. If the `.env` file in repo directory of MCP server, the config file will have those as well. This way, you have a single source of truth for your API keys and other sensitive information. You can change these in the config.json file of your project if needed. Example (partial) config looks something like this -
 
 ```json
 {
@@ -103,6 +116,9 @@ Custom configuration can be specified in `.agentic/config.json` at the root of y
   }
 }
 ```
+
+> ⚠️ [!IMPORTANT]
+> It is generally a good idea to add `.agentic` directory to your `.gitignore` file to avoid committing sensitive information, generated files, or the database.
 
 Refer to [src/config/default_config.ts] for default settings, including supported language extensions, ignore paths, test file regexes, and entry point patterns.
 
@@ -169,44 +185,50 @@ The server registers 29 specialized tools over `stdio`. They are grouped logical
 
 ### CLI Commands
 
-The core commands leverage `index.ts` to manage your environment:
+The core commands leverage `index.ts` to manage your environment. All commands support an optional `--cwd` argument to specify the target project directory. If omitted, the current working directory is used.
 
 1. **Index a workspace (One-off Build):**
    Run the initial parser pass on your codebase.
 
    ```bash
-   agentic-indexer index --cwd /path/to/your/project
+   agentic-indexer index [--cwd /path/to/your/project]
+   ```
+2. **Init a Workspace:**
+   Create a `.agentic/config.json` file in your project root with default settings.
+
+   ```bash
+   agentic-indexer init [--cwd /path/to/your/project]
    ```
 
-2. **Index a Single File:**
+3. **Index a Single File:**
    Re-index only a specific file.
 
    ```bash
-   agentic-indexer index-file --cwd /path/to/your/project --file /path/to/your/file.ts
+   agentic-indexer index-file [--cwd /path/to/your/project] --file /path/to/your/file.ts
    ```
 
-3. **Remove Generated Docstrings:**
+4. **Remove Generated Docstrings:**
    Delete all generated docstrings from and database (optionally) source files.
 
    ```bash
-   agentic-indexer remove-docstrings --cwd /path/to/your/project
+   agentic-indexer remove-docstrings [--cwd /path/to/your/project]
    ```
 
-4. **Query the Index locally:**
+5. **Query the Index locally:**
    Search for symbols via the CLI.
 
    ```bash
-   agentic-indexer query --cwd /path/to/your/project -q "auth*" -k "function"
+   agentic-indexer query [--cwd /path/to/your/project] -q "auth*" -k "function"
    ```
 
-5. **Start the MCP Server:**
+6. **Start the MCP Server:**
    Start the stdio MCP server for agent integration.
 
    ```bash
-   agentic-indexer serve --cwd /path/to/your/project
+   agentic-indexer serve [--cwd /path/to/your/project]
    ```
 
-6. **Inspect the MCP Server (while debugging, from within the cloned repo only):**
+7. **Inspect the MCP Server (while debugging, from within the cloned repo only):**
    Launch the MCP Inspector to debug tools.
    ```bash
    bun run inspect

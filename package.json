@@ -8,6 +8,7 @@
   "scripts": {
     "start": "bun run --env-file .env index.ts serve",
     "index": "bun run --env-file .env index.ts index",
+    "init": "bun run --env-file .env index.ts init",
     "enhance": "bun run --env-file .env index.ts enhance",
     "index-file": "bun run --env-file .env index.ts index-file",
     "enhance-file": "bun run --env-file .env index.ts enhance-file",

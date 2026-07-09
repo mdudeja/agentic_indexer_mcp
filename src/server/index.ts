@@ -48,7 +48,7 @@ export async function stopMcpServer() {
   if (!watcher) {
     logInfo(`[indexer] No file system watcher found to stop`)
   } else {
-    watcher.stop()
+    await watcher.stop()
     logInfo(`[indexer] File system watcher stopped`)
   }
 

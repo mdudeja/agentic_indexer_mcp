@@ -6,7 +6,7 @@ import { IndexerDB } from './src/database/IndexerDB'
 import type { SymbolKind } from './src/config/types'
 import { logWarning } from 'src/utils/logger'
 import { resolvePath } from 'src/utils/paths'
-import { loadConfig } from 'src/config/loader'
+import { loadConfig, saveConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
 import { version } from './package.json'
 
@@ -78,9 +78,10 @@ if (values.help || !command) {
 Usage: agentic-indexer <command> [options]
 
 Commands:
+  init                Initialize the workspace (create config file)
+  index               Run a one-off index of the workspace
   serve               Run the MCP server (reads over stdio)
   stop                Stop the MCP server
-  index               Run a one-off index of the workspace
   enhance             Run a one-off enhancement of the workspace
   index-file          Index a single file (provide path via --file option)
   enhance-file        Enhance the symbol information for a single file (provide path via --file option)
@@ -122,6 +123,7 @@ async function main() {
       process.exit(0)
 
     case 'index': {
+      await saveConfig(cwd, config)
       logWarning(`Running index on ${cwd}`)
       const pipeline = new IndexPipeline({
         cwd,
@@ -129,6 +131,11 @@ async function main() {
       })
 
       await pipeline.run()
+      process.exit(0)
+    }
+
+    case 'init': {
+      await saveConfig(cwd, config)
       process.exit(0)
     }
 

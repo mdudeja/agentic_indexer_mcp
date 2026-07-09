@@ -2,7 +2,7 @@ import { default_config } from './default_config'
 import { join } from 'node:path'
 import type { IndexerConfig } from './types'
 import { existsSync } from 'node:fs'
-import { logError, logWarning } from 'src/utils/logger'
+import { logError, logInfo, logWarning } from 'src/utils/logger'
 
 /** Load the configuration for the indexer by checking the specified directory and files. If a valid configuration file is found, use its settings; otherwise, default values are applied, with special attention to docstring generation preferences. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
@@ -63,5 +63,27 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
     )
     logError('', err)
     return default_config.indexer
+  }
+}
+
+export async function saveConfig(
+  rootDir: string,
+  config: IndexerConfig,
+): Promise<void> {
+  const AGENTIC_DIR = process.env.AGENTIC_DIR || '.agentic'
+  const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.json'
+
+  const configPath = join(rootDir, AGENTIC_DIR, CONFIG_FILENAME)
+
+  if (existsSync(configPath)) {
+    logWarning(`Config file already exists at ${configPath}, skipping.`)
+    return
+  }
+
+  try {
+    await Bun.write(configPath, JSON.stringify({ indexer: config }, null, 2))
+    logInfo(`Config saved to ${configPath}`)
+  } catch (err) {
+    logError(`Failed to save config file at ${configPath}.`, err)
   }
 }

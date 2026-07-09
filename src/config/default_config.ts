@@ -95,9 +95,9 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       },
     },
     docstring_generation: {
-      enabled: true,
+      enabled: false,
       provider: 'ollama',
-      write_to_file: true,
+      write_to_file: false,
       exclude_generation_patterns: [
         '**/tests/fixtures/**',
         '**/__tests__/fixtures/**',
