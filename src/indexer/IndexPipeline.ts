@@ -15,10 +15,12 @@ import { hashFileContent } from 'src/utils/hashers.ts'
 import { PythonLspEnhancer } from './enhancers/PythonLspEnhancer.ts'
 import { TypescriptLspEnhancer } from './enhancers/TypescriptLspEnhancer.ts'
 import { FileManager } from './FileManager.ts'
+import { resolveWorkspacePath } from 'src/utils/paths.ts'
 
-const embedderNameToClass: Record<string, new () => EmbeddingGenerator> = {
-  ollama: OllamaEmbeddingGenerator,
-}
+export const embedderNameToClass: Record<string, new () => EmbeddingGenerator> =
+  {
+    ollama: OllamaEmbeddingGenerator,
+  }
 
 interface IndexPipelineOptions {
   cwd: string
@@ -44,6 +46,7 @@ export class IndexPipeline {
       agent_config_candidates: [],
       entryPointPatterns: [],
     }
+    this.fileManager = AppStateManager.getInstance().getItem('fileManager')
   }
 
   /** Runs the indexing pipeline, orchestrating symbol extraction, enhancement, docstring, and embedding processing for the project. */
@@ -65,6 +68,7 @@ export class IndexPipeline {
 
     if (!this.fileManager) {
       this.fileManager = await FileManager.getInstance()
+      AppStateManager.getInstance().setItem('fileManager', this.fileManager)
     }
 
     if (this.fileManager.isPathIgnored(absPath)) {
@@ -127,25 +131,30 @@ export class IndexPipeline {
 
     if (!this.fileManager) {
       this.fileManager = await FileManager.getInstance()
+      AppStateManager.getInstance().setItem('fileManager', this.fileManager)
     }
 
-    for (const file of files) {
-      const absPath = join(dir, file)
+    try {
+      for (const file of files) {
+        const absPath = resolveWorkspacePath(join(dir, file))
 
-      if (this.fileManager.isPathIgnored(absPath)) {
-        continue
+        if (this.fileManager.isPathIgnored(absPath)) {
+          continue
+        }
+
+        const stats = await stat(absPath)
+
+        if (stats.isDirectory()) {
+          await this.findFiles(absPath, fileList)
+        } else {
+          fileList.push(absPath)
+        }
       }
-
-      const stats = await stat(absPath)
-
-      if (stats.isDirectory()) {
-        await this.findFiles(absPath, fileList)
-      } else {
-        fileList.push(absPath)
-      }
+      return fileList
+    } catch (e) {
+      logError(`[Indexer] Error while finding files in ${dir}:`, e)
+      return []
     }
-
-    return fileList
   }
 
   /** "Runs a step to extract symbols from source files using Tree-sitter. Processes each file and collects paths of successfully processed files." */
@@ -219,11 +228,13 @@ export class IndexPipeline {
     if (initialized) {
       enhancerMap!.set(ext, enhancer)
       AppStateManager.getInstance().setItem('lspEnhancers', enhancerMap!)
-      logInfo(`[Indexer] Loaded GenericLspEnhancer for .${ext} files.`)
+      logInfo(
+        `[Indexer] Loaded ${enhancer.constructor.name} for .${ext} files.`,
+      )
       return enhancer
     } else {
       logError(
-        `[Indexer] Failed to initialize GenericLspEnhancer for .${ext} files. It will be skipped.`,
+        `[Indexer] Failed to initialize ${enhancer.constructor.name} for .${ext} files. It will be skipped.`,
       )
       return null
     }
@@ -252,13 +263,13 @@ export class IndexPipeline {
     const initialized = await embeddor.init()
     if (!initialized) {
       logError(
-        '[Indexer] Failed to initialize embeddor. Skipping embedding generation.',
+        `[Indexer] Failed to initialize ${embeddor.constructor.name}. Skipping embedding generation.`,
       )
       return null
     }
 
     this.embedders[this.config.embedder.provider] = embeddor
-    logInfo('[Indexer] Loaded embeddor.')
+    logInfo(`[Indexer] Loaded ${embeddor.constructor.name}.`)
     return embeddor
   }
 
@@ -284,24 +295,32 @@ export class IndexPipeline {
       processedFilesByExt[ext].push(file)
     }
 
-    for (const ext in processedFilesByExt) {
-      const enhancer = await this.loadEnhancerForFileType(ext)
-      if (enhancer) {
-        // Notify LSP of any file content changes before querying it
-        for (const relPath of processedFilesByExt[ext]!) {
-          enhancer.refreshFile(join(this.options.cwd, relPath))
+    try {
+      for (const ext in processedFilesByExt) {
+        const enhancer = await this.loadEnhancerForFileType(ext)
+        if (enhancer) {
+          // Notify LSP of any file content changes before querying it
+          for (const relPath of processedFilesByExt[ext]!) {
+            enhancer.refreshFile(
+              resolveWorkspacePath(join(this.options.cwd, relPath)),
+            )
+          }
+
+          await enhancer.prepareFiles(processedFilesByExt[ext]!)
+          await enhancer.enhanceSymbolTypesForCallables(
+            processedFilesByExt[ext]!,
+          )
+          await enhancer.enhanceInterfaceInheritence(processedFilesByExt[ext]!)
+          await enhancer.enhanceTypeInheritence(processedFilesByExt[ext]!)
+          await enhancer.resolveAllPendingCalls(processedFilesByExt[ext]!)
+          await enhancer.closeFiles(processedFilesByExt[ext]!)
         }
-
-        await enhancer.prepareFiles(processedFilesByExt[ext]!)
-        await enhancer.enhanceSymbolTypesForCallables(processedFilesByExt[ext]!)
-        await enhancer.enhanceInterfaceInheritence(processedFilesByExt[ext]!)
-        await enhancer.enhanceTypeInheritence(processedFilesByExt[ext]!)
-        await enhancer.resolveAllPendingCalls(processedFilesByExt[ext]!)
-        await enhancer.closeFiles(processedFilesByExt[ext]!)
       }
-    }
 
-    logInfo(`[Indexer] Step 2 complete.`)
+      logInfo(`[Indexer] Step 2 complete.`)
+    } catch (e) {
+      logError(`[Indexer] Error during enhancement step:`, e)
+    }
   }
 
   /** Runs the step responsible for generating docstrings as part of the documentation process. */

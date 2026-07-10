@@ -5,7 +5,7 @@ import { IndexPipeline } from './src/indexer/IndexPipeline'
 import { IndexerDB } from './src/database/IndexerDB'
 import type { SymbolKind } from './src/config/types'
 import { logWarning } from 'src/utils/logger'
-import { resolvePath } from 'src/utils/paths'
+import { resolvePath, resolveWorkspacePath } from 'src/utils/paths'
 import { loadConfig, saveConfig } from 'src/config/loader'
 import { AppStateManager } from 'src/state'
 import { version } from './package.json'
@@ -156,7 +156,7 @@ async function main() {
         process.exit(1)
       }
 
-      const absPath = resolvePath(values.file)
+      const absPath = resolveWorkspacePath(values.file)
       logWarning(`Indexing single file: ${absPath}`)
       const pipeline = new IndexPipeline({
         cwd,
@@ -173,7 +173,7 @@ async function main() {
         process.exit(1)
       }
 
-      const absPath = resolvePath(values.file)
+      const absPath = resolveWorkspacePath(values.file)
       logWarning(`Enhancing single file: ${absPath}`)
       const pipeline = new IndexPipeline({
         cwd,

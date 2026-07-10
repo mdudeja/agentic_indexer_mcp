@@ -9,6 +9,7 @@ import {
   linkNegatedGlobs,
   type GlobData,
 } from 'src/utils/pathGlobs'
+import { resolveWorkspacePath } from 'src/utils/paths'
 
 /** A utility class for managing file operations, including handling ignore patterns from configuration and .gitignore files to determine which files should be excluded. */
 export class FileManager {
@@ -50,18 +51,22 @@ export class FileManager {
   ): Promise<string[]> {
     const files = await readdir(dir)
 
-    for (const file of files) {
-      const absPath = join(dir, file)
-      const stats = statSync(absPath)
+    try {
+      for (const file of files) {
+        const absPath = resolveWorkspacePath(join(dir, file))
+        const stats = statSync(absPath)
 
-      if (stats.isDirectory()) {
-        await this.findGitignoreFiles(absPath, foundFiles)
-      } else if (file === '.gitignore') {
-        foundFiles.push(absPath)
+        if (stats.isDirectory()) {
+          await this.findGitignoreFiles(absPath, foundFiles)
+        } else if (file === '.gitignore') {
+          foundFiles.push(absPath)
+        }
       }
+      return foundFiles
+    } catch (error) {
+      logDebug(`Error while reading directory ${dir}: ${error}`)
+      return []
     }
-
-    return foundFiles
   }
 
   /** Checks if the given relative path matches any of the ignore globs, indicating that the file should be ignored. */

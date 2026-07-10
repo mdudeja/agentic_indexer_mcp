@@ -15,6 +15,7 @@ import {
   parseArguments,
   parseTypeNames,
 } from 'src/utils/misc.ts'
+import { resolveWorkspacePath } from 'src/utils/paths.ts'
 
 /** Enhancer implementation that connects to standard Language Servers (like typescript language server, Pyright, or gopls) for runtime type queries. */
 export class GenericLspEnhancer implements Enhancer {
@@ -145,29 +146,45 @@ export class GenericLspEnhancer implements Enhancer {
   async prepareFiles(relPaths: string[]): Promise<void> {
     if (!this.available || !this.client) return
 
-    const absPaths = relPaths.map((relPath) => join(this.cwd, relPath))
-    for (const absPath of absPaths) {
-      this.ensureFileOpen(absPath)
-    }
+    try {
+      const absPaths = relPaths.map((relPath) =>
+        resolveWorkspacePath(join(this.cwd, relPath)),
+      )
+      for (const absPath of absPaths) {
+        this.ensureFileOpen(absPath)
+      }
 
-    logInfo(
-      `[LSP Enhancer - ${this.languageId}] Waiting for LSP to finish analyzing ${absPaths.length} files before enhancement...`,
-    )
-    await this.client.waitForDiagnostics(absPaths)
+      logInfo(
+        `[LSP Enhancer - ${this.languageId}] Waiting for LSP to finish analyzing ${absPaths.length} files before enhancement...`,
+      )
+      await this.client.waitForDiagnostics(absPaths)
+    } catch (err) {
+      logError(
+        `[LSP Enhancer - ${this.languageId}] Failed to prepare files for enhancement:`,
+        err,
+      )
+    }
   }
 
   /** Closes the specified files by sending notifications to the language server and removing them from the list of open documents. */
   async closeFiles(relPaths: string[]): Promise<void> {
     if (!this.client) return
-    for (const relPath of relPaths) {
-      const absPath = join(this.cwd, relPath)
-      if (!this.openDocuments.has(absPath)) continue
-      this.client.notify('textDocument/didClose', {
-        textDocument: {
-          uri: `file://${absPath}`,
-        },
-      })
-      this.openDocuments.delete(absPath)
+    try {
+      for (const relPath of relPaths) {
+        const absPath = resolveWorkspacePath(join(this.cwd, relPath))
+        if (!this.openDocuments.has(absPath)) continue
+        this.client.notify('textDocument/didClose', {
+          textDocument: {
+            uri: `file://${absPath}`,
+          },
+        })
+        this.openDocuments.delete(absPath)
+      }
+    } catch (err) {
+      logError(
+        `[LSP Enhancer - ${this.languageId}] Failed to close files:`,
+        err,
+      )
     }
   }
 
@@ -274,9 +291,9 @@ export class GenericLspEnhancer implements Enhancer {
     const hits: ImplementationHit[] = []
 
     for (const sym of interfaceSymbols) {
-      const absPath = join(this.cwd, sym.file_path)
-      this.ensureFileOpen(absPath)
       try {
+        const absPath = resolveWorkspacePath(join(this.cwd, sym.file_path))
+        this.ensureFileOpen(absPath)
         const response = await this.client.request(
           'textDocument/implementation',
           {
@@ -610,10 +627,15 @@ export class GenericLspEnhancer implements Enhancer {
     for (const sym of callableSymbols) {
       const references = await this.getReferencesForSymbol(
         sym.name,
-        join(this.cwd, sym.file_path),
+        resolveWorkspacePath(join(this.cwd, sym.file_path)),
         sym.line,
         sym.column,
-      )
+      ).catch((err) => {
+        logError(
+          `[LSP Enhancer - ${this.languageId}] Failed to get references for symbol ${sym.name} in ${sym.file_path}:${sym.line}:${sym.column}`,
+          err,
+        )
+      })
 
       if (!references || references.length === 0) continue
 
@@ -765,16 +787,24 @@ export class GenericLspEnhancer implements Enhancer {
     column: number
     signature?: string | null
   }): Promise<{ name?: string; type?: string } | undefined> {
-    const absPath = join(this.cwd, sym.file_path)
-    const nameOffset = sym.signature?.indexOf(sym.name) ?? 0
-    const hoverStr = await this.getTypeAtLocation(
-      absPath,
-      sym.line,
-      sym.column + nameOffset,
-    )
-    if (!hoverStr) return undefined
+    try {
+      const absPath = resolveWorkspacePath(join(this.cwd, sym.file_path))
+      const nameOffset = sym.signature?.indexOf(sym.name) ?? 0
+      const hoverStr = await this.getTypeAtLocation(
+        absPath,
+        sym.line,
+        sym.column + nameOffset,
+      )
+      if (!hoverStr) return undefined
 
-    return this.convertHoverStringToSignature(hoverStr)
+      return this.convertHoverStringToSignature(hoverStr)
+    } catch (err) {
+      logError(
+        `[LSP Enhancer - ${this.languageId}] Failed to get hover signature for symbol ${sym.name} in ${sym.file_path}:${sym.line}:${sym.column}`,
+        err,
+      )
+      return
+    }
   }
 
   /** This method retrieves all references for a given symbol at a specific location in a file. */
@@ -832,10 +862,11 @@ export class GenericLspEnhancer implements Enhancer {
       return []
     }
 
-    const absPath = join(this.cwd, call.caller_file_path)
-    this.ensureFileOpen(absPath)
-
     try {
+      const absPath = resolveWorkspacePath(
+        join(this.cwd, call.caller_file_path),
+      )
+      this.ensureFileOpen(absPath)
       const response = await this.client.request('textDocument/definition', {
         textDocument: { uri: `file://${absPath}` },
         position: { line: call.call_line, character: call.call_column },
@@ -850,7 +881,7 @@ export class GenericLspEnhancer implements Enhancer {
       }))
     } catch (err) {
       logError(
-        `[LSP Enhancer - ${this.languageId}] Definition request failed for ${absPath}:${call.call_line}:${call.call_column}`,
+        `[LSP Enhancer - ${this.languageId}] Definition request failed for ${call.caller_file_path}:${call.call_line}:${call.call_column}`,
         err,
       )
       return []
@@ -914,12 +945,15 @@ export class GenericLspEnhancer implements Enhancer {
     if (typeNames.length === 0) return
 
     const match = importsForFile.find((imp) =>
-      typeNames.some(
-        (name) =>
-          imp.imported_name?.toLowerCase().startsWith(name.toLowerCase()) ||
-          (imp.imported_name &&
-            name.toLowerCase().startsWith(imp.imported_name?.toLowerCase())),
-      ),
+      typeNames.some((name) => {
+        const lowercaseNames =
+          imp.importedNames?.map((n) => n.toLowerCase()) ?? []
+        return lowercaseNames.some(
+          (importedName) =>
+            importedName.startsWith(name.toLowerCase()) ||
+            name.toLowerCase().startsWith(importedName),
+        )
+      }),
     )
     return match?.id
   }
@@ -985,8 +1019,7 @@ export class GenericLspEnhancer implements Enhancer {
       const parents = getParentsOfSymbolCall(call.call_text, call.callee_name)
       const namesToMatch = new Set([...parents, call.callee_name])
       const importEntry = (importsByFile.get(call.caller_file_path) ?? []).find(
-        (imp) =>
-          imp.imported_name !== null && namesToMatch.has(imp.imported_name),
+        (imp) => imp.importedNames?.some((name) => namesToMatch.has(name)),
       )
 
       if (!importEntry) {
@@ -1111,48 +1144,58 @@ export class GenericLspEnhancer implements Enhancer {
       return undefined
     }
 
-    let importId: string | undefined
-    const absPath = join(this.cwd, call.caller_file_path)
-    const relevantText = call.call_text.substring(
-      0,
-      call.call_text.indexOf(call.callee_name),
-    )
-
-    for (const parent of parents) {
-      const parentIndex = relevantText.lastIndexOf(parent)
-      if (parentIndex === -1) continue
-      const lineBreaksBetweenCallAndParent =
-        relevantText.substring(parentIndex).split('\n').length - 1
-      const hoverLine = call.call_line - lineBreaksBetweenCallAndParent
-      const hoverColumn =
-        hoverLine === call.call_line
-          ? call.call_column - (relevantText.length - parentIndex)
-          : (relevantText.substring(0, parentIndex).split('\n').at(-1)
-              ?.length ?? call.call_column - 2)
-
-      const hoverStr = await this.getTypeAtLocation(
-        absPath,
-        hoverLine,
-        hoverColumn,
+    try {
+      let importId: string | undefined
+      const absPath = resolveWorkspacePath(
+        join(this.cwd, call.caller_file_path),
+      )
+      const relevantText = call.call_text.substring(
+        0,
+        call.call_text.indexOf(call.callee_name),
       )
 
-      if (!hoverStr) continue
+      for (const parent of parents) {
+        const parentIndex = relevantText.lastIndexOf(parent)
+        if (parentIndex === -1) continue
+        const lineBreaksBetweenCallAndParent =
+          relevantText.substring(parentIndex).split('\n').length - 1
+        const hoverLine = call.call_line - lineBreaksBetweenCallAndParent
+        const hoverColumn =
+          hoverLine === call.call_line
+            ? call.call_column - (relevantText.length - parentIndex)
+            : (relevantText.substring(0, parentIndex).split('\n').at(-1)
+                ?.length ?? call.call_column - 2)
 
-      const signatureInfo = this.convertHoverStringToSignature(hoverStr)
-      if (!signatureInfo || !signatureInfo.type || !signatureInfo.name) {
-        continue
+        const hoverStr = await this.getTypeAtLocation(
+          absPath,
+          hoverLine,
+          hoverColumn,
+        )
+
+        if (!hoverStr) continue
+
+        const signatureInfo = this.convertHoverStringToSignature(hoverStr)
+        if (!signatureInfo || !signatureInfo.type || !signatureInfo.name) {
+          continue
+        }
+
+        importId = this.resolveImportIdByType(
+          [signatureInfo.type, signatureInfo.name],
+          importsByFile.get(call.caller_file_path),
+        )
+
+        if (importId) {
+          break
+        }
       }
 
-      importId = this.resolveImportIdByType(
-        [signatureInfo.type, signatureInfo.name],
-        importsByFile.get(call.caller_file_path),
+      return importId
+    } catch (err) {
+      logError(
+        `[LSP Enhancer - ${this.languageId}] Failed to find import ID via parent type for call ${call.call_text} in ${call.caller_file_path}:${call.call_line}:${call.call_column}`,
+        err,
       )
-
-      if (importId) {
-        break
-      }
+      return
     }
-
-    return importId
   }
 }

@@ -19,6 +19,10 @@ export type LanguageConfig = {
     language_name: string
     signature_max_length?: number
   }
+  tsconfig_paths?: string[]
+  import_resolution?: {
+    asset_extensions: string[]
+  }
 }
 
 type DocstringProviderName = 'claude' | 'gemini' | 'openai' | 'ollama'

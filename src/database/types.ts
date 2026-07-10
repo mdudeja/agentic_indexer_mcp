@@ -1,4 +1,5 @@
 export type NestedCaller = {
+  callerId: string
   callerFile: string
   callerName: string
   line: number
@@ -8,6 +9,7 @@ export type NestedCaller = {
 }
 
 export type DirectCaller = {
+  callerId: string
   callerFile: string
   callerName: string
   line: number

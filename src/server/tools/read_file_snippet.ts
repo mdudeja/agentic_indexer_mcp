@@ -4,6 +4,7 @@ import { join } from 'path'
 import { readFileSync, existsSync } from 'fs'
 import { AppStateManager } from 'src/state/index.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
+import { resolveWorkspacePath } from 'src/utils/paths'
 
 /** Registers a tool to read arbitrary line ranges from files in the workspace. */
 export function registerReadFileSnippetTool(server: McpServer) {
@@ -26,9 +27,9 @@ export function registerReadFileSnippetTool(server: McpServer) {
     },
     async ({ file_path, start_line, end_line }) => {
       const cwd = AppStateManager.getInstance().getItem('root') ?? process.cwd()
-      const absPath = join(cwd, file_path as string)
 
       try {
+        const absPath = resolveWorkspacePath(join(cwd, file_path as string))
         if (!existsSync(absPath)) {
           return {
             content: [{ type: 'text', text: `File not found: ${file_path}` }],

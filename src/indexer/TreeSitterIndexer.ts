@@ -1,12 +1,12 @@
 import { Parser, Language, Query } from 'web-tree-sitter'
 import * as fs from 'fs'
-import * as path from 'path'
 import { logError } from 'src/utils/logger'
 import { AppStateManager } from 'src/state'
 import { extractSymbols } from './steps/s1_symbol_extractor'
 import type { ExtractionResult } from './adapters/LanguageAdapter'
 import type { IndexerConfig } from 'src/config/types'
 import { getWasmPath, type SupportedLanguage } from 'tree-sitter-wasm'
+import { resolvePath } from 'src/utils/paths'
 
 /** A utility class for managing code parsing and indexing using TreeSitter. It handles initialization of parsers, loading language grammars from WebAssembly modules, and extracting code elements like symbols and imports from source files based on file extensions and configured language settings. */
 export class TreeSitterIndexer {
@@ -46,10 +46,7 @@ export class TreeSitterIndexer {
       this.languages.set(langName, lang)
 
       try {
-        const queryPath = path.resolve(
-          __dirname,
-          `queries/${langName}/tags.scm`,
-        )
+        const queryPath = resolvePath(`queries/${langName}/tags.scm`, __dirname)
         if (fs.existsSync(queryPath)) {
           const queryString = fs.readFileSync(queryPath, 'utf-8')
           const query = new Query(lang, queryString)

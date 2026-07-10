@@ -7,6 +7,7 @@ import { AppStateManager } from 'src/state'
 import type { IndexedSymbol } from 'src/database/schemas/symbols.schema'
 import type { IndexedFile } from 'src/database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
+import { resolveWorkspacePath } from 'src/utils/paths'
 
 /** Registers a tool to retrieve the full source code definition of a symbol, allowing agents to fetch the definition using either a symbol ID or a combination of name and file path. */
 export function registerGetDefinitionTool(server: McpServer) {
@@ -97,9 +98,11 @@ export function registerGetDefinitionTool(server: McpServer) {
           }
         }
 
-        const absPath = join(
-          AppStateManager.getInstance().getItem('root') ?? '',
-          symbol.file_path,
+        const absPath = resolveWorkspacePath(
+          join(
+            AppStateManager.getInstance().getItem('root') ?? '',
+            symbol.file_path,
+          ),
         )
         const fileContent = readFileSync(absPath, 'utf-8')
         const lines = fileContent.split('\n')

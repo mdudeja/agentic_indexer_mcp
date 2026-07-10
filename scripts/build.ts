@@ -1,11 +1,12 @@
 import { mkdir } from 'node:fs/promises'
-import { dirname, resolve } from 'path'
+import { dirname } from 'path'
 import { logDebug } from 'src/utils/logger'
+import { resolvePath } from 'src/utils/paths'
 
 /** Builds and prepares a distributable version of the application by generating an executable script and ensuring all necessary directories exist. */
 export async function build() {
   const currentDir = import.meta.dir
-  const distDir = resolve(currentDir, '../dist')
+  const distDir = resolvePath('../dist', currentDir)
   const rootDir = dirname(distDir)
 
   //   Ensure the dist directory exists
@@ -16,7 +17,7 @@ export async function build() {
   agenticIndexerContent += `bun --env-file ${rootDir}/.env ${rootDir}/index.ts "$@"\n`
 
   //   Write the agentic_indexer file to the dist directory
-  const agenticIndexerPath = resolve(distDir, 'agentic_indexer')
+  const agenticIndexerPath = resolvePath('agentic_indexer', distDir)
   await Bun.write(agenticIndexerPath, agenticIndexerContent)
 
   //   Make the agentic_indexer file executable

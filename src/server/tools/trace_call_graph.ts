@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import type { IndexedFile } from 'src/database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
+import type { DirectCaller } from 'src/database/types'
 
 /** Registers a tool to traverse the call graph inbound and/or outbound from a symbol, up to a configurable depth. */
 export function registerTraceCallGraphTool(server: McpServer) {
@@ -152,6 +153,7 @@ export function registerTraceCallGraphTool(server: McpServer) {
 
             await buildInbound(
               store,
+              inboundTarget.id,
               inboundTarget.name,
               inboundTarget.file_path,
               inboundTarget.line + 1,
@@ -288,7 +290,7 @@ async function buildOutbound(
     const callLine =
       call.call_line != null ? ` at line ${call.call_line + 1}` : ''
     lines.push(
-      `${prefix}${connector} ${call.callee_name} (unresolved or inbuilt command${callLine}) ${docstringNote}`,
+      `${prefix}${connector} ${call.callee_name} (${call.is_lang_feature ? 'language or runner framework feature' : 'possibly unresolved'})${callLine} ${docstringNote}`,
     )
   }
 
@@ -321,6 +323,7 @@ async function buildOutbound(
  * that has callers is rendered as an intermediate node with its callers nested beneath it. */
 async function buildInbound(
   store: IndexerDB,
+  symbolId: string,
   symbolName: string,
   filePath: string,
   lineNum: number,
@@ -334,26 +337,22 @@ async function buildInbound(
     lines.push(`${symbolName} (${filePath}:${lineNum})`)
   }
 
-  if (visited.has(symbolName)) return
-  visited.add(symbolName)
+  if (visited.has(symbolId)) return
+  visited.add(symbolId)
 
   if (currentDepth >= maxDepth) return
 
-  const callers = await store.calls.getCallersNested(symbolName)
+  const callers = await store.calls.getCallersNestedById(symbolId)
   if (callers.length === 0) return
 
   // Separate direct callers (childName == null) from callers-via-children
-  const directCallers: Array<{
-    callerFile: string
-    callerName: string
-    line: number
-  }> = []
+  const directCallers: Array<DirectCaller> = []
   const childGroups = new Map<
     string,
     {
       childFilePath: string
       childLine: number
-      callers: Array<{ callerFile: string; callerName: string; line: number }>
+      callers: Array<DirectCaller>
     }
   >()
   const seenDirect = new Set<string>()
@@ -361,13 +360,14 @@ async function buildInbound(
 
   for (const c of callers) {
     if (c.childName === null) {
-      const key = `${c.callerName}|${c.callerFile}`
+      const key = `${c.callerId}`
       if (!seenDirect.has(key)) {
         seenDirect.add(key)
         directCallers.push({
           callerFile: c.callerFile,
           callerName: c.callerName,
           line: c.line,
+          callerId: c.callerId,
         })
       }
     } else {
@@ -379,13 +379,14 @@ async function buildInbound(
         })
         seenChildCallers.set(c.childName, new Set())
       }
-      const callerKey = `${c.callerName}|${c.callerFile}`
+      const callerKey = `${c.callerId}`
       if (!seenChildCallers.get(c.childName)!.has(callerKey)) {
         seenChildCallers.get(c.childName)!.add(callerKey)
         childGroups.get(c.childName)!.callers.push({
           callerFile: c.callerFile,
           callerName: c.callerName,
           line: c.line,
+          callerId: c.callerId,
         })
       }
     }
@@ -400,7 +401,7 @@ async function buildInbound(
     const connector = isLast ? '└─' : '├─'
     const childPrefix = prefix + (isLast ? '   ' : '│  ')
 
-    if (visited.has(caller.callerName)) {
+    if (visited.has(caller.callerId)) {
       lines.push(
         `${prefix}${connector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1}) [cycle]`,
       )
@@ -410,6 +411,7 @@ async function buildInbound(
       )
       await buildInbound(
         store,
+        caller.callerId,
         caller.callerName,
         caller.callerFile,
         caller.line + 1,
@@ -442,7 +444,7 @@ async function buildInbound(
       const callerConnector = isLastCaller ? '└─' : '├─'
       const callerPrefix = childPrefix + (isLastCaller ? '   ' : '│  ')
 
-      if (visited.has(caller.callerName)) {
+      if (visited.has(caller.callerId)) {
         lines.push(
           `${childPrefix}${callerConnector} ${caller.callerName} (${caller.callerFile}:${caller.line + 1}) [cycle]`,
         )
@@ -452,6 +454,7 @@ async function buildInbound(
         )
         await buildInbound(
           store,
+          caller.callerId,
           caller.callerName,
           caller.callerFile,
           caller.line + 1,

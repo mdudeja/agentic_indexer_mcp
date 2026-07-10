@@ -34,7 +34,7 @@
 (import_statement) @import.statement
 
 ; Exports
-(export_specifier (identifier) @export.identifier)
+(export_statement) @export.statement
 
 ; Exceptions
 (throw_statement) @exception.throw

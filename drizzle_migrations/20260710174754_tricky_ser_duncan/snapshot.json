@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "caba78a7-ec10-48a1-a5d1-855765b9b48b",
+  "id": "33e08c4b-b961-4057-8ec8-01689a693567",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -230,7 +230,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "module_path",
+      "name": "sourceModule",
       "entityType": "columns",
       "table": "imports"
     },
@@ -240,7 +240,97 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "imported_name",
+      "name": "importedNames",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolvedPath",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolvedKind",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "isExternal",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "isRuntimeDependency",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "importKind",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolutionSource",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "edgeKind",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "confidence",
+      "entityType": "columns",
+      "table": "imports"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
       "entityType": "columns",
       "table": "imports"
     },
@@ -922,14 +1012,14 @@
     {
       "columns": [
         {
-          "value": "module_path",
+          "value": "sourceModule",
           "isExpression": false
         }
       ],
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "idx_imports_module",
+      "name": "idx_imports_source_module",
       "entityType": "indexes",
       "table": "imports"
     },

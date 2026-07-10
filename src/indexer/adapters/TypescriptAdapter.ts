@@ -7,12 +7,18 @@ import {
   seedModuleSymbol,
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
-import { resolveImportedModulePath } from '../../utils/paths'
 import { getCommentText } from '../docstrings/formatComment'
 import { hashSymbol } from 'src/utils/hashers'
+import { EdgeKind, ImportKind } from 'src/database/schemas'
+import { TypescriptImportResolver } from '../importResolver/TypescriptImportResolver'
+import type { ImportResolver } from '../importResolver/ImportResolver'
+import { BunImportResolver } from '../importResolver/BunImportResolver'
 
 /** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
 export class TypescriptAdapter implements LanguageAdapter {
+  private importResolver?: ImportResolver
+
+  constructor(private readonly langName: string) {}
   /** Extracts and organizes symbols, docstrings, calls, imports, exceptions, and environment variables from the given query matches in a file, returning a structured ExtractionResult containing all extracted information. */
   extract(
     matches: QueryMatch[],
@@ -26,6 +32,10 @@ export class TypescriptAdapter implements LanguageAdapter {
       exceptions: [],
       envVars: [],
       explicitExports: [],
+    }
+
+    if (!this.importResolver) {
+      this.importResolver = new BunImportResolver(this.langName)
     }
 
     // Maps node ID to symbol ID to quickly find parent_id
@@ -48,25 +58,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         if (capture.name.startsWith('export')) {
           const capturedNode = capture.node
           if (!capturedNode) continue
-          result.explicitExports.push({
-            id: randomUUIDv7(),
-            file_path,
-            name: capturedNode.text,
-            line: capturedNode.startPosition.row,
-            column: capturedNode.startPosition.column,
-            end_line: capturedNode.endPosition.row,
-            end_column: capturedNode.endPosition.column,
-            decorator: null,
-            docstring: null,
-            exported: true,
-            inheritence: null,
-            kind: SymbolKind.export,
-            language: 'typescript',
-            parent_id: null,
-            signature: null,
-            parameters_json: null,
-            return_type: null,
-          })
+          this.handleExportCapture(capturedNode, file_path, result)
         }
       }
     }
@@ -480,6 +472,149 @@ export class TypescriptAdapter implements LanguageAdapter {
     })
   }
 
+  /** Captures export information from a node and stores it in the result. */
+  private handleExportCapture(
+    node: Node,
+    file_path: string,
+    result: ExtractionResult,
+  ) {
+    const sourceNode = node.childForFieldName('source')
+    const declarationNode = node.childForFieldName('declaration')
+    if (!sourceNode && !declarationNode) {
+      const exportClauseNode = node.childForFieldName('export_clause')
+      if (!exportClauseNode) return
+
+      const specifiers = exportClauseNode.children.filter(
+        (c) => c && c.type === 'export_specifier',
+      )
+      for (const spec of specifiers) {
+        if (!spec) continue
+        const nameNode =
+          spec.childForFieldName('alias') ||
+          spec.childForFieldName('name') ||
+          spec.children.find((c) => c && c.type === 'identifier')
+
+        if (!nameNode) continue
+
+        result.explicitExports.push({
+          id: randomUUIDv7(),
+          file_path,
+          name: nameNode.text,
+          line: nameNode.startPosition.row,
+          column: nameNode.startPosition.column,
+          end_line: nameNode.endPosition.row,
+          end_column: nameNode.endPosition.column,
+          decorator: null,
+          docstring: null,
+          exported: true,
+          inheritence: null,
+          kind: SymbolKind.export,
+          language: 'typescript',
+          parent_id: null,
+          signature: null,
+          parameters_json: null,
+          return_type: null,
+        })
+      }
+    }
+
+    if (declarationNode) {
+      const nameNode = declarationNode.childForFieldName('name')
+      if (!nameNode) return
+
+      result.explicitExports.push({
+        id: randomUUIDv7(),
+        file_path,
+        name: nameNode.text,
+        line: nameNode.startPosition.row,
+        column: nameNode.startPosition.column,
+        end_line: nameNode.endPosition.row,
+        end_column: nameNode.endPosition.column,
+        decorator: null,
+        docstring: null,
+        exported: true,
+        inheritence: null,
+        kind: SymbolKind.export,
+        language: 'typescript',
+        parent_id: null,
+        signature: null,
+        parameters_json: null,
+        return_type: null,
+      })
+    }
+
+    if (sourceNode) {
+      const moduleName = sourceNode.text.slice(1, -1)
+      let importKind: ImportKind = ImportKind.Unresolved
+      const exportedNames: string[] = []
+
+      const exportClauseNode = node.childForFieldName('export_clause')
+
+      if (!exportClauseNode) {
+        importKind = ImportKind.Default
+        const namespaceImportNode = node.children.find(
+          (c) => c && c.type === 'namespace_export',
+        )
+        if (namespaceImportNode) {
+          importKind = ImportKind.Namespace
+          const nameNode = namespaceImportNode.children.find(
+            (c) => c && c.type === 'identifier',
+          )
+          if (nameNode) {
+            exportedNames.push(nameNode.text)
+          }
+        }
+        const resolutionResult = this.importResolver?.resolve(
+          moduleName,
+          file_path,
+          exportedNames,
+          importKind,
+          EdgeKind.ExportAll,
+        )
+        if (!resolutionResult) {
+          return
+        }
+        result.imports.push({
+          id: randomUUIDv7(),
+          file_path,
+          ...resolutionResult,
+        })
+        return
+      }
+
+      const specifiers = exportClauseNode.children.filter(
+        (c) => c && c.type === 'export_specifier',
+      )
+      for (const spec of specifiers) {
+        if (!spec) continue
+        const nameNode =
+          spec.childForFieldName('alias') ||
+          spec.childForFieldName('name') ||
+          spec.children.find((c) => c && c.type === 'identifier')
+        if (nameNode) {
+          exportedNames.push(nameNode.text)
+          importKind = ImportKind.Named
+        }
+      }
+
+      const resolutionResult = this.importResolver?.resolve(
+        moduleName,
+        file_path,
+        exportedNames,
+        importKind,
+        EdgeKind.ReExport,
+      )
+      if (!resolutionResult) {
+        return
+      }
+      result.imports.push({
+        id: randomUUIDv7(),
+        file_path,
+        ...resolutionResult,
+      })
+    }
+  }
+
   /** Captures import information from a node and stores it in the result. */
   private handleImportCapture(
     node: Node,
@@ -490,6 +625,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     if (!sourceNode) return
     const moduleName = sourceNode.text.slice(1, -1)
 
+    let importKind: ImportKind = ImportKind.Unresolved
     const importedNames: string[] = []
     const importClause = node.children.find(
       (c) => c && c.type === 'import_clause',
@@ -500,7 +636,10 @@ export class TypescriptAdapter implements LanguageAdapter {
     const defaultImport = importClause.children.find(
       (c) => c && c.type === 'identifier',
     )
-    if (defaultImport) importedNames.push(defaultImport.text)
+    if (defaultImport) {
+      importedNames.push(defaultImport.text)
+      importKind = ImportKind.Default
+    }
 
     const namedImports = importClause.children.find(
       (c) => c && c.type === 'named_imports',
@@ -512,9 +651,13 @@ export class TypescriptAdapter implements LanguageAdapter {
       for (const spec of specifiers) {
         if (!spec) continue
         const nameNode =
+          spec.childForFieldName('alias') ||
           spec.childForFieldName('name') ||
           spec.children.find((c) => c && c.type === 'identifier')
-        if (nameNode) importedNames.push(nameNode.text)
+        if (nameNode) {
+          importedNames.push(nameNode.text)
+          importKind = ImportKind.Named
+        }
       }
     }
 
@@ -525,37 +668,38 @@ export class TypescriptAdapter implements LanguageAdapter {
       const idNode = namespaceImport.children.find(
         (c) => c && c.type === 'identifier',
       )
-      if (idNode) importedNames.push(idNode.text)
+      if (idNode) {
+        importedNames.push(idNode.text)
+        importKind = ImportKind.Namespace
+      }
     }
 
-    if (importedNames.length > 0) {
-      for (const name of importedNames) {
-        const id = randomUUIDv7()
-        result.imports.push({
-          id,
-          file_path,
-          module_path: resolveImportedModulePath(
-            moduleName,
-            file_path,
-            '.ts',
-            'index.ts',
-          ),
-          imported_name: name,
-        })
-      }
-    } else {
-      result.imports.push({
-        id: randomUUIDv7(),
-        file_path,
-        module_path: resolveImportedModulePath(
-          moduleName,
-          file_path,
-          '.ts',
-          'index.ts',
-        ),
-        imported_name: '',
-      })
+    if (!importedNames.length) {
+      importKind = ImportKind.SideEffect
     }
+
+    if (sourceNode.text.includes('import type {')) {
+      importKind = ImportKind.TypeOnly
+    }
+
+    const id = randomUUIDv7()
+    const importResolutionResult = this.importResolver?.resolve(
+      moduleName,
+      file_path,
+      importedNames,
+      importKind,
+      EdgeKind.Import,
+    )
+
+    if (!importResolutionResult) {
+      return
+    }
+
+    result.imports.push({
+      id,
+      file_path,
+      ...importResolutionResult,
+    })
   }
 
   /** Capture exceptions during processing and log them with relevant details including symbol IDs and file paths. */

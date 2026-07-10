@@ -12,6 +12,7 @@ import {
   doesPathMatch,
   getExcludeDocstringGenerationGlobs,
 } from 'src/utils/pathGlobs'
+import { resolveWorkspacePath } from 'src/utils/paths'
 
 /** Generates and manages docstrings for code symbols based on configured settings, including generation of new docstrings and removal of existing ones. */
 export class DocstringGenerationStep {
@@ -167,40 +168,46 @@ export class DocstringGenerationStep {
       byFile.set(sym.file_path, list)
     }
 
-    for (const [relPath, fileSymbols] of byFile) {
-      const absPath = join(this.cwd, relPath)
-      if (!existsSync(absPath)) continue
+    try {
+      for (const [relPath, fileSymbols] of byFile) {
+        const absPath = resolveWorkspacePath(join(this.cwd, relPath))
+        if (!existsSync(absPath)) continue
 
-      // Process bottom-up so splice deletions don't shift unprocessed line indices
-      fileSymbols.sort((a, b) => b.line - a.line)
-      const fileLines = await Bun.file(absPath)
-        .text()
-        .then((t) => t.split('\n'))
+        // Process bottom-up so splice deletions don't shift unprocessed line indices
+        fileSymbols.sort((a, b) => b.line - a.line)
+        const fileLines = await Bun.file(absPath)
+          .text()
+          .then((t) => t.split('\n'))
 
-      for (const sym of fileSymbols) {
-        const startLine = sym.line
-        const docstringLines = sym.docstring?.split('\n').length ?? 0
-        if (docstringLines === 0) continue
+        for (const sym of fileSymbols) {
+          const startLine = sym.line
+          const docstringLines = sym.docstring?.split('\n').length ?? 0
+          if (docstringLines === 0) continue
 
-        const docstringText = fileLines
-          .slice(startLine - docstringLines, startLine)
-          .join('\n')
-          .trim()
+          const docstringText = fileLines
+            .slice(startLine - docstringLines, startLine)
+            .join('\n')
+            .trim()
 
-        if (
-          getCommentText(docstringText) !==
-          getCommentText(formatComment(sym.docstring!, sym.language))
-        ) {
-          logWarning(
-            `[Indexer] Docstring text in file for ${sym.name} does not match database. Skipping removal in file for safety.`,
-          )
-          continue
+          if (
+            getCommentText(docstringText) !==
+            getCommentText(formatComment(sym.docstring!, sym.language))
+          ) {
+            logWarning(
+              `[Indexer] Docstring text in file for ${sym.name} does not match database. Skipping removal in file for safety.`,
+            )
+            continue
+          }
+
+          fileLines.splice(startLine - docstringLines, docstringLines)
         }
 
-        fileLines.splice(startLine - docstringLines, docstringLines)
+        await Bun.write(absPath, fileLines.join('\n'))
       }
-
-      await Bun.write(absPath, fileLines.join('\n'))
+    } catch (error) {
+      logWarning(
+        `[Indexer] Error while removing docstrings from source files: ${error}`,
+      )
     }
 
     logInfo(
@@ -266,73 +273,80 @@ export class DocstringGenerationStep {
     relPath: string,
     fileSymbols: IndexedSymbol['Select'][],
   ): Promise<number> {
-    let generated = 0
-    const absPath = join(this.cwd, relPath)
-    if (!existsSync(absPath)) return generated
+    try {
+      let generated = 0
+      const absPath = resolveWorkspacePath(join(this.cwd, relPath))
+      if (!existsSync(absPath)) return generated
 
-    const sourceText = await Bun.file(absPath).text()
-    const fileLines = sourceText.split('\n')
+      const sourceText = await Bun.file(absPath).text()
+      const fileLines = sourceText.split('\n')
 
-    // Process bottom-up so splice inserts don't shift unprocessed line indices
-    fileSymbols.sort((a, b) => b.line - a.line)
+      // Process bottom-up so splice inserts don't shift unprocessed line indices
+      fileSymbols.sort((a, b) => b.line - a.line)
 
-    for (const sym of fileSymbols) {
-      // tree-sitter lines are 0-indexed
-      const endLine = sym.end_line ?? sym.line
-      const symText = fileLines.slice(sym.line, endLine + 1).join('\n')
+      for (const sym of fileSymbols) {
+        // tree-sitter lines are 0-indexed
+        const endLine = sym.end_line ?? sym.line
+        const symText = fileLines.slice(sym.line, endLine + 1).join('\n')
 
-      const prompt = this.buildPrompt(sym, symText)
-      const docstring = await provider.generate(prompt)
-      if (!docstring) {
-        logWarning(
-          `[Indexer] Failed to generate docstring for ${sym.name} in ${relPath}`,
-        )
-        continue
-      }
-
-      generated++
-
-      // Remove anything within <think> tags if present
-      const cleanedDocstring = docstring
-        .replace(/<think>[\s\S]*?<\/think>/g, '')
-        .replace(/[\"\']/g, '')
-        .trim()
-      if (cleanedDocstring.length === 0) {
-        logWarning(
-          `[Indexer] Generated docstring for ${sym.name} in ${relPath} was empty after cleaning. Skipping.`,
-        )
-        continue
-      }
-
-      await store.symbols.updateDocstring(
-        sym.id,
-        getCommentText(cleanedDocstring),
-      )
-      logDebug(
-        `[Indexer] Generated docstring for ${sym.name} in ${relPath}:${sym.line}`,
-      )
-
-      if (docCfg.write_to_file) {
-        const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
-        const comment = formatComment(cleanedDocstring, sym.language)
-        let indentedComment = comment
-          .split('\n')
-          .map((l) => `${indent}${l}`)
-          .join('\n')
-
-        if (sym.language === 'python') {
-          indentedComment = `    ${indentedComment}`
+        const prompt = this.buildPrompt(sym, symText)
+        const docstring = await provider.generate(prompt)
+        if (!docstring) {
+          logWarning(
+            `[Indexer] Failed to generate docstring for ${sym.name} in ${relPath}`,
+          )
+          continue
         }
 
-        const targetLine = sym.language === 'python' ? sym.line + 1 : sym.line
+        generated++
 
-        fileLines.splice(targetLine, 0, indentedComment)
+        // Remove anything within <think> tags if present
+        const cleanedDocstring = docstring
+          .replace(/<think>[\s\S]*?<\/think>/g, '')
+          .replace(/[\"\']/g, '')
+          .trim()
+        if (cleanedDocstring.length === 0) {
+          logWarning(
+            `[Indexer] Generated docstring for ${sym.name} in ${relPath} was empty after cleaning. Skipping.`,
+          )
+          continue
+        }
+
+        await store.symbols.updateDocstring(
+          sym.id,
+          getCommentText(cleanedDocstring),
+        )
+        logDebug(
+          `[Indexer] Generated docstring for ${sym.name} in ${relPath}:${sym.line}`,
+        )
+
+        if (docCfg.write_to_file) {
+          const indent = (fileLines[sym.line] ?? '').match(/^(\s*)/)?.[1] ?? ''
+          const comment = formatComment(cleanedDocstring, sym.language)
+          let indentedComment = comment
+            .split('\n')
+            .map((l) => `${indent}${l}`)
+            .join('\n')
+
+          if (sym.language === 'python') {
+            indentedComment = `    ${indentedComment}`
+          }
+
+          const targetLine = sym.language === 'python' ? sym.line + 1 : sym.line
+
+          fileLines.splice(targetLine, 0, indentedComment)
+        }
       }
-    }
 
-    if (docCfg.write_to_file) {
-      await Bun.write(absPath, fileLines.join('\n'))
+      if (docCfg.write_to_file) {
+        await Bun.write(absPath, fileLines.join('\n'))
+      }
+      return generated
+    } catch (error) {
+      logWarning(
+        `[Indexer] Error while generating docstrings for ${relPath}: ${error}`,
+      )
+      return 0
     }
-    return generated
   }
 }

@@ -4,6 +4,10 @@ import { IndexerDB } from '../../database/IndexerDB.ts'
 import type { SymbolKind } from '../../config/types.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
 import { OllamaEmbeddingGenerator } from 'src/indexer/embedders/OllamaEmbeddingGenerator.ts'
+import type { EmbeddingGenerator } from 'src/indexer/steps/s4_EmbeddingGenerator.ts'
+import { embedderNameToClass } from 'src/indexer/IndexPipeline.ts'
+import { AppStateManager } from 'src/state/index.ts'
+import { logError } from 'src/utils/logger.ts'
 
 /** Registers a tool to enable semantic and hybrid searching for symbols across the codebase. */
 export function registerSemanticSearchSymbolsTool(server: McpServer) {
@@ -42,9 +46,21 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
     },
     async ({ query, kind, file_pattern, limit }) => {
       const store = IndexerDB.getInstance()
-      const embedder = new OllamaEmbeddingGenerator()
 
       try {
+        const embedder = await loadEmbedder()
+        if (!embedder) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'No embedder is configured or the embedder failed to initialize. Semantic search is unavailable.',
+              },
+            ],
+            isError: true,
+          }
+        }
+
         // Generate query embedding (gracefully falls back to text-only if Ollama is down)
         const embedding = await embedder.getEmbedding(query)
         if (!embedding) {
@@ -124,4 +140,35 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
       }
     },
   )
+}
+
+async function loadEmbedder(): Promise<EmbeddingGenerator | null> {
+  const config = AppStateManager.getInstance().getItem('config')
+  if (
+    !config ||
+    !config.embedder ||
+    !config.embedder.enabled ||
+    !config.embedder.provider
+  ) {
+    logError(
+      '[Indexer] No embedder configuration found or embedder is not enabled. Skipping embedding generation.',
+    )
+    return null
+  }
+  const EmbedderClass = embedderNameToClass[config.embedder.provider]
+  if (!EmbedderClass) {
+    logError('[Indexer] Embedder not found. Skipping embedding generation.')
+    return null
+  }
+
+  const embeddor = new EmbedderClass()
+  const initialized = await embeddor.init()
+  if (!initialized) {
+    logError(
+      `[Indexer] Failed to initialize ${embeddor.constructor.name}. Skipping embedding generation.`,
+    )
+    return null
+  }
+
+  return embeddor
 }

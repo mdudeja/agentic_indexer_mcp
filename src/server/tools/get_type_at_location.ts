@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { join } from 'path'
 import { AppStateManager } from 'src/state/index.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
+import { resolveWorkspacePath } from 'src/utils/paths'
 
 /** Registers a tool to get the inferred or explicit type of an identifier at a specific line and column. */
 export function registerGetTypeAtLocationTool(server: McpServer) {
@@ -31,10 +32,10 @@ export function registerGetTypeAtLocationTool(server: McpServer) {
       const cwd = AppStateManager.getInstance().getItem('root') ?? process.cwd()
       const exntToLangMap =
         AppStateManager.getInstance().getItem('config')?.extnToLangMap ?? {}
-      const absPath = join(cwd, file_path as string)
-      const ext = (file_path as string).split('.').pop() || ''
 
       try {
+        const absPath = resolveWorkspacePath(join(cwd, file_path as string))
+        const ext = (file_path as string).split('.').pop() || ''
         let enhancerMap = AppStateManager.getInstance().getItem('lspEnhancers')
         if (!enhancerMap) {
           return {

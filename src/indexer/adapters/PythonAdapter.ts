@@ -12,6 +12,7 @@ import { resolveImportedModulePath } from 'src/utils/paths'
 
 /** An adapter class for extracting and categorizing symbols, imports, calls, exceptions, environment variables, and docstrings from Python code. It processes source files to gather metadata about code elements and organizes them into structured results. */
 export class PythonAdapter implements LanguageAdapter {
+  constructor(private readonly langName: string) {}
   /** Extracts and categorizes symbols, imports, calls, exceptions, environment variables, and docstrings from a file based on query matches. Returns an object containing the extracted elements organized by type. */
   extract(
     matches: QueryMatch[],

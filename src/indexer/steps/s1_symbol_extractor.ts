@@ -8,9 +8,9 @@ import {
 import { logError } from '../../utils/logger'
 
 const adapters: Record<string, LanguageAdapter> = {
-  typescript: new TypescriptAdapter(),
-  tsx: new TypescriptAdapter(),
-  python: new PythonAdapter(),
+  typescript: new TypescriptAdapter('typescript'),
+  tsx: new TypescriptAdapter('tsx'),
+  python: new PythonAdapter('python'),
 }
 
 /** Extracts and collects symbols, imports, and calls from the provided AST (root node) based on the given configuration, using language-specific adapters and tree-sitter queries. */

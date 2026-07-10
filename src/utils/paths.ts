@@ -64,3 +64,23 @@ export const resolveImportedModulePath = (
     }
   }
 }
+
+export const resolveWorkspacePath = (inputPath: string): string => {
+  const root = AppStateManager.getInstance().getItem('root')
+
+  if (!root) {
+    throw new Error('Root directory is not set in AppStateManager.')
+  }
+
+  const absRoot = resolve(root)
+  const absInputPath = resolve(absRoot, inputPath)
+  const relativePath = relative(absRoot, absInputPath)
+
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw new Error(
+      `The path "${inputPath}" is outside the workspace root "${absRoot}".`,
+    )
+  }
+
+  return absInputPath
+}

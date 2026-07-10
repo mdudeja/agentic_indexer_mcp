@@ -43,6 +43,22 @@ export function getExcludeDocstringGenerationGlobs(): Map<string, GlobData> {
   )
 }
 
+export function getTsconfigPathGlobsForLanguage(
+  language: string,
+): Map<string, GlobData> {
+  const config = AppStateManager.getInstance().getItem('config')
+  if (!config) {
+    throw new Error('Config not found in AppStateManager')
+  }
+
+  const languageConfig = config.languages[language]
+  if (!languageConfig) {
+    throw new Error(`Language configuration for ${language} not found`)
+  }
+
+  return generateGlobData(languageConfig.tsconfig_paths ?? [])
+}
+
 /** Links negated glob patterns to their corresponding positive patterns in the provided map. */
 export function linkNegatedGlobs(
   existingMap: Map<string, GlobData>,
@@ -125,9 +141,9 @@ export function globifyPattern(
     isNegated = true
   }
 
-  if (pattern.startsWith('/')) {
+  if (globifiedPattern.startsWith('/')) {
     // If the pattern starts with a slash, it's relative to the root directory in gitignore instead of system root
-    globifiedPattern = pattern.slice(1)
+    globifiedPattern = globifiedPattern.slice(1)
     hasLeadingSlash = true
   }
 
@@ -182,7 +198,7 @@ export function globifyPattern(
 export function getPathType(path: string): PATHTYPE | null {
   const pathExists = existsSync(path)
   if (!pathExists) {
-    return null
+    return 'other'
   }
 
   const stats = statSync(path)

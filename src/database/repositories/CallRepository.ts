@@ -1,6 +1,16 @@
 import { Database, Statement } from 'bun:sqlite'
 import type { SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
-import { eq, and, getColumns, inArray, isNull, isNotNull } from 'drizzle-orm'
+import {
+  eq,
+  and,
+  getColumns,
+  inArray,
+  isNull,
+  isNotNull,
+  arrayContains,
+  sql,
+  like,
+} from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedSymbolCall } from '../schemas'
 import type { DirectCaller, NestedCaller } from '../types'
@@ -96,13 +106,14 @@ export class CallRepository {
       .where(
         and(
           eq(schema.imports.file_path, call.caller_file_path),
-          eq(schema.imports.imported_name, call.callee_name),
+          like(schema.imports.importedNames, `%${call.callee_name}%`),
+          isNotNull(schema.imports.resolvedPath),
         ),
       )
 
     for (const imp of imports) {
       const impCandidates = filePathToNameId
-        .get(imp.module_path)
+        .get(imp.resolvedPath!)
         ?.filter((entry) => entry.name === call.callee_name)
       if (impCandidates?.length) return impCandidates[0]!.id
     }
@@ -114,7 +125,7 @@ export class CallRepository {
   async getCallers(symbolName: string): Promise<DirectCaller[]> {
     return this.sqlite
       .prepare(
-        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line
+        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line, s.id AS callerId
          FROM symbol_calls sc
          JOIN symbols callee ON callee.name = ?
          JOIN symbols s ON s.id = sc.caller_id
@@ -128,7 +139,7 @@ export class CallRepository {
   async getCallersNested(symbolName: string): Promise<NestedCaller[]> {
     const callers = this.sqlite
       .prepare(
-        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line,
+        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line, s.id AS callerId,
                 child.name AS childName, child.file_path AS childFilePath, child.line AS childLine
          FROM symbol_calls sc
          JOIN symbols t ON t.name = ? COLLATE NOCASE
@@ -141,6 +152,26 @@ export class CallRepository {
       )
       .all(symbolName) as NestedCaller[]
 
-    return callers.filter((caller) => caller.callerName !== '<module>') // Exclude self-calls
+    return callers.filter((caller) => caller.callerName !== '<module>')
+  }
+
+  /** Retrieves all nested callers of a given symbol by its unique identifier, including their direct and indirect call relationships. */
+  async getCallersNestedById(symbolId: string): Promise<NestedCaller[]> {
+    const callers = this.sqlite
+      .prepare(
+        `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line, s.id AS callerId,
+                child.name AS childName, child.file_path AS childFilePath, child.line AS childLine
+         FROM symbol_calls sc
+         JOIN symbols t ON t.id = ?
+         JOIN symbols s ON s.id = sc.caller_id
+         LEFT JOIN symbols child ON child.parent_id = t.id
+                                 AND (sc.callee_id = child.id OR sc.callee_name = child.name COLLATE NOCASE)
+         WHERE (sc.callee_id = t.id OR sc.callee_name = t.name COLLATE NOCASE)
+            OR child.id IS NOT NULL
+         ORDER BY s.file_path, s.line`,
+      )
+      .all(symbolId) as NestedCaller[]
+
+    return callers.filter((caller) => caller.callerName !== '<module>')
   }
 }

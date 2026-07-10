@@ -35,7 +35,12 @@ export class ImportRepository {
       const uniqueFiles = [...new Set(importsData.map((m) => m.file_path))]
       uniqueFiles.forEach((f) => this.importDelete!.run(f))
       importsData.forEach((item) => {
-        this.importInsert!.run(...cols.map((col) => (item as any)[col] ?? null))
+        const updatedItem = {
+          ...item,
+          importedNames: JSON.stringify(item.importedNames),
+        }
+        const values = cols.map((col) => (updatedItem as any)[col])
+        this.importInsert!.run(...values)
       })
     })()
   }
@@ -49,7 +54,7 @@ export class ImportRepository {
       .from(schema.imports)
       .where(
         like(
-          schema.imports.module_path,
+          schema.imports.resolvedPath,
           `%${moduleNamePattern.replace(/\*/g, '%')}%`,
         ),
       )
@@ -70,7 +75,7 @@ export class ImportRepository {
     return this.db
       .select()
       .from(schema.imports)
-      .where(eq(schema.imports.imported_name, importedName))
+      .where(like(schema.imports.importedNames, `%${importedName}%`))
   }
 
   /** "Retrieves imports that match the specified name and file path." */
@@ -83,11 +88,11 @@ export class ImportRepository {
       .from(schema.imports)
       .where(
         and(
-          eq(schema.imports.imported_name, importedName),
+          like(schema.imports.importedNames, `%${importedName}%`),
           eq(schema.imports.file_path, filePath),
         ),
       )
-      .orderBy(schema.imports.module_path)
+      .orderBy(schema.imports.resolvedPath)
   }
 
   /** Fetches all import records from the database. */
@@ -95,6 +100,6 @@ export class ImportRepository {
     return this.db
       .select()
       .from(schema.imports)
-      .orderBy(schema.imports.file_path, schema.imports.module_path)
+      .orderBy(schema.imports.file_path, schema.imports.resolvedPath)
   }
 }

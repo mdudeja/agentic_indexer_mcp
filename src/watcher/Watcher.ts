@@ -4,6 +4,7 @@ import { IndexerDB } from '../database/IndexerDB'
 import { relative } from 'path'
 import { logInfo, logError } from 'src/utils/logger'
 import { FileManager } from 'src/indexer/FileManager'
+import { AppStateManager } from 'src/state'
 
 /** How long to wait after the most recent file event before processing a batch. Resets on every new event so a burst of changes (e.g. a branch switch) collapses into one run. */
 const DEBOUNCE_MS = 500
@@ -22,7 +23,10 @@ export class Watcher {
   private isProcessing = false
 
   /** Initializes a new instance of the Watcher with the specified current working directory. */
-  constructor(private cwd: string) {}
+  constructor(private cwd: string) {
+    this.fileManager =
+      AppStateManager.getInstance().getItem('fileManager') ?? null
+  }
 
   /** Starts monitoring a directory for file changes, triggering corresponding actions for added, modified, or removed files. */
   async start() {
@@ -30,6 +34,7 @@ export class Watcher {
 
     if (!this.fileManager) {
       this.fileManager = await FileManager.getInstance()
+      AppStateManager.getInstance().setItem('fileManager', this.fileManager)
     }
 
     this.watcher = watch(this.cwd, {

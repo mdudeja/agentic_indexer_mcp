@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB'
 import { AppStateManager } from 'src/state'
 import { join } from 'node:path'
-import { resolvePath } from 'src/utils/paths'
+import { resolveWorkspacePath } from 'src/utils/paths'
 import { updateUsage } from 'src/utils/updateUsage'
 
 /**
@@ -104,7 +104,7 @@ export function registerAuditAgentConfigTool(server: McpServer) {
         let foundAny = false
 
         for (const candidate of AGENT_CONFIG_CANDIDATES) {
-          const fullPath = join(root, candidate)
+          const fullPath = resolveWorkspacePath(join(root, candidate))
           const bunFile = Bun.file(fullPath)
           const exists = await bunFile.exists()
           if (!exists) continue
@@ -115,7 +115,7 @@ export function registerAuditAgentConfigTool(server: McpServer) {
 
           const pathRefs = extractPathRefs(content)
           const stalePaths = pathRefs.filter((p) => {
-            const normalized = resolvePath(p)
+            const normalized = resolveWorkspacePath(p)
             return !filePathSet.has(normalized) && !filePathSet.has(p)
           })
 
