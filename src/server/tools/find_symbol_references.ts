@@ -120,7 +120,7 @@ export function registerFindSymbolReferencesTool(server: McpServer) {
           importRefs = await store.imports.getByName(symbol!.name)
           if (importRefs.length > 0) {
             const importLines = importRefs.map(
-              (i) => `  - ${i.file_path} (from '${i.module_path}')`,
+              (i) => `  - ${i.file_path} (from '${i.sourceModule}')`,
             )
             sections.push(
               `Imported by name in (${importRefs.length} file${importRefs.length !== 1 ? 's' : ''}):\n${importLines.join('\n')}`,

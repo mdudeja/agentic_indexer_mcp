@@ -43,6 +43,7 @@ export function getExcludeDocstringGenerationGlobs(): Map<string, GlobData> {
   )
 }
 
+/** Retrieves the path glob patterns for tsconfig paths for a specified programming language. */
 export function getTsconfigPathGlobsForLanguage(
   language: string,
 ): Map<string, GlobData> {

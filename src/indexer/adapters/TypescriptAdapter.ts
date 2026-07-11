@@ -20,6 +20,7 @@ import { AppStateManager } from 'src/state'
 export class TypescriptAdapter implements LanguageAdapter {
   private importResolver?: ChainedImportResolver
 
+  /** The constructor method initializes an instance of the TypescriptAdapter class with a specified programming language name. */
   constructor(private readonly langName: string) {}
   /** Extracts and organizes symbols, docstrings, calls, imports, exceptions, and environment variables from the given query matches in a file, returning a structured ExtractionResult containing all extracted information. */
   extract(
@@ -483,7 +484,9 @@ export class TypescriptAdapter implements LanguageAdapter {
     const sourceNode = node.childForFieldName('source')
     const declarationNode = node.childForFieldName('declaration')
     if (!sourceNode && !declarationNode) {
-      const exportClauseNode = node.childForFieldName('export_clause')
+      const exportClauseNode = node.children.find(
+        (c) => c && c.type === 'export_clause',
+      )
       if (!exportClauseNode) return
 
       const specifiers = exportClauseNode.children.filter(
@@ -633,7 +636,25 @@ export class TypescriptAdapter implements LanguageAdapter {
       (c) => c && c.type === 'import_clause',
     )
 
-    if (!importClause) return
+    if (!importClause) {
+      importKind = ImportKind.SideEffect
+      const resolutionResult = this.importResolver!.resolve(
+        moduleName,
+        file_path,
+        importedNames,
+        importKind,
+        EdgeKind.Import,
+      )
+      if (!resolutionResult) {
+        return
+      }
+      result.imports.push({
+        id: randomUUIDv7(),
+        file_path,
+        ...resolutionResult,
+      })
+      return
+    }
 
     const defaultImport = importClause.children.find(
       (c) => c && c.type === 'identifier',
@@ -677,10 +698,6 @@ export class TypescriptAdapter implements LanguageAdapter {
         importedNames.push(idNode.text)
         importKind = ImportKind.Namespace
       }
-    }
-
-    if (!importedNames.length) {
-      importKind = ImportKind.SideEffect
     }
 
     if (sourceNode.text.includes('import type {')) {
@@ -834,6 +851,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     return initialText.trim()
   }
 
+  /** Configures and initializes an import resolver based on the languages configuration settings. Sets up resolvers in a specific order depending on the import resolution strategy, either ts-first or bun-first. Throws errors if configurations are missing or strategies are unsupported. */
   private createImportResolver(): void {
     const langConfig =
       AppStateManager.getInstance().getItem('config')?.languages[this.langName]

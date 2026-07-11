@@ -36,7 +36,7 @@ export function registerGetImportByIdTool(server: McpServer) {
         }
 
         const importData = results[0]!
-        const outputText = `Import ID: ${importData.id}\nFile: ${importData.file_path}\nModule: ${importData.module_path}\nImported Name: ${importData.imported_name || '*'}`
+        const outputText = `Import ID: ${importData.id}\nFile: ${importData.file_path}\nModule: ${importData.sourceModule}\nImported Names: ${importData.importedNames?.join(', ') || '*'}`
 
         //usage computation
         await updateUsage(

@@ -277,7 +277,7 @@ async function buildOutbound(
       const imp = await store.imports.getById(call.imports_id)
       if (imp) {
         lines.push(
-          `${prefix}${connector} ${call.callee_name} (${imp.imported_name} from ${imp.module_path}) ${docstringNote}`,
+          `${prefix}${connector} ${call.callee_name} (${imp.importedNames?.join(', ') || '*'} from ${imp.sourceModule}) ${docstringNote}`,
         )
         continue
       }

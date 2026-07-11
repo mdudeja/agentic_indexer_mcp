@@ -58,11 +58,12 @@ export function registerFindDeadCodeTool(server: McpServer) {
 
         // Collect all imported names across the entire codebase
         const allImportedRows = await db
-          .select({ name: schema.imports.imported_name })
+          .select({ names: schema.imports.importedNames })
           .from(schema.imports)
         const importedNameSet = new Set(
           allImportedRows
-            .map((i) => i.name)
+            .map((i) => i.names)
+            .flat()
             .filter((n): n is string => n != null),
         )
 
@@ -254,7 +255,7 @@ async function getInheritenceCoveredIds(
   const viaImportRows = await db
     .select({
       callee_name: schema.symbol_calls.callee_name,
-      imported_name: schema.imports.imported_name,
+      imported_names: schema.imports.importedNames,
     })
     .from(schema.symbol_calls)
     .innerJoin(
@@ -264,10 +265,17 @@ async function getInheritenceCoveredIds(
     .where(isNull(schema.symbol_calls.callee_id))
 
   for (const row of viaImportRows) {
-    if (!row.imported_name || !row.callee_name) continue
-    const names = calledByTypeName.get(row.imported_name) ?? new Set<string>()
-    names.add(row.callee_name)
-    calledByTypeName.set(row.imported_name, names)
+    if (
+      !row.imported_names ||
+      row.imported_names.length === 0 ||
+      !row.callee_name
+    )
+      continue
+    for (const importedName of row.imported_names) {
+      const names = calledByTypeName.get(importedName) ?? new Set<string>()
+      names.add(row.callee_name)
+      calledByTypeName.set(importedName, names)
+    }
   }
 
   // Find child classes (via inherits_from_names) and mark matching methods covered.

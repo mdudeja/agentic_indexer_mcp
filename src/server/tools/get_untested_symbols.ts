@@ -73,12 +73,12 @@ export async function registerGetUntestedSymbolsTool(server: McpServer) {
           }
         }
 
-        // Get all module_paths imported by test files
+        // Get all paths imported by test files
         const testImports = await db
-          .select({ module_path: schema.imports.module_path })
+          .select({ resolvedPath: schema.imports.resolvedPath })
           .from(schema.imports)
           .where(inArray(schema.imports.file_path, [...testFilePaths]))
-        const testCoveredPaths = new Set(testImports.map((i) => i.module_path))
+        const testCoveredPaths = new Set(testImports.map((i) => i.resolvedPath))
 
         // All non-test file paths
         const allFilePaths = allFiles.map((f) => f.path)

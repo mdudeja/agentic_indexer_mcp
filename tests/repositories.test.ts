@@ -3,6 +3,7 @@ import { IndexerDB } from '../src/database/IndexerDB'
 import { InheritenceType, SymbolKind } from '../src/database/schemas'
 import { randomUUID } from 'crypto'
 import { getStoreForTests } from '../scripts/test_setup'
+import * as schema from '../src/database/schemas'
 
 describe('Database Repositories Unit Tests', () => {
   let store: IndexerDB
@@ -78,8 +79,12 @@ describe('Database Repositories Unit Tests', () => {
       {
         id: importId,
         file_path: 'src/lib.ts',
-        module_path: 'react',
-        imported_name: 'useState',
+        sourceModule: 'react',
+        importedNames: ['useState'],
+        edgeKind: schema.EdgeKind.Import,
+        importKind: schema.ImportKind.Named,
+        resolutionSource: schema.ResolutionSource.Bun,
+        resolvedKind: schema.ResolvedKind.Source,
       },
     ])
 
@@ -94,11 +99,11 @@ describe('Database Repositories Unit Tests', () => {
     }
 
     expect(imports.length).toBe(1)
-    expect(imports[0]?.imported_name).toBe('useState')
+    expect(imports[0]?.importedNames).toContain('useState')
 
     const singleImport = await store.imports.getById(importId)
     expect(singleImport).toBeDefined()
-    expect(singleImport?.module_path).toBe('react')
+    expect(singleImport?.sourceModule).toBe('react')
   })
 
   it('should test CallRepository methods', async () => {
@@ -335,18 +340,26 @@ describe('Database Repositories Unit Tests', () => {
       {
         id: impId,
         file_path: 'src/imp.ts',
-        module_path: 'lodash',
-        imported_name: 'debounce',
+        sourceModule: 'lodash',
+        importedNames: ['debounce'],
+        edgeKind: schema.EdgeKind.Import,
+        importKind: schema.ImportKind.Named,
+        resolutionSource: schema.ResolutionSource.Bun,
+        resolvedKind: schema.ResolvedKind.Source,
       },
     ])
 
     // getImporters
     const importers = await store.imports.getImporters('lodash')
-    expect(importers.some((i) => i.imported_name === 'debounce')).toBe(true)
+    expect(importers.some((i) => i.importedNames?.includes('debounce'))).toBe(
+      true,
+    )
 
     // getImporters with wildcard
     const wildcardImporters = await store.imports.getImporters('lod*')
-    expect(wildcardImporters.some((i) => i.module_path === 'lodash')).toBe(true)
+    expect(wildcardImporters.some((i) => i.sourceModule === 'lodash')).toBe(
+      true,
+    )
 
     // getByName
     const byName = await store.imports.getByName('debounce')
@@ -358,7 +371,7 @@ describe('Database Repositories Unit Tests', () => {
       'src/imp.ts',
     )
     expect(byNameAndFile.length).toBeGreaterThan(0)
-    expect(byNameAndFile[0]?.module_path).toBe('lodash')
+    expect(byNameAndFile[0]?.sourceModule).toBe('lodash')
 
     // getByNameAndFile with wrong file returns empty
     const wrongFile = await store.imports.getByNameAndFile(
@@ -433,8 +446,12 @@ describe('Database Repositories Unit Tests', () => {
       {
         id: impId,
         file_path: 'src/calls.ts',
-        module_path: 'some-lib',
-        imported_name: 'targetFn',
+        sourceModule: 'some-lib',
+        importedNames: ['targetFn'],
+        edgeKind: schema.EdgeKind.Import,
+        importKind: schema.ImportKind.Named,
+        resolutionSource: schema.ResolutionSource.Bun,
+        resolvedKind: schema.ResolvedKind.Source,
       },
     ])
     const anotherCallId = randomUUID()

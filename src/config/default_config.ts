@@ -133,7 +133,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
           asset_extensions: [],
           resolution_strategy: 'python-first',
           python: {
-            python_path: '.venv/bin/python',
+            python_path: 'python',
             source_roots: [
               'src',
               '.',

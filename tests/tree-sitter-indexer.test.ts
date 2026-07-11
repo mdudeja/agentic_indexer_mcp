@@ -65,7 +65,9 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(labelField?.kind).toBe(SymbolKind.property)
 
     // constructor parameter properties
-    const xProp = result.symbols.find((s) => s.name === 'x' && s.kind === SymbolKind.property)
+    const xProp = result.symbols.find(
+      (s) => s.name === 'x' && s.kind === SymbolKind.property,
+    )
     expect(xProp).toBeDefined()
 
     // trailing inline docstring on PI const
@@ -74,14 +76,18 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(piSym?.docstring).toBeTruthy()
 
     // explicit re-export of non-exported function
-    expect(result.explicitExports.some((e) => e.name === 'internalHelper')).toBe(true)
+    expect(
+      result.explicitExports.some((e) => e.name === 'internalHelper'),
+    ).toBe(true)
 
     // empty named import { } creates a record with empty imported_name
-    const emptyImport = result.imports.find((i) => i.imported_name === '')
+    const emptyImport = result.imports.find(
+      (i) => i.importedNames?.length === 0,
+    )
     expect(emptyImport).toBeDefined()
 
     // namespace import (import * as fs) creates a record
-    const fsImport = result.imports.find((i) => i.imported_name === 'fs')
+    const fsImport = result.imports.find((i) => i.importedNames?.includes('fs'))
     expect(fsImport).toBeDefined()
   })
 
@@ -94,7 +100,9 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(result).toBeDefined()
 
     // named imports
-    const importAdd = result.imports.find((i) => i.imported_name === 'add')
+    const importAdd = result.imports.find((i) =>
+      i.importedNames?.includes('add'),
+    )
     expect(importAdd).toBeDefined()
 
     // calls
@@ -107,7 +115,9 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(tokenEnv).toBeDefined()
 
     // subscript env var (process.env['SERVICE_KEY'])
-    const serviceKey = result.envVars.find((e) => e.name.includes('SERVICE_KEY'))
+    const serviceKey = result.envVars.find((e) =>
+      e.name.includes('SERVICE_KEY'),
+    )
     expect(serviceKey).toBeDefined()
 
     // exceptions
@@ -132,11 +142,17 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(result).toBeDefined()
 
     // __all__ exports
-    expect(result.explicitExports.some((e) => e.name === 'Authenticator')).toBe(true)
-    expect(result.explicitExports.some((e) => e.name === 'login_required')).toBe(true)
+    expect(result.explicitExports.some((e) => e.name === 'Authenticator')).toBe(
+      true,
+    )
+    expect(
+      result.explicitExports.some((e) => e.name === 'login_required'),
+    ).toBe(true)
 
     // aliased import (import os as operating_system)
-    const aliasedImport = result.imports.find((i) => i.imported_name === 'operating_system')
+    const aliasedImport = result.imports.find((i) =>
+      i.importedNames?.includes('os as operating_system'),
+    )
     expect(aliasedImport).toBeDefined()
 
     // module-level variable
@@ -177,11 +193,15 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(result).toBeDefined()
 
     // from .auth import Authenticator
-    const authImport = result.imports.find((i) => i.imported_name === 'Authenticator')
+    const authImport = result.imports.find((i) =>
+      i.importedNames?.includes('Authenticator'),
+    )
     expect(authImport).toBeDefined()
 
     // from .auth import login_required as require_login
-    const aliasImport = result.imports.find((i) => i.imported_name === 'require_login')
+    const aliasImport = result.imports.find((i) =>
+      i.importedNames?.includes('login_required as require_login'),
+    )
     expect(aliasImport).toBeDefined()
   })
 })

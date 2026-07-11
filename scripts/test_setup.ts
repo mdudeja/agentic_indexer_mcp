@@ -1,7 +1,7 @@
 import { afterAll, beforeAll } from 'bun:test'
 import { existsSync, unlinkSync, rmSync } from 'fs'
 import { dirname, join, resolve } from 'path'
-import { loadConfig } from 'src/config/loader'
+import { loadConfig, saveConfig } from 'src/config/loader'
 import { IndexerDB } from 'src/database/IndexerDB'
 import { IndexPipeline } from 'src/indexer/IndexPipeline'
 import { AppStateManager } from 'src/state'
@@ -45,6 +45,7 @@ async function prepareTestEnvironment() {
 
   // 1. Setup AppState config
   const config = await loadConfig(fixturePath)
+  await saveConfig(fixturePath, config)
 
   appStateManager = AppStateManager.getInstance()
   appStateManager.setItem('config', config)
@@ -82,7 +83,7 @@ export function getAppStateManagerForTests(): AppStateManager {
 beforeAll(async () => {
   clearDB()
   await prepareTestEnvironment()
-}, 60000)
+}, 0)
 
 afterAll(() => {
   clearDB()

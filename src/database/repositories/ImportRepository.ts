@@ -54,7 +54,7 @@ export class ImportRepository {
       .from(schema.imports)
       .where(
         like(
-          schema.imports.resolvedPath,
+          schema.imports.sourceModule,
           `%${moduleNamePattern.replace(/\*/g, '%')}%`,
         ),
       )

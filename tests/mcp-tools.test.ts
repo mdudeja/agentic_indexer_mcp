@@ -156,10 +156,10 @@ describe('MCP Tools Integration Tests', () => {
     const response = await getImportsTool.handler({ filePath: 'app.ts' })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain("import add from 'math.ts'")
     expect(response.content[0].text).toContain(
-      "import Calculator from 'math.ts'",
+      "import add, Calculator from 'math'",
     )
+    expect(response.content[0].text).toContain("import * from 'math'")
   })
 
   test('should list files via list_files tool', async () => {
@@ -228,15 +228,17 @@ describe('MCP Tools Integration Tests', () => {
     const response = await getImportByIdTool.handler({ id: imported!.id })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain(imported!.imported_name!)
+    expect(response.content[0].text).toContain(
+      imported!.importedNames?.join(', '),
+    )
   })
 
   test('should search symbols semantically via semantic_search_symbols tool', async () => {
     const semanticSearchTool = mockServer.tools.get('semantic_search_symbols')!
     const response = await semanticSearchTool.handler({ query: 'add' })
 
-    expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('[FUNCTION] add')
+    expect(response.isError).toBeTruthy()
+    expect(response.content[0].text).toContain('No embedder is configured') // no embedder available in test environment
   })
 
   test('should attempt to get type at location via get_type_at_location tool', async () => {
@@ -248,7 +250,8 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Could not resolve type')
+    expect(response.content[0].text).toContain('Type at math.ts:2:17')
+    expect(response.content[0].text).toContain('node:path')
   })
 
   test('should read file snippet via read_file_snippet tool', async () => {
@@ -452,8 +455,12 @@ describe('MCP Tools Integration Tests', () => {
       {
         id: importId,
         file_path: 'tests/my_module.test.ts',
-        module_path: 'src/my_module.ts',
-        imported_name: 'myFunc',
+        sourceModule: 'src/my_module.ts',
+        importedNames: ['myFunc'],
+        edgeKind: schema.EdgeKind.Import,
+        importKind: schema.ImportKind.Named,
+        resolutionSource: schema.ResolutionSource.Bun,
+        resolvedKind: schema.ResolvedKind.Source,
       },
     ])
 
@@ -763,8 +770,12 @@ describe('MCP Tools Integration Tests', () => {
       {
         id: impId,
         file_path: fileA,
-        module_path: 'external-module',
-        imported_name: 'externalFunc',
+        sourceModule: 'external-module',
+        importedNames: ['externalFunc'],
+        edgeKind: schema.EdgeKind.Import,
+        importKind: schema.ImportKind.Named,
+        resolutionSource: schema.ResolutionSource.Bun,
+        resolvedKind: schema.ResolvedKind.Package,
       },
     ])
 
@@ -840,7 +851,7 @@ describe('MCP Tools Integration Tests', () => {
       '(externalFunc from external-module)',
     )
     expect(resOut.content[0].text).toContain(
-      'console.log (unresolved or inbuilt command at line 5)',
+      'console.log (possibly unresolved) at line 5',
     )
 
     // F. Inbound calls, cycles, and nested child class callers
@@ -938,8 +949,12 @@ describe('MCP Tools Integration Tests', () => {
       {
         id: impId2,
         file_path: fileA,
-        module_path: 'ghost-module',
-        imported_name: 'unresolvedImportFunc',
+        sourceModule: 'ghost-module',
+        importedNames: ['unresolvedImportFunc'],
+        edgeKind: schema.EdgeKind.Import,
+        importKind: schema.ImportKind.Named,
+        resolutionSource: schema.ResolutionSource.Bun,
+        resolvedKind: schema.ResolvedKind.Source,
       },
     ])
     await store.calls.upsert([

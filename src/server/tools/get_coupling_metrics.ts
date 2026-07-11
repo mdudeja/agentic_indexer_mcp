@@ -76,19 +76,19 @@ export function registerGetCouplingMetricsTool(server: McpServer) {
         for (const imp of allImports) {
           if (
             !filePathSet.has(imp.file_path) ||
-            !filePathSet.has(imp.module_path)
+            !filePathSet.has(imp.sourceModule)
           ) {
             continue
           }
-          if (imp.file_path === imp.module_path) continue
+          if (imp.file_path === imp.sourceModule) continue
 
           const ce = ceMap.get(imp.file_path) ?? new Set<string>()
-          ce.add(imp.module_path)
+          ce.add(imp.sourceModule)
           ceMap.set(imp.file_path, ce)
 
-          const ca = caMap.get(imp.module_path) ?? new Set<string>()
+          const ca = caMap.get(imp.sourceModule) ?? new Set<string>()
           ca.add(imp.file_path)
-          caMap.set(imp.module_path, ca)
+          caMap.set(imp.sourceModule, ca)
         }
 
         // Build abstractness map (interface/type symbols / total symbols per file)

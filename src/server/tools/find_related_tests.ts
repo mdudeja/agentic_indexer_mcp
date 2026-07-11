@@ -68,7 +68,9 @@ export function registerFindRelatedTestsTool(server: McpServer) {
           )
           for (const imp of testFileImporters) {
             const reasons = found.get(imp.file_path) ?? []
-            reasons.push(`imports module '${imp.imported_name}'`)
+            reasons.push(
+              `imports module '${(imp.importedNames ?? []).join(', ')}'`,
+            )
             found.set(imp.file_path, reasons)
           }
         }

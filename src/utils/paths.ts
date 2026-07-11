@@ -65,6 +65,7 @@ export const resolveImportedModulePath = (
   }
 }
 
+/** Validates and resolves an input path relative to the workspace root, ensuring it stays within defined boundaries. */
 export const resolveWorkspacePath = (inputPath: string): string => {
   const root = AppStateManager.getInstance().getItem('root')
 

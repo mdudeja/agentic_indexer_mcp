@@ -18,6 +18,7 @@ import type { ImportResolver } from '../importResolver/ImportResolver'
 export class PythonAdapter implements LanguageAdapter {
   private importResolver?: ChainedImportResolver
 
+  /** Initializes a new instance of the PythonAdapter class with the specified language name. */
   constructor(private readonly langName: string) {}
   /** Extracts and categorizes symbols, imports, calls, exceptions, environment variables, and docstrings from a file based on query matches. Returns an object containing the extracted elements organized by type. */
   extract(
@@ -551,6 +552,7 @@ export class PythonAdapter implements LanguageAdapter {
     return signature.trim()
   }
 
+  /** Initializes an import resolver based on the current languages configuration to handle module resolution. */
   private createImportResolver() {
     const langConfig =
       AppStateManager.getInstance().getItem('config')?.languages[this.langName]

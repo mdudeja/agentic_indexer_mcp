@@ -76,6 +76,7 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
   }
 }
 
+/** Save the indexer configuration to a JSON file in the specified project root directory. The configuration is stored in the `.agentic` directory as `config.json`. If the config file already exists, the function skips creation and logs a warning. */
 export async function saveConfig(
   rootDir: string,
   config: IndexerConfig,
@@ -98,6 +99,7 @@ export async function saveConfig(
   }
 }
 
+/** Populates a mapping of file extensions to supported programming languages based on the given language configurations. This map allows quick lookup of which language corresponds to specific file extensions. */
 function populateExtnToLangMap(
   languages: Record<string, LanguageConfig>,
 ): Record<string, SupportedLanguage> {

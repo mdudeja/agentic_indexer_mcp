@@ -49,7 +49,7 @@ export function registerGetImportsForFileTool(server: McpServer) {
 
         const output = results
           .map((i) => {
-            return `- [${i.id}] import ${i.imported_name || '*'} from '${i.module_path}'`
+            return `- [${i.id}] import ${i.importedNames?.join(', ') || '*'} from '${i.sourceModule}'`
           })
           .join('\n')
 

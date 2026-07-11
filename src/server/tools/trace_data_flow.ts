@@ -140,9 +140,9 @@ export function registerTraceDataFlowTool(server: McpServer) {
               return [
                 {
                   id: entry.id,
-                  callee_name: importRecord.imported_name,
+                  callee_name: importRecord.sourceModule,
                   kind: 'import' as const,
-                  file_path: importRecord.module_path,
+                  file_path: importRecord.resolvedPath,
                   line: 0,
                   parameters_json: null,
                   return_type: null,
@@ -213,7 +213,7 @@ export function registerTraceDataFlowTool(server: McpServer) {
         const allFilePaths = new Set([
           ...candidates.map((c) => c.file_path),
           ...callerSymbols.map((s) => s.file_path),
-          ...calleeOrImportSymbolsFlattened.map((s) => s.file_path),
+          ...calleeOrImportSymbolsFlattened.map((s) => s.file_path ?? ''),
         ])
         await updateUsage(
           'trace_data_flow',

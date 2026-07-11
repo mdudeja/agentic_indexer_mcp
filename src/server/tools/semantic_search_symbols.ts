@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { IndexerDB } from '../../database/IndexerDB.ts'
 import type { SymbolKind } from '../../config/types.ts'
 import { updateUsage } from 'src/utils/updateUsage.ts'
-import { OllamaEmbeddingGenerator } from 'src/indexer/embedders/OllamaEmbeddingGenerator.ts'
 import type { EmbeddingGenerator } from 'src/indexer/steps/s4_EmbeddingGenerator.ts'
 import { embedderNameToClass } from 'src/indexer/IndexPipeline.ts'
 import { AppStateManager } from 'src/state/index.ts'
@@ -142,6 +141,7 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
   )
 }
 
+/** Attempts to load and initialize an embedding generator based on configuration settings. Returns null if configuration is missing or initialization fails. */
 async function loadEmbedder(): Promise<EmbeddingGenerator | null> {
   const config = AppStateManager.getInstance().getItem('config')
   if (

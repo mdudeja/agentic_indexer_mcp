@@ -42,8 +42,10 @@ describe('IndexPipeline Integration Tests', () => {
     expect(dbImports.length).toBeGreaterThanOrEqual(2)
     const appImports = dbImports.filter((i) => i.file_path === 'app.ts')
     expect(appImports.length).toBeGreaterThanOrEqual(2)
-    expect(appImports.map((i) => i.imported_name)).toContain('add')
-    expect(appImports.map((i) => i.imported_name)).toContain('Calculator')
+    expect(appImports.map((i) => i.importedNames ?? []).flat()).toContain('add')
+    expect(appImports.map((i) => i.importedNames ?? []).flat()).toContain(
+      'Calculator',
+    )
 
     // Check calls table
     const dbCalls = await db.select().from(schema.symbol_calls)

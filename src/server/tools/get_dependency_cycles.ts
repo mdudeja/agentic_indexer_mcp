@@ -52,13 +52,13 @@ export function registerGetDependencyCyclesTool(server: McpServer) {
         for (const imp of allImports) {
           if (
             !filePathSet.has(imp.file_path) ||
-            !filePathSet.has(imp.module_path)
+            !filePathSet.has(imp.resolvedPath ?? '')
           ) {
             continue
           }
-          if (imp.file_path === imp.module_path) continue // self-import, skip
+          if (imp.file_path === imp.resolvedPath) continue // self-import, skip
           const set = adj.get(imp.file_path) ?? new Set<string>()
-          set.add(imp.module_path)
+          set.add(imp.resolvedPath ?? '')
           adj.set(imp.file_path, set)
         }
 

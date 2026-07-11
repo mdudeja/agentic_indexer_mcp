@@ -14,13 +14,15 @@ import { AppStateManager } from 'src/state'
 import { dirname, join, relative } from 'path'
 import { existsSync } from 'fs'
 
+/** Provides import resolution functionality for Python code within the application. */
 export class PythonImportResolver implements ImportResolver {
   private projectRoot: string
   private langConfig?: LanguageConfig
   private pythonConfig?: PythonImportResolutionConfig
   private findSpecScriptPath: string | null = null
 
-  constructor(private readonly language: string) {
+  /** Initializes a new instance of the PythonImportResolver class with configuration specific to the provided programming language. */
+  constructor(language: string) {
     this.projectRoot =
       AppStateManager.getInstance().getItem('root') ?? process.cwd()
     this.langConfig =
@@ -40,6 +42,7 @@ export class PythonImportResolver implements ImportResolver {
     )
   }
 
+  /** Attempts to resolve an import by first checking for static resolution. If static resolution fails and Importlib is enabled, it falls back to resolving using Importlib. Returns the result of the successful resolution or null if unresolved. */
   resolve(
     moduleName: string,
     containingFile: string,
@@ -79,6 +82,7 @@ export class PythonImportResolver implements ImportResolver {
     return importlibResult
   }
 
+  /** Resolves a static import by determining the target module or file location based on the provided parameters. */
   private resolveStaticImport(
     moduleName: string,
     containingFile: string,
@@ -136,6 +140,7 @@ export class PythonImportResolver implements ImportResolver {
     }
   }
 
+  /** Resolves module paths and kinds via Pythons importlib by leveraging the find_spec python file. */
   private resolveViaImportlib(
     moduleName: string,
     importedNames: string[],
@@ -196,6 +201,7 @@ export class PythonImportResolver implements ImportResolver {
     }
   }
 
+  /** Creates an unresolved import resolution result object with specified parameters. */
   private getUnresolvedResult(
     moduleName: string,
     edgeKind: EdgeKind,

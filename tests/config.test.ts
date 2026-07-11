@@ -25,7 +25,10 @@ describe('loadConfig', () => {
   it('returns default config when config file does not exist', async () => {
     const rootDir = makeTempDir()
     const config = await loadConfig(rootDir)
-    expect(config).toEqual(default_config.indexer)
+    expect(config).toEqual({
+      ...default_config.indexer,
+      extnToLangMap: expect.any(Object),
+    })
   })
 
   it('returns default config when agentic dir is missing', async () => {

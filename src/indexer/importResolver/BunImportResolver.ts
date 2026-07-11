@@ -11,18 +11,21 @@ import { AppStateManager } from 'src/state'
 import { resolvePath } from 'src/utils/paths'
 import { dirname, relative, resolve } from 'path'
 
+/** A utility class to resolve module import paths using the Bun JavaScript runtime. It handles both built-in modules (like bun:) and external dependencies, providing detailed resolution information including confidence levels and source tracking. */
 export class BunImportResolver implements ImportResolver {
   private projectRoot: string
   private langConfig?: LanguageConfig
   private builtInResolvedKinds: string[] = ['bun:', 'node:', 'deno:']
 
-  constructor(private readonly language: string) {
+  /** Initializes a new instance of the resolver with the specified programming language, setting up project root and language-specific configurations. */
+  constructor(language: string) {
     this.projectRoot =
       AppStateManager.getInstance().getItem('root') ?? process.cwd()
     this.langConfig =
       AppStateManager.getInstance().getItem('config')?.languages?.[language]
   }
 
+  /** Resolve a module name to a concrete file path, handling both built-in modules and external dependencies, and returning detailed resolution information. */
   resolve(
     moduleName: string,
     containingFile: string,
@@ -48,9 +51,9 @@ export class BunImportResolver implements ImportResolver {
       }
     }
 
-    const from = resolve(containingFile, this.projectRoot)
+    const from = resolve(this.projectRoot, containingFile)
     const resolvedModuleName = moduleName.startsWith('.')
-      ? resolvePath(moduleName, dirname(containingFile))
+      ? resolvePath(moduleName, dirname(from))
       : moduleName
 
     try {
@@ -93,6 +96,7 @@ export class BunImportResolver implements ImportResolver {
     }
   }
 
+  /** Determines if a resolved path is external by checking if it resides outside the project root or within node_modules. */
   private isExternal(resolvedPath: string): boolean {
     return (
       resolvedPath.includes('/node_modules/') ||
@@ -100,6 +104,7 @@ export class BunImportResolver implements ImportResolver {
     )
   }
 
+  /** Determines the kind of a resolved resource based on its path and whether it is external. */
   private getResolvedKind(
     resolvedPath: string,
     isExternal: boolean,
@@ -133,6 +138,7 @@ export class BunImportResolver implements ImportResolver {
     return ResolvedKind.Unresolved
   }
 
+  /** Checks if a string is formatted like a valid path. This includes relative paths (./, ../), absolute paths (/...), and standard filesystem-style paths. */
   private isPathLike(moduleName: string): boolean {
     // should match relative paths (./, ../), absolute paths (/) and paths like src/module.ts
     return (

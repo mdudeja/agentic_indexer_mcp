@@ -90,10 +90,13 @@ export function registerGetEntryPointsTool(server: McpServer) {
 
         if (only_unreferenced) {
           const allImportedNames = await db
-            .select({ name: schema.imports.imported_name })
+            .select({ names: schema.imports.importedNames })
             .from(schema.imports)
           const importedNameSet = new Set(
-            allImportedNames.map((i) => i.name).filter(Boolean),
+            allImportedNames
+              .map((i) => i.names)
+              .flat()
+              .filter(Boolean),
           )
           results = results.filter((s) => !importedNameSet.has(s.name))
         }

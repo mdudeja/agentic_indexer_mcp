@@ -13,6 +13,7 @@ import { AppStateManager } from 'src/state'
 import type { LanguageConfig } from 'src/config/types'
 import { resolvePath } from 'src/utils/paths'
 
+/** A class that resolves import paths using TypeScript configuration files and module resolution logic. It determines the location of imported modules based on TypeScript compiler options and file structure, handling both internal and external dependencies. */
 export class TypescriptImportResolver implements ImportResolver {
   private projectRoot: string
   private langConfig?: LanguageConfig
@@ -23,6 +24,7 @@ export class TypescriptImportResolver implements ImportResolver {
   private host: ts.ModuleResolutionHost
   private builtInResolvedKinds: string[] = ['bun:', 'node:', 'deno:']
 
+  /** Initializes a new instance of the TypescriptImportResolver with configuration files for the specified programming language. */
   constructor(private readonly language: string) {
     this.projectRoot =
       AppStateManager.getInstance().getItem('root') ?? process.cwd()
@@ -71,6 +73,7 @@ export class TypescriptImportResolver implements ImportResolver {
     })
   }
 
+  /** Resolves a given module name within the context of a specified file, using TypeScript configuration to determine its location and other import-related details. */
   resolve(
     moduleName: string,
     containingFile: string,
@@ -146,6 +149,7 @@ export class TypescriptImportResolver implements ImportResolver {
     return this.enhanceResolutionResult(result)
   }
 
+  /** Loads the TypeScript configuration for a given file path by locating the nearest tsconfig.json file and returning its path after validation and caching. */
   private loadTsConfig(containingFile: string): string {
     const configPath = this.findNearestTsConfig(containingFile)
 
@@ -186,6 +190,7 @@ export class TypescriptImportResolver implements ImportResolver {
     return configPath
   }
 
+  /** Finds the nearest TypeScript configuration (tsconfig.json) file by searching upward from the specified files directory. */
   private findNearestTsConfig(containingFile: string): string | null {
     let currentDir = normalize(
       relative(this.projectRoot, dirname(containingFile)),
@@ -208,6 +213,7 @@ export class TypescriptImportResolver implements ImportResolver {
     return matchedPath
   }
 
+  /** Enhances an import resolution result by determining and setting the appropriate kind based on the modules source path and other factors. */
   private enhanceResolutionResult(
     result: Partial<ImportResolutionResult>,
   ): ImportResolutionResult {

@@ -1,7 +1,8 @@
 import { add, Calculator } from './math'
 import './math'
 
-function log(msg: string): void { // simple logger
+function log(msg: string): void {
+  // simple logger
   console.log(msg)
 }
 
