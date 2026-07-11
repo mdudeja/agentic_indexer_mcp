@@ -129,7 +129,7 @@ Refer to [src/config/default_config.ts] for default settings, including supporte
 The system operates across three distinct layers:
 
 1. **Parser & Extractor Layer (Tree-Sitter):** Uses `web-tree-sitter` and compiled `.wasm` grammars to parse source files, identifying symbol kinds, imports, and call sites.
-2. **Enhancement Layer (LSP):** Uses Language Server Protocol (LSP) to enhance symbols with additional type information, interfaces/type inheritance, and call-graph links.
+2. **Enhancement Layer (LSP):** Uses Language specific `ImportResolver` to resolve imports, and Server Protocol (LSP) to enhance symbols with additional type information, interfaces/type inheritance, and call-graph links.
 3. **Database Layer (Drizzle + Bun SQLite):** Persists metadata, signatures, dependencies, and file hashes to optimize subsequent runs.
 
 ---

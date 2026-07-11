@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "private": false,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "scripts": {
     "start": "bun run --env-file .env index.ts serve",

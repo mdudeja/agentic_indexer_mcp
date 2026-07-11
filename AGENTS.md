@@ -11,16 +11,27 @@ Agentic Indexer indexes codebases at a symbol level, making it easy for AI agent
 The codebase operates across the following directories:
 
 ```mermaid
-graph TD
+graph LR
     CLI[index.ts] --> Config[src/config/]
     CLI --> DB[src/database/]
     CLI --> Server[src/server/]
+    CLI --> Indexer[src/indexer/]
     CLI --> Watcher[src/watcher/]
+    CLI --> AppState[src/state]
     Server --> Tools[src/server/tools/]
+    Tools --> DB
+    Tools --> Config
+    Tools --> AppState
+    Tools --> FileManager[src/indexer/FileManager.ts]
     Watcher --> Indexer[src/indexer/]
     Indexer --> Adapters[src/indexer/adapters/]
     Indexer --> Enhancers[src/indexer/enhancers/]
+    Indexer --> ImportResolver[src/indexer/importResolver/]
+    Indexer --> Embedders[src/indexer/embedders/]
     Indexer --> DB
+    Indexer --> Config
+    Indexer --> FileManager
+    Indexer --> AppState
 ```
 
 ### Key Folders & Responsibilities
@@ -29,12 +40,18 @@ graph TD
 - [src/config/]: Configuration loader, defaults, schema types.
 - [src/database/]: SQLite database storage layer using Drizzle ORM and `sqlite-vec` for vector operations.
   - [IndexerDB.ts]: Singleton connection manager that initiates database connections, loads extensions, and applies migrations at startup.
+  - [repositories/]: Database access layer for symbols, files, and embeddings.
 - [src/indexer/]: Parser pipeline orchestration.
   - [adapters/]: Tree-sitter parsers for specific programming languages (e.g., `PythonAdapter`, `TypescriptAdapter`).
   - [enhancers/]: Type resolution, call site linkage, and structural analysis.
+  - [importResolver/]: Resolves imports for different languages.
+  - [embedders/]: Generates embeddings for symbols using AI providers.
+  - [docstrings/]: Extracts and generates (using AI providers) docstrings and comments for symbols.
+  - [FileManager.ts]: Exposes `isPathIgnored`, which checks if a file path is ignored based on `.gitignore` and `indexer.ignore` rules.
 - [src/server/]: MCP Server instantiation and standard IO transport logic.
   - [tools/]: Declarations and handler logic for each registered MCP tool.
 - [src/watcher/]: Incrementally re-indexes files on save/change.
+- [src/state/]: Maintains in-memory app state for the application.
 
 ---
 
@@ -75,9 +92,12 @@ Each tool is declared in its own file in [src/server/tools/] and registered via 
 
 AST extraction is done using `web-tree-sitter`. To add support for a new language:
 
-1. Create an adapter in [src/indexer/adapters/] inheriting from `LanguageAdapter`.
-2. Map the AST node patterns matching classes, functions, calls, imports, and exports for that language.
-3. Update [TreeSitterIndexer.ts] to detect files with the new language's extensions and instantiate your adapter.
+1. Write the `query.scm` file for the language in [src/indexer/queries/{language}/tags.scm]. This file defines the Tree-sitter query patterns for classes, functions, calls, imports, exports, exceptions, env variables, and docstrings, and should follow the structure of existing query files for other languages.
+2. Create an adapter in [src/indexer/adapters/] inheriting from `LanguageAdapter`.
+3. Map the AST node patterns matching classes, functions, calls, imports, and exports for that language in the adapter.
+4. Create an import resolver inheriting from `ImportResolver` for the language in [src/indexer/importResolver/] to resolve imports and re-exports (if the language supports them) using the language compiler itself.
+5. Create an enhancer inheriting from `GenericLSPEnhancer` for the language in [src/indexer/enhancers/] to resolve types, link call sites, and perform structural analysis. The GenericLSPEnhancer was created with TypeScript in mind, so any language specific quirks will need to be implemented in the language's enhancer.
+6. Update `loadEnhancerForFileType` in [src/indexer/IndexPipeline.ts] with the new enhancer, link adapater to the import resolver and register the new adapter in [src/indexer/steps/s1_symbol_extractor.ts].
 
 ---
 
@@ -96,12 +116,13 @@ If you modify database schemas:
    ```bash
    bunx drizzle-kit generate
    ```
+3. Ensure the repositories in [src/database/repositories/] are updated to reflect the schema changes.
 
 ---
 
 ## 🧪 Testing
 
-The tests are written using Bun's native test runner (`bun test`) and are located in the [tests/](file:///home/md/Projects/nvim_plugins/agentic_indexer_mcp/tests/) directory.
+The tests are written using Bun's native test runner (`bun test`) and are located in the [tests/](/tests/) directory.
 
 - Running tests:
   ```bash
@@ -119,7 +140,7 @@ The tests are written using Bun's native test runner (`bun test`) and are locate
 
 ## ⚠️ Important Rules for AI Agents
 
-1. **Path Resolution:** Always use the `resolvePath` utility from [src/utils/paths.ts] when dealing with file/directory paths. This ensures compatibility when paths are relative to the target workspace or the indexer project home.
+1. **Path Resolution:** Always use the `resolvePath` or `resolveWorkspacePath` utility from [src/utils/paths.ts] when dealing with file/directory paths. This ensures compatibility when paths are relative to the target workspace or the indexer project home.
 2. **Environment Variables:** Do not hardcode configurations. Read them from `process.env`. If a key is required, document it in `.env` and `.env.test`.
 3. **Preserve Docstrings:** When editing files, maintain existing JSDoc/TSDoc headers and comments unless explicitly directed to change them.
 4. **Clean Code & Modularity:** Keep MCP tool handlers slim. Keep business logic separated in repositories, adapters, or enhancers.
