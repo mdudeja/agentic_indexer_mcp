@@ -8,10 +8,16 @@ import {
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
-import { resolveImportedModulePath } from 'src/utils/paths'
+import { PythonImportResolver } from '../importResolver/PythonImportResolver'
+import { EdgeKind, ImportKind } from 'src/database/schemas/imports.schema'
+import { ChainedImportResolver } from '../importResolver/ChainedImportResolver'
+import { AppStateManager } from 'src/state'
+import type { ImportResolver } from '../importResolver/ImportResolver'
 
 /** An adapter class for extracting and categorizing symbols, imports, calls, exceptions, environment variables, and docstrings from Python code. It processes source files to gather metadata about code elements and organizes them into structured results. */
 export class PythonAdapter implements LanguageAdapter {
+  private importResolver?: ChainedImportResolver
+
   constructor(private readonly langName: string) {}
   /** Extracts and categorizes symbols, imports, calls, exceptions, environment variables, and docstrings from a file based on query matches. Returns an object containing the extracted elements organized by type. */
   extract(
@@ -26,6 +32,10 @@ export class PythonAdapter implements LanguageAdapter {
       exceptions: [],
       envVars: [],
       explicitExports: [],
+    }
+
+    if (!this.importResolver) {
+      this.createImportResolver()
     }
 
     const nodeToSymbolId = new Map<number, string>()
@@ -333,76 +343,78 @@ export class PythonAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
   ) {
-    if (node.type === 'import_statement') {
-      const imports = node.children.filter(
-        (c) => c && (c.type === 'dotted_name' || c.type === 'aliased_import'),
-      )
-      for (const imp of imports) {
-        if (!imp) continue
-        if (imp.type === 'dotted_name') {
-          result.imports.push({
-            id: randomUUIDv7(),
-            file_path,
-            module_path: imp.text,
-            imported_name: imp.text.split('.').pop() || imp.text,
-          })
-        } else if (imp.type === 'aliased_import') {
-          const nameNode = imp.children.find((c) => c?.type === 'dotted_name')
-          const aliasNode = imp.children.find((c) => c?.type === 'identifier')
-          if (nameNode && aliasNode) {
-            result.imports.push({
-              id: randomUUIDv7(),
-              file_path,
-              module_path: nameNode.text,
-              imported_name: aliasNode.text,
-            })
-          }
+    const importedNames: Set<string> = new Set()
+    const isImportFrom = node.type === 'import_from_statement'
+    const moduleNameNodes = isImportFrom
+      ? node.childrenForFieldName('module_name')
+      : node.childrenForFieldName('name')
+
+    if (!moduleNameNodes || moduleNameNodes.length === 0) return
+
+    let importKind: ImportKind = isImportFrom
+      ? ImportKind.Named
+      : ImportKind.Namespace
+
+    for (const moduleNameNode of moduleNameNodes) {
+      if (!moduleNameNode) continue
+      let moduleName =
+        moduleNameNode.type === 'dotted_name'
+          ? moduleNameNode.text
+          : moduleNameNode.children.find((c) => c && c.type === 'dotted_name')
+              ?.text
+      if (!moduleName) continue
+
+      if (moduleNameNode.type === 'relative_import') {
+        const import_prefix = moduleNameNode.children.find(
+          (c) => c && c.type === 'import_prefix',
+        )
+        if (import_prefix) {
+          moduleName = import_prefix.text + moduleName
         }
       }
-    } else if (node.type === 'import_from_statement') {
-      const moduleNameNode = node.childForFieldName('module_name')
-      if (!moduleNameNode) return
-      const modulePath = moduleNameNode
-        ? moduleNameNode.type === 'relative_import'
-          ? resolveImportedModulePath(
-              moduleNameNode.text
-                .replaceAll('..', '../')
-                .replace(/^\.(?!\.)/g, './')
-                .replace(/(\w+)\./g, '$1/'),
-              file_path,
-              '.py',
-              '__init__.py',
-            )
-          : moduleNameNode.text
-        : ''
-      const imports = node.children.filter(
-        (c) =>
-          c &&
-          (c.type === 'dotted_name' || c.type === 'aliased_import') &&
-          !c.equals(moduleNameNode),
-      )
-      for (const imp of imports) {
-        if (!imp) continue
-        if (imp.type === 'dotted_name') {
-          result.imports.push({
-            id: randomUUIDv7(),
-            file_path,
-            module_path: modulePath,
-            imported_name: imp.text,
-          })
-        } else if (imp.type === 'aliased_import') {
-          const nameNode = imp.children.find((c) => c?.type === 'dotted_name')
-          const aliasNode = imp.children.find((c) => c?.type === 'identifier')
-          if (nameNode && aliasNode) {
-            result.imports.push({
-              id: randomUUIDv7(),
-              file_path,
-              module_path: modulePath,
-              imported_name: aliasNode.text,
-            })
-          }
+
+      const nameNodes = isImportFrom
+        ? moduleNameNode.parent?.childrenForFieldName('name')
+        : [moduleNameNode]
+
+      if (!nameNodes || nameNodes.length === 0) continue
+
+      for (const nameNode of nameNodes) {
+        if (!nameNode) continue
+        if (nameNode.type === 'dotted_name') {
+          importedNames.add(nameNode.text)
+          importKind =
+            importKind === ImportKind.Namespace
+              ? ImportKind.Default
+              : ImportKind.Named
+          continue
+        }
+        if (nameNode.type === 'aliased_import') {
+          const dottedNameNode = nameNode.childForFieldName('name')
+          const aliasNode = nameNode.childForFieldName('alias')
+          if (!dottedNameNode || !aliasNode) continue
+          importedNames.add(`${dottedNameNode.text} as ${aliasNode.text}`)
         }
       }
+
+      const id = randomUUIDv7()
+      const importResolutionResult = this.importResolver!.resolve(
+        moduleName,
+        file_path,
+        Array.from(importedNames),
+        importKind,
+        EdgeKind.Import,
+      )
+
+      if (!importResolutionResult) {
+        continue
+      }
+
+      result.imports.push({
+        id,
+        file_path,
+        ...importResolutionResult,
+      })
     }
   }
 
@@ -537,5 +549,34 @@ export class PythonAdapter implements LanguageAdapter {
       }
     }
     return signature.trim()
+  }
+
+  private createImportResolver() {
+    const langConfig =
+      AppStateManager.getInstance().getItem('config')?.languages[this.langName]
+    if (!langConfig) {
+      throw new Error(`Language configuration for ${this.langName} not found.`)
+    }
+
+    const importResolutionConfig = langConfig.import_resolution
+    if (!importResolutionConfig) {
+      throw new Error(
+        `Import resolution configuration for ${this.langName} not found.`,
+      )
+    }
+
+    const resolvers: ImportResolver[] = []
+
+    switch (importResolutionConfig.resolution_strategy) {
+      case 'python-first':
+        resolvers.push(new PythonImportResolver(this.langName))
+        break
+      default:
+        throw new Error(
+          `Unsupported import resolution strategy: ${importResolutionConfig.resolution_strategy}`,
+        )
+    }
+
+    this.importResolver = new ChainedImportResolver(resolvers)
   }
 }

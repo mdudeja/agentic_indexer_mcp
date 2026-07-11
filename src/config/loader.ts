@@ -1,8 +1,9 @@
 import { default_config } from './default_config'
 import { join } from 'node:path'
-import type { IndexerConfig } from './types'
+import type { IndexerConfig, LanguageConfig } from './types'
 import { existsSync } from 'node:fs'
 import { logError, logInfo, logWarning } from 'src/utils/logger'
+import type { SupportedLanguage } from 'tree-sitter-wasm'
 
 /** Load the configuration for the indexer by checking the specified directory and files. If a valid configuration file is found, use its settings; otherwise, default values are applied, with special attention to docstring generation preferences. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
@@ -13,7 +14,10 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
 
   if (!existsSync(configPath)) {
     logWarning(`Config file not found at ${configPath}, using default config.`)
-    return default_config.indexer
+    return {
+      ...default_config.indexer,
+      extnToLangMap: populateExtnToLangMap(default_config.indexer.languages),
+    }
   }
 
   try {
@@ -21,7 +25,7 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
     const userConfig = JSON.parse(configContent) as {
       indexer?: Partial<IndexerConfig>
     }
-    return {
+    const config: IndexerConfig = {
       ...default_config.indexer,
       ...userConfig.indexer,
       languages: {
@@ -57,12 +61,18 @@ export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
         }),
       },
     }
+
+    config.extnToLangMap = populateExtnToLangMap(config.languages)
+
+    return config
   } catch (err) {
     logError(
       `Failed to load config file at ${configPath}, using default config.`,
     )
     logError('', err)
-    return default_config.indexer
+    const defaultConfig = default_config.indexer
+    defaultConfig.extnToLangMap = populateExtnToLangMap(defaultConfig.languages)
+    return defaultConfig
   }
 }
 
@@ -86,4 +96,20 @@ export async function saveConfig(
   } catch (err) {
     logError(`Failed to save config file at ${configPath}.`, err)
   }
+}
+
+function populateExtnToLangMap(
+  languages: Record<string, LanguageConfig>,
+): Record<string, SupportedLanguage> {
+  const extnToLangMap: Record<string, SupportedLanguage> = {}
+  for (const [lang, config] of Object.entries(languages)) {
+    if (!config.enabled) continue
+    const cleanedExtensions = config.extensions.map((ext) =>
+      ext.startsWith('.') ? ext.slice(1) : ext,
+    )
+    for (const ext of cleanedExtensions) {
+      extnToLangMap[ext] = lang as SupportedLanguage
+    }
+  }
+  return extnToLangMap
 }

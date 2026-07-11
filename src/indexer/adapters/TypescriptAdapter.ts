@@ -13,10 +13,12 @@ import { EdgeKind, ImportKind } from 'src/database/schemas'
 import { TypescriptImportResolver } from '../importResolver/TypescriptImportResolver'
 import type { ImportResolver } from '../importResolver/ImportResolver'
 import { BunImportResolver } from '../importResolver/BunImportResolver'
+import { ChainedImportResolver } from '../importResolver/ChainedImportResolver'
+import { AppStateManager } from 'src/state'
 
 /** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
 export class TypescriptAdapter implements LanguageAdapter {
-  private importResolver?: ImportResolver
+  private importResolver?: ChainedImportResolver
 
   constructor(private readonly langName: string) {}
   /** Extracts and organizes symbols, docstrings, calls, imports, exceptions, and environment variables from the given query matches in a file, returning a structured ExtractionResult containing all extracted information. */
@@ -35,7 +37,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     }
 
     if (!this.importResolver) {
-      this.importResolver = new BunImportResolver(this.langName)
+      this.createImportResolver()
     }
 
     // Maps node ID to symbol ID to quickly find parent_id
@@ -564,7 +566,7 @@ export class TypescriptAdapter implements LanguageAdapter {
             exportedNames.push(nameNode.text)
           }
         }
-        const resolutionResult = this.importResolver?.resolve(
+        const resolutionResult = this.importResolver!.resolve(
           moduleName,
           file_path,
           exportedNames,
@@ -597,7 +599,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         }
       }
 
-      const resolutionResult = this.importResolver?.resolve(
+      const resolutionResult = this.importResolver!.resolve(
         moduleName,
         file_path,
         exportedNames,
@@ -651,11 +653,14 @@ export class TypescriptAdapter implements LanguageAdapter {
       for (const spec of specifiers) {
         if (!spec) continue
         const nameNode =
-          spec.childForFieldName('alias') ||
           spec.childForFieldName('name') ||
           spec.children.find((c) => c && c.type === 'identifier')
+        const aliasNode = spec.childForFieldName('alias')
         if (nameNode) {
-          importedNames.push(nameNode.text)
+          const importedName = aliasNode
+            ? `${nameNode.text} as ${aliasNode.text}`
+            : nameNode.text
+          importedNames.push(importedName)
           importKind = ImportKind.Named
         }
       }
@@ -683,7 +688,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     }
 
     const id = randomUUIDv7()
-    const importResolutionResult = this.importResolver?.resolve(
+    const importResolutionResult = this.importResolver!.resolve(
       moduleName,
       file_path,
       importedNames,
@@ -827,5 +832,41 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
     return initialText.trim()
+  }
+
+  private createImportResolver(): void {
+    const langConfig =
+      AppStateManager.getInstance().getItem('config')?.languages[this.langName]
+
+    if (!langConfig) {
+      throw new Error(`Language configuration for ${this.langName} not found.`)
+    }
+
+    const importResolutionConfig = langConfig.import_resolution
+
+    if (!importResolutionConfig) {
+      throw new Error(
+        `Import resolution configuration for ${this.langName} not found.`,
+      )
+    }
+
+    const resolvers: ImportResolver[] = []
+
+    switch (importResolutionConfig.resolution_strategy) {
+      case 'ts-first':
+        resolvers.push(new TypescriptImportResolver(this.langName))
+        resolvers.push(new BunImportResolver(this.langName))
+        break
+      case 'bun-first':
+        resolvers.push(new BunImportResolver(this.langName))
+        resolvers.push(new TypescriptImportResolver(this.langName))
+        break
+      default:
+        throw new Error(
+          `Unsupported import resolution strategy: ${importResolutionConfig.resolution_strategy}`,
+        )
+    }
+
+    this.importResolver = new ChainedImportResolver(resolvers)
   }
 }

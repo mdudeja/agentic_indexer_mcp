@@ -78,7 +78,9 @@ export class TreeSitterIndexer {
       const langName = this.config.extnToLangMap[ext]
 
       if (!langName) {
-        logError(`No language mapping found for extension: ${ext}`)
+        logError(
+          `No language mapping found for extension: ${ext} or language disabled in config`,
+        )
         return {
           symbols: [],
           imports: [],

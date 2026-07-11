@@ -11,7 +11,14 @@ export { SymbolKind } from '../database/schemas'
 
 import type { SupportedLanguage } from 'tree-sitter-wasm'
 
+export type PythonImportResolutionConfig = {
+  python_path: string
+  source_roots: string[]
+  use_importlib: boolean
+}
+
 export type LanguageConfig = {
+  enabled: boolean
   extensions: string[]
   lsp_command?: string[]
   lang_features_paths?: string[]
@@ -21,7 +28,9 @@ export type LanguageConfig = {
   }
   tsconfig_paths?: string[]
   import_resolution?: {
+    resolution_strategy: 'ts-first' | 'bun-first' | 'python-first'
     asset_extensions: string[]
+    python?: PythonImportResolutionConfig
   }
 }
 

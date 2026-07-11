@@ -17,7 +17,8 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       '.claude/*.json',
       '__pycache__',
       'venv',
-      'poetry',
+      '.venv',
+      '.poetry',
       'docker',
       'doc/',
       '**/tests/fixtures/**',
@@ -27,18 +28,12 @@ export const default_config: Record<'indexer', IndexerConfig> = {
       '**/tests/mock/**',
       '**/tests/stubs/**',
     ],
-    extnToLangMap: {
-      tsx: 'tsx',
-      ts: 'typescript',
-      js: 'javascript',
-      jsx: 'javascript',
-      json: 'json',
-      py: 'python',
-    },
+    extnToLangMap: {}, // will be populated dynamically based on enabled languages in the config
     testFilePatterns: ['*.{test,spec}.*', '__tests__/**', 'tests/**'],
     entryPointPatterns: ['index.*', 'main.*', 'app.*'],
     languages: {
       typescript: {
+        enabled: true,
         extensions: ['.ts', '.mts', '.cts'],
         lsp_command: ['typescript-language-server', '--stdio'],
         lang_features_paths: [
@@ -78,9 +73,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             '.yml',
             '.toml',
           ],
+          resolution_strategy: 'bun-first',
         },
       },
       tsx: {
+        enabled: true,
         extensions: ['.tsx'],
         lsp_command: ['typescript-language-server', '--stdio'],
         lang_features_paths: [
@@ -120,9 +117,11 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             '.yml',
             '.toml',
           ],
+          resolution_strategy: 'ts-first',
         },
       },
       python: {
+        enabled: true,
         extensions: ['.py'],
         lsp_command: ['basedpyright-langserver', '--stdio'],
         lang_features_paths: ['/usr/lib/python', 'typeshed', 'django'],
@@ -131,24 +130,25 @@ export const default_config: Record<'indexer', IndexerConfig> = {
           signature_max_length: 400,
         },
         import_resolution: {
-          asset_extensions: [
-            '.css',
-            '.scss',
-            '.sass',
-            '.less',
-            '.svg',
-            '.png',
-            '.jpg',
-            '.jpeg',
-            '.webp',
-            '.json',
-            '.yaml',
-            '.yml',
-            '.toml',
-          ],
+          asset_extensions: [],
+          resolution_strategy: 'python-first',
+          python: {
+            python_path: '.venv/bin/python',
+            source_roots: [
+              'src',
+              '.',
+              'app',
+              'apps',
+              'packages',
+              'lib',
+              'libs',
+            ],
+            use_importlib: true,
+          },
         },
       },
       javascript: {
+        enabled: true,
         extensions: ['.js', '.mjs', '.cjs'],
         lsp_command: ['typescript-language-server', '--stdio'],
         lang_features_paths: [
@@ -178,6 +178,7 @@ export const default_config: Record<'indexer', IndexerConfig> = {
             '.yml',
             '.toml',
           ],
+          resolution_strategy: 'ts-first',
         },
       },
     },
