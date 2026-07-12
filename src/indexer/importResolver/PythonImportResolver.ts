@@ -126,7 +126,7 @@ export class PythonImportResolver implements ImportResolver {
       confidence: 1,
       reason: null,
       resolvedKind: ResolvedKind.Source,
-      isRuntimeDependency: false,
+      isRuntimeDependency: importKind !== ImportKind.TypeOnly,
     }
   }
 
@@ -136,8 +136,7 @@ export class PythonImportResolver implements ImportResolver {
     containingFile: string,
   ): string {
     const startDotCount = moduleName.match(/^\.+/)?.[0].length ?? 0
-    const levelsUp =
-      startDotCount % 2 === 0 ? startDotCount / 2 : (startDotCount - 1) / 2
+    const levelsUp = startDotCount - 1
     let targetPath: string = moduleName
       .slice(startDotCount)
       .replaceAll('.', '/')

@@ -424,19 +424,70 @@ export class PythonAdapter implements LanguageAdapter {
   /** Determines if a given node is within a type-checking context by traversing its parent nodes and checking for specific conditions. This is used to identify whether certain imports should be treated as type-only imports. */
   private importIsInsideTypeCheckingContext(node: Node): boolean {
     let current: Node | null = node.parent
-    let maxLevels = 3
 
-    while (current && maxLevels > 0) {
+    while (current) {
       if (current.type === 'if_statement') {
         const condition = current.childForFieldName('condition')
+        const consequence = current.childForFieldName('consequence')
+        const alternative = current.childForFieldName('alternative')
 
-        if (condition && condition.text.includes('TYPE_CHECKING')) {
+        if (!condition) {
+          current = current.parent
+          continue
+        }
+
+        if (
+          consequence &&
+          this.isPositiveTypeCheckingCondition(condition) &&
+          this.isDescendantOf(node, consequence)
+        ) {
+          return true
+        }
+
+        if (
+          alternative &&
+          this.isNegativeTypeCheckingCondition(condition) &&
+          this.isDescendantOf(node, alternative)
+        ) {
           return true
         }
       }
 
       current = current.parent
-      maxLevels--
+    }
+
+    return false
+  }
+
+  /** Checks if a given condition node represents a positive type-checking condition, such as `if TYPE_CHECKING:` or similar constructs. */
+  private isPositiveTypeCheckingCondition(condition: Node): boolean {
+    const text = condition.text.replace(/\s+/g, '')
+
+    return (
+      text === 'TYPE_CHECKING' ||
+      text === 'typing.TYPE_CHECKING' ||
+      text.endsWith('.TYPE_CHECKING')
+    )
+  }
+
+  /** Checks if a given condition node represents a negative type-checking condition, such as `if not TYPE_CHECKING:` or similar constructs. */
+  private isNegativeTypeCheckingCondition(condition: Node): boolean {
+    const text = condition.text.replace(/\s+/g, '')
+
+    return (
+      text === 'notTYPE_CHECKING' ||
+      text === 'nottyping.TYPE_CHECKING' ||
+      /^not.*\.TYPE_CHECKING$/.test(text)
+    )
+  }
+
+  /** Checks if a given node is a descendant of another node in the AST. */
+  private isDescendantOf(node: Node, ancestor: Node): boolean {
+    let current: Node | null = node
+
+    while (current) {
+      if (current.id === ancestor.id) return true
+      current = current.parent
     }
 
     return false

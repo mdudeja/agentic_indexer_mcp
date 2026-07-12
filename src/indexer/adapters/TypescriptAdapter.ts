@@ -569,6 +569,11 @@ export class TypescriptAdapter implements LanguageAdapter {
             exportedNames.push(nameNode.text)
           }
         }
+
+        if (/^export\s+type\b/.test(node.text.trim())) {
+          importKind = ImportKind.TypeOnly
+        }
+
         const resolutionResult = this.importResolver!.resolve(
           moduleName,
           file_path,
@@ -608,7 +613,7 @@ export class TypescriptAdapter implements LanguageAdapter {
         }
       }
 
-      if (node.text.includes('export type {')) {
+      if (/^export\s+type\b/.test(node.text.trim())) {
         importKind = ImportKind.TypeOnly
       }
 
@@ -713,7 +718,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
 
-    if (node.text.includes('import type {')) {
+    if (/^import\s+type\b/.test(node.text.trim())) {
       importKind = ImportKind.TypeOnly
     }
 
