@@ -1,5 +1,5 @@
 import {
-  type ImportKind,
+  ImportKind,
   type EdgeKind,
   type ImportResolutionResult,
   ResolutionSource,
@@ -23,8 +23,8 @@ export class ChainedImportResolver implements ImportResolver {
   ): ImportResolutionResult | null {
     let lastUnresolvedResult: ImportResolutionResult | null = null
 
-    try {
-      for (const resolver of this.resolvers) {
+    for (const resolver of this.resolvers) {
+      try {
         const result = resolver.resolve(
           moduleName,
           containingFile,
@@ -41,21 +41,27 @@ export class ChainedImportResolver implements ImportResolver {
         }
 
         lastUnresolvedResult = result
-      }
-    } catch (error) {
-      logError('Error occurred while resolving import:', error)
-      lastUnresolvedResult = {
-        sourceModule: moduleName,
-        edgeKind,
-        importedNames,
-        importKind,
-        resolvedPath: null,
-        resolutionSource: ResolutionSource.Unresolved,
-        isExternal: false,
-        confidence: 0,
-        reason: `Error occurred while resolving import: ${error instanceof Error ? error.message : String(error)}`,
-        resolvedKind: ResolvedKind.Unresolved,
-        isRuntimeDependency: false,
+      } catch (error) {
+        logError(
+          `Error in resolver ${resolver.constructor.name} for module ${moduleName}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+        lastUnresolvedResult = {
+          sourceModule: moduleName,
+          edgeKind,
+          importedNames,
+          importKind,
+          resolvedPath: null,
+          resolutionSource: ResolutionSource.Unresolved,
+          isExternal: false,
+          confidence: 0,
+          reason: `Resolver ${resolver.constructor.name} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          resolvedKind: ResolvedKind.Unresolved,
+          isRuntimeDependency: importKind !== ImportKind.TypeOnly,
+        }
       }
     }
 
