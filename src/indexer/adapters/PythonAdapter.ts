@@ -403,7 +403,9 @@ export class PythonAdapter implements LanguageAdapter {
         moduleName,
         file_path,
         Array.from(importedNames),
-        importKind,
+        this.importIsInsideTypeCheckingContext(node)
+          ? ImportKind.TypeOnly
+          : importKind,
         EdgeKind.Import,
       )
 
@@ -417,6 +419,27 @@ export class PythonAdapter implements LanguageAdapter {
         ...importResolutionResult,
       })
     }
+  }
+
+  /** Determines if a given node is within a type-checking context by traversing its parent nodes and checking for specific conditions. This is used to identify whether certain imports should be treated as type-only imports. */
+  private importIsInsideTypeCheckingContext(node: Node): boolean {
+    let current: Node | null = node.parent
+    let maxLevels = 3
+
+    while (current && maxLevels > 0) {
+      if (current.type === 'if_statement') {
+        const condition = current.childForFieldName('condition')
+
+        if (condition && condition.text.includes('TYPE_CHECKING')) {
+          return true
+        }
+      }
+
+      current = current.parent
+      maxLevels--
+    }
+
+    return false
   }
 
   /** Captures exception information during code analysis and links exceptions to their nearest symbol in the codebase by traversing parent nodes. */

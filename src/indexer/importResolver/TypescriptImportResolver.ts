@@ -1,6 +1,6 @@
 import {
   EdgeKind,
-  type ImportKind,
+  ImportKind,
   ResolutionSource,
   ResolvedKind,
   type ImportResolutionResult,
@@ -106,7 +106,7 @@ export class TypescriptImportResolver implements ImportResolver {
         importedNames,
         importKind,
         resolvedKind: ResolvedKind.BuiltIn,
-        isRuntimeDependency: true,
+        isRuntimeDependency: importKind !== ImportKind.TypeOnly,
       }
     }
 
@@ -123,7 +123,7 @@ export class TypescriptImportResolver implements ImportResolver {
       importedNames,
       importKind,
       edgeKind,
-      isRuntimeDependency: false,
+      isRuntimeDependency: importKind !== ImportKind.TypeOnly,
     }
 
     if (!resolved) {
@@ -170,20 +170,19 @@ export class TypescriptImportResolver implements ImportResolver {
       )
     }
 
-    this.compilerOptionsByConfigPath.set(
-      configPath,
-      ts.parseJsonConfigFileContent(
-        configFile.config,
-        ts.sys,
-        dirname(configFilePath),
-      ),
+    const parsed = ts.parseJsonConfigFileContent(
+      configFile.config,
+      ts.sys,
+      dirname(configFilePath),
     )
+
+    this.compilerOptionsByConfigPath.set(configPath, parsed)
     this.cacheByConfigPath.set(
       configPath,
       ts.createModuleResolutionCache(
         this.projectRoot,
         ts.sys.useCaseSensitiveFileNames ? (s) => s : (s) => s.toLowerCase(),
-        configFile.config.compilerOptions,
+        parsed.options,
       ),
     )
 
@@ -222,31 +221,46 @@ export class TypescriptImportResolver implements ImportResolver {
       result.resolvedKind = ResolvedKind.Unresolved
       result.confidence = 0
     } else {
-      if (result.resolvedPath.endsWith('.d.ts')) {
-        result.resolvedKind = ResolvedKind.Declaration
-      } else if (
-        this.builtInResolvedKinds.some((prefix) =>
-          result.sourceModule?.startsWith(prefix),
-        )
-      ) {
-        result.resolvedKind = ResolvedKind.BuiltIn
-      } else if (result.isExternal) {
-        result.resolvedKind = ResolvedKind.Package
-      } else {
-        result.resolvedKind = ResolvedKind.Source
-      }
-
-      const assetExtensions =
-        this.langConfig?.import_resolution?.asset_extensions
-
-      if (assetExtensions && assetExtensions.length > 0) {
-        const ext = result.sourceModule?.split('.').pop()?.toLowerCase()
-        if (ext && assetExtensions.includes(ext)) {
-          result.resolvedKind = ResolvedKind.Asset
-        }
-      }
+      result.resolvedKind = this.getResolvedKind(
+        resolve(this.projectRoot, result.resolvedPath),
+        result.isExternal ?? false,
+      )
     }
 
     return result as ImportResolutionResult
+  }
+
+  /** Determines the kind of a resolved resource based on its path and whether it is external. */
+  private getResolvedKind(
+    resolvedPath: string,
+    isExternal: boolean,
+  ): ResolvedKind {
+    if (resolvedPath.endsWith('.d.ts')) {
+      return ResolvedKind.Declaration
+    }
+
+    const assetExtensions =
+      this.langConfig?.import_resolution?.asset_extensions ?? []
+    if (assetExtensions.some((ext) => resolvedPath.endsWith(ext))) {
+      return ResolvedKind.Asset
+    }
+
+    if (
+      this.builtInResolvedKinds.some((prefix) =>
+        resolvedPath.startsWith(prefix),
+      )
+    ) {
+      return ResolvedKind.BuiltIn
+    }
+
+    if (isExternal) {
+      return ResolvedKind.Package
+    }
+
+    if (resolvedPath.startsWith(this.projectRoot)) {
+      return ResolvedKind.Source
+    }
+
+    return ResolvedKind.Unresolved
   }
 }

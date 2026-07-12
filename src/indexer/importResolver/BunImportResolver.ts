@@ -1,5 +1,5 @@
 import {
-  type ImportKind,
+  ImportKind,
   type EdgeKind,
   type ImportResolutionResult,
   ResolutionSource,
@@ -10,6 +10,7 @@ import type { LanguageConfig } from 'src/config/types'
 import { AppStateManager } from 'src/state'
 import { resolvePath } from 'src/utils/paths'
 import { dirname, relative, resolve } from 'path'
+import { logError } from 'src/utils/logger'
 
 /** A utility class to resolve module import paths using the Bun JavaScript runtime. It handles both built-in modules (like bun:) and external dependencies, providing detailed resolution information including confidence levels and source tracking. */
 export class BunImportResolver implements ImportResolver {
@@ -43,7 +44,7 @@ export class BunImportResolver implements ImportResolver {
         sourceModule: moduleName,
         resolutionSource: ResolutionSource.Bun,
         isExternal: true,
-        isRuntimeDependency: true,
+        isRuntimeDependency: importKind !== ImportKind.TypeOnly,
         confidence: 1,
         resolvedKind: ResolvedKind.BuiltIn,
         resolvedPath: moduleName,
@@ -69,14 +70,14 @@ export class BunImportResolver implements ImportResolver {
           : resolvedModuleName,
         resolutionSource: ResolutionSource.Bun,
         isExternal: isExternal,
-        isRuntimeDependency: false,
+        isRuntimeDependency: importKind !== ImportKind.TypeOnly,
         confidence: 1,
         resolvedKind: this.getResolvedKind(resolved, isExternal),
         resolvedPath: resolvedPath,
         reason: null,
       }
     } catch (error) {
-      console.error(
+      logError(
         `Error resolving module '${resolvedModuleName}' from '${containingFile}':`,
         error,
       )
@@ -87,7 +88,7 @@ export class BunImportResolver implements ImportResolver {
         sourceModule: resolvedModuleName,
         resolutionSource: ResolutionSource.Unresolved,
         isExternal: false,
-        isRuntimeDependency: false,
+        isRuntimeDependency: importKind !== ImportKind.TypeOnly,
         confidence: 0,
         resolvedKind: ResolvedKind.Unresolved,
         resolvedPath: null,
@@ -109,6 +110,16 @@ export class BunImportResolver implements ImportResolver {
     resolvedPath: string,
     isExternal: boolean,
   ): ResolvedKind {
+    if (resolvedPath.endsWith('.d.ts')) {
+      return ResolvedKind.Declaration
+    }
+
+    const assetExtensions =
+      this.langConfig?.import_resolution?.asset_extensions ?? []
+    if (assetExtensions.some((ext) => resolvedPath.endsWith(ext))) {
+      return ResolvedKind.Asset
+    }
+
     if (
       this.builtInResolvedKinds.some((prefix) =>
         resolvedPath.startsWith(prefix),
@@ -125,16 +136,6 @@ export class BunImportResolver implements ImportResolver {
       return ResolvedKind.Source
     }
 
-    if (resolvedPath.endsWith('.d.ts')) {
-      return ResolvedKind.Declaration
-    }
-
-    const assetExtensions =
-      this.langConfig?.import_resolution?.asset_extensions ?? []
-    if (assetExtensions.some((ext) => resolvedPath.endsWith(ext))) {
-      return ResolvedKind.Asset
-    }
-
     return ResolvedKind.Unresolved
   }
 
@@ -145,7 +146,7 @@ export class BunImportResolver implements ImportResolver {
       moduleName.startsWith('./') ||
       moduleName.startsWith('../') ||
       moduleName.startsWith('/') ||
-      /^[a-zA-Z0-9_\-./]+$/.test(moduleName)
+      /^(?:[\w\-.]+\/)+[\w\-.]+$/.test(moduleName)
     )
   }
 }

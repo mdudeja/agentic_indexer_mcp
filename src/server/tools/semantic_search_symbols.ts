@@ -6,7 +6,7 @@ import { updateUsage } from 'src/utils/updateUsage.ts'
 import type { EmbeddingGenerator } from 'src/indexer/steps/s4_EmbeddingGenerator.ts'
 import { embedderNameToClass } from 'src/indexer/IndexPipeline.ts'
 import { AppStateManager } from 'src/state/index.ts'
-import { logError } from 'src/utils/logger.ts'
+import { logError, logWarning } from 'src/utils/logger.ts'
 
 /** Registers a tool to enable semantic and hybrid searching for symbols across the codebase. */
 export function registerSemanticSearchSymbolsTool(server: McpServer) {
@@ -63,7 +63,7 @@ export function registerSemanticSearchSymbolsTool(server: McpServer) {
         // Generate query embedding (gracefully falls back to text-only if Ollama is down)
         const embedding = await embedder.getEmbedding(query)
         if (!embedding) {
-          console.warn(
+          logWarning(
             '[Semantic Search] Ollama embedding generation failed. Falling back to text-only search.',
           )
         }

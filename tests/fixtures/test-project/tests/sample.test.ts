@@ -1,8 +1,10 @@
 import { Calculator, Direction, MathUtils } from '../math'
 import { runCalculation, Service } from '../app'
+import { helper } from '../utils/helper'
 import { describe, expect, it } from 'bun:test'
 
 const calc = new Calculator()
+helper()
 
 describe('Sample Tests', () => {
   it('should multiply two numbers correctly', () => {

@@ -592,14 +592,24 @@ export class TypescriptAdapter implements LanguageAdapter {
       )
       for (const spec of specifiers) {
         if (!spec) continue
+        const isTypeExport = spec.text.startsWith('type ')
         const nameNode =
-          spec.childForFieldName('alias') ||
           spec.childForFieldName('name') ||
           spec.children.find((c) => c && c.type === 'identifier')
+        const aliasNode = spec.childForFieldName('alias')
         if (nameNode) {
-          exportedNames.push(nameNode.text)
+          const exportedName = aliasNode
+            ? `${nameNode.text} as ${aliasNode.text}`
+            : nameNode.text
+          exportedNames.push(
+            isTypeExport ? `type ${exportedName}` : exportedName,
+          )
           importKind = ImportKind.Named
         }
+      }
+
+      if (node.text.includes('export type {')) {
+        importKind = ImportKind.TypeOnly
       }
 
       const resolutionResult = this.importResolver!.resolve(
@@ -673,6 +683,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       )
       for (const spec of specifiers) {
         if (!spec) continue
+        const isTypeImport = spec.text.startsWith('type ')
         const nameNode =
           spec.childForFieldName('name') ||
           spec.children.find((c) => c && c.type === 'identifier')
@@ -681,7 +692,9 @@ export class TypescriptAdapter implements LanguageAdapter {
           const importedName = aliasNode
             ? `${nameNode.text} as ${aliasNode.text}`
             : nameNode.text
-          importedNames.push(importedName)
+          importedNames.push(
+            isTypeImport ? `type ${importedName}` : importedName,
+          )
           importKind = ImportKind.Named
         }
       }
@@ -700,7 +713,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
 
-    if (sourceNode.text.includes('import type {')) {
+    if (node.text.includes('import type {')) {
       importKind = ImportKind.TypeOnly
     }
 

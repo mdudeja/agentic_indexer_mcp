@@ -25,7 +25,7 @@ describe('CLI Integration Tests', () => {
     expect(
       fs.existsSync(join(fixturePath, process.env.DB_FILE_URL as string)),
     ).toBe(true)
-    expect(text).toContain('Indexed 21 files.')
+    expect(text).toContain('Indexed 28 files.')
     expect(text).toContain('Running Step 1:')
     expect(text).toContain('Running Step 2:')
     expect(text).toContain('sqlite-vec virtual table initialized')

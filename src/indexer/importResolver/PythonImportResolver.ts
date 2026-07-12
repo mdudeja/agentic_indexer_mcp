@@ -1,8 +1,8 @@
 import {
+  ImportKind,
   ResolutionSource,
   ResolvedKind,
   type EdgeKind,
-  type ImportKind,
   type ImportResolutionResult,
 } from 'src/database/schemas'
 import type { ImportResolver } from './ImportResolver'
@@ -91,20 +91,10 @@ export class PythonImportResolver implements ImportResolver {
     edgeKind: EdgeKind,
   ): ImportResolutionResult | null {
     const sourceRoots = this.pythonConfig?.source_roots ?? []
-    let targetPath: string = moduleName
-    if (moduleName.startsWith('.')) {
-      const startDotCount = moduleName.match(/^\.+/)![0].length
-      if (startDotCount === 1) {
-        targetPath = moduleName.slice(1)
-      } else {
-        const levelsUp =
-          startDotCount % 2 === 0 ? startDotCount / 2 : (startDotCount - 1) / 2
-        targetPath = `${'../'.repeat(levelsUp)}${moduleName.slice(startDotCount)}`
-        targetPath = join(dirname(containingFile), targetPath)
-      }
-    }
-
-    targetPath = targetPath.replaceAll('.', '/')
+    let targetPath = this.generateTargetPathForStaticImport(
+      moduleName,
+      containingFile,
+    )
 
     let foundFile: string | null = null
     for (const sourceRoot of [dirname(containingFile), ...sourceRoots]) {
@@ -140,7 +130,27 @@ export class PythonImportResolver implements ImportResolver {
     }
   }
 
-  /** Resolves module paths and kinds via Pythons importlib by leveraging the find_spec python file. */
+  /** Generates the target path for a static import based on the module name and containing file. */
+  private generateTargetPathForStaticImport(
+    moduleName: string,
+    containingFile: string,
+  ): string {
+    const startDotCount = moduleName.match(/^\.+/)?.[0].length ?? 0
+    const levelsUp =
+      startDotCount % 2 === 0 ? startDotCount / 2 : (startDotCount - 1) / 2
+    let targetPath: string = moduleName
+      .slice(startDotCount)
+      .replaceAll('.', '/')
+
+    if (levelsUp > 0) {
+      targetPath = `${'../'.repeat(levelsUp)}${targetPath}`
+      targetPath = join(dirname(containingFile), targetPath)
+    }
+
+    return targetPath
+  }
+
+  /** Resolves module paths and kinds via Python's importlib by leveraging the find_spec python file. */
   private resolveViaImportlib(
     moduleName: string,
     importedNames: string[],
@@ -186,6 +196,11 @@ export class PythonImportResolver implements ImportResolver {
       )
     }
 
+    const isExternal =
+      result.kind === ResolvedKind.Package ||
+      result.kind === ResolvedKind.BuiltIn ||
+      result.kind === ResolvedKind.StdLib
+
     return {
       sourceModule: moduleName,
       edgeKind,
@@ -193,11 +208,11 @@ export class PythonImportResolver implements ImportResolver {
       importKind,
       resolvedPath: result.origin,
       resolutionSource: ResolutionSource.PythonImportlib,
-      isExternal: false,
+      isExternal,
       confidence: 1,
       reason: null,
       resolvedKind: result.kind,
-      isRuntimeDependency: false,
+      isRuntimeDependency: importKind !== ImportKind.TypeOnly,
     }
   }
 

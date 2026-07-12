@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@utils/*": [
+        "./utils/*"
+      ]
+    },
+    "resolveJsonModule": true,
+    "esModuleInterop": true
+  }
+}

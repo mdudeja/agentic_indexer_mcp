@@ -61,8 +61,9 @@ describe('Database Repositories Unit Tests', () => {
 
     // search
     const results = await store.symbols.search('helper*')
-    expect(results.length).toBe(1)
-    expect(results[0]?.name).toBe('helperFunction')
+    expect(results.length).toBe(2)
+    expect(results[0]?.name).toBeOneOf(['helperFunction', 'helper'])
+    expect(results[1]?.name).toBeOneOf(['helperFunction', 'helper'])
   })
 
   it('should test ImportRepository methods', async () => {
