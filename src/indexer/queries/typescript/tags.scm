@@ -26,9 +26,9 @@
 (call_expression
   function: (member_expression property: (property_identifier) @call.member))
 (call_expression
-  function: (subscript_expression index: (string) @call.subscript))
+  function: (subscript_expression index: (string) @call.dynamic))
 (new_expression
-  constructor: (identifier) @call.identifier)
+  constructor: (identifier) @call.constructor)
 
 ; Imports
 (import_statement) @import.statement

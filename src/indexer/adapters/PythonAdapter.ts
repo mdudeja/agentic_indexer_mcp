@@ -8,11 +8,11 @@ import {
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
-import { PythonImportResolver } from '../importResolver/PythonImportResolver'
+import { PythonImportResolver } from '../resolvers/importResolvers/PythonImportResolver'
 import { EdgeKind, ImportKind } from 'src/database/schemas/imports.schema'
-import { ChainedImportResolver } from '../importResolver/ChainedImportResolver'
+import { ChainedImportResolver } from '../resolvers/importResolvers/ChainedImportResolver'
 import { AppStateManager } from 'src/state'
-import type { ImportResolver } from '../importResolver/ImportResolver'
+import type { ImportResolver } from '../resolvers/importResolvers/ImportResolver'
 
 /** An adapter class for extracting and categorizing symbols, imports, calls, exceptions, environment variables, and docstrings from Python code. It processes source files to gather metadata about code elements and organizes them into structured results. */
 export class PythonAdapter implements LanguageAdapter {

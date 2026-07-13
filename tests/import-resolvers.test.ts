@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeAll, afterAll, spyOn } from 'bun:test'
 import { join } from 'path'
-import { BunImportResolver } from '../src/indexer/importResolver/BunImportResolver'
-import { TypescriptImportResolver } from '../src/indexer/importResolver/TypescriptImportResolver'
-import { PythonImportResolver } from '../src/indexer/importResolver/PythonImportResolver'
-import { ChainedImportResolver } from '../src/indexer/importResolver/ChainedImportResolver'
-import type { ImportResolver } from '../src/indexer/importResolver/ImportResolver'
+import { BunImportResolver } from '../src/indexer/resolvers/importResolvers/BunImportResolver'
+import { TypescriptImportResolver } from '../src/indexer/resolvers/importResolvers/TypescriptImportResolver'
+import { PythonImportResolver } from '../src/indexer/resolvers/importResolvers/PythonImportResolver'
+import { ChainedImportResolver } from '../src/indexer/resolvers/importResolvers/ChainedImportResolver'
+import type { ImportResolver } from '../src/indexer/resolvers/importResolvers/ImportResolver'
 import {
   EdgeKind,
   ImportKind,

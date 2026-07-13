@@ -10,10 +10,10 @@ import { randomUUIDv7 } from 'bun'
 import { getCommentText } from '../docstrings/formatComment'
 import { hashSymbol } from 'src/utils/hashers'
 import { EdgeKind, ImportKind } from 'src/database/schemas'
-import { TypescriptImportResolver } from '../importResolver/TypescriptImportResolver'
-import type { ImportResolver } from '../importResolver/ImportResolver'
-import { BunImportResolver } from '../importResolver/BunImportResolver'
-import { ChainedImportResolver } from '../importResolver/ChainedImportResolver'
+import { TypescriptImportResolver } from '../resolvers/importResolvers/TypescriptImportResolver'
+import type { ImportResolver } from '../resolvers/importResolvers/ImportResolver'
+import { BunImportResolver } from '../resolvers/importResolvers/BunImportResolver'
+import { ChainedImportResolver } from '../resolvers/importResolvers/ChainedImportResolver'
 import { AppStateManager } from 'src/state'
 
 /** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
@@ -168,6 +168,7 @@ export class TypescriptAdapter implements LanguageAdapter {
             file_path,
             result,
             nodeToSymbolId,
+            capture.name,
           )
         }
 
@@ -374,18 +375,13 @@ export class TypescriptAdapter implements LanguageAdapter {
     const paramsNode = constructorNode.childForFieldName('parameters')
     if (!paramsNode) return
 
-    const PARAMETER_NODE_TYPES = new Set([
-      'required_parameter',
-      'optional_parameter',
-    ])
-
     for (const param of paramsNode.children) {
-      if (!param || !PARAMETER_NODE_TYPES.has(param.type)) continue
+      if (!param) continue
 
       // A parameter is promoted to a class field if it carries an
-      // accessibility modifier (public/private/protected) and/or `readonly`.
+      // accessibility modifier (public/private/protected).
       const isParameterProperty = param.children.some(
-        (c) => c?.type === 'accessibility_modifier' || c?.type === 'readonly',
+        (c) => c?.type === 'accessibility_modifier',
       )
       if (!isParameterProperty) continue
 
@@ -431,6 +427,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
+    capturedName: string,
   ) {
     const lexicalKinds = [SymbolKind.const, SymbolKind.let, SymbolKind.var]
 
