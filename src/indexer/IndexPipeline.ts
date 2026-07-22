@@ -95,6 +95,7 @@ export class IndexPipeline {
       })
       await this.options.store.symbols.upsert(parsed.symbols)
       await this.options.store.calls.upsert(parsed.calls)
+      await this.options.store.callSites.upsert(parsed.call_sites || [])
       await this.options.store.imports.upsert(parsed.imports)
       await this.options.store.analysis.upsertExceptions(parsed.exceptions)
       await this.options.store.analysis.upsertEnvVars(parsed.envVars)

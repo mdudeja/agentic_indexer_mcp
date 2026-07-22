@@ -170,6 +170,16 @@ export class SymbolRepository {
       .orderBy(schema.symbols.line)
   }
 
+  /** Retrieves all symbols associated with a list of files, ordered by their file path and line number. */
+  async getForFiles(paths: string[]): Promise<IndexedSymbol['Select'][]> {
+    if (!paths.length) return []
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(inArray(schema.symbols.file_path, paths))
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
   /** Retrieves all symbols in the subtree of the specified symbol, including its descendants, and returns their hierarchical data as an array. */
   async getSubtree(symbolId: string): Promise<IndexedSymbol['Select'][]> {
     const rows = this.sqlite
@@ -196,10 +206,11 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
-  /** Retrieves the symbol located at the specified file and line number. Returns null if no symbol exists at that location. */
+  /** Retrieves the symbol located at the specified file, line and column number. Returns null if no symbol exists at that location. */
   async getAtLocation(
     filePath: string,
     line: number,
+    column: number,
   ): Promise<IndexedSymbol['Select'] | null> {
     const result = await this.db
       .select()
@@ -208,6 +219,7 @@ export class SymbolRepository {
         and(
           eq(schema.symbols.file_path, filePath),
           eq(schema.symbols.line, line),
+          eq(schema.symbols.column, column),
         ),
       )
       .limit(1)
@@ -218,6 +230,7 @@ export class SymbolRepository {
   async getCallableAtLocation(
     filePath: string,
     line: number,
+    column: number,
     callableKinds: SymbolKind[],
   ): Promise<IndexedSymbol['Select'] | null> {
     const result = await this.db
@@ -227,6 +240,7 @@ export class SymbolRepository {
         and(
           eq(schema.symbols.file_path, filePath),
           eq(schema.symbols.line, line),
+          eq(schema.symbols.column, column),
           inArray(schema.symbols.kind, callableKinds),
         ),
       )

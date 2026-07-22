@@ -101,7 +101,7 @@ export class TypescriptImportResolver implements ImportResolver {
         resolvedPath: null,
         resolutionSource: ResolutionSource.Typescript,
         isExternal: true,
-        confidence: 1,
+        confidence: 100,
         reason: null,
         importedNames,
         importKind,
@@ -142,7 +142,7 @@ export class TypescriptImportResolver implements ImportResolver {
         ),
         resolutionSource: ResolutionSource.Typescript,
         isExternal: resolved.isExternalLibraryImport ?? false,
-        confidence: 1,
+        confidence: 100,
         reason: null,
       }
     }

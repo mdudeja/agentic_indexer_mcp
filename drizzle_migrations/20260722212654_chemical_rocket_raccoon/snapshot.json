@@ -1,11 +1,19 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "33e08c4b-b961-4057-8ec8-01689a693567",
+  "id": "63c6c392-fdc6-4e64-a702-ea1e9e3bec1e",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
+    {
+      "name": "call_edges",
+      "entityType": "tables"
+    },
+    {
+      "name": "call_sites",
+      "entityType": "tables"
+    },
     {
       "name": "env_vars",
       "entityType": "tables"
@@ -33,6 +41,246 @@
     {
       "name": "tool_usage",
       "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_site_id",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "caller_id",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'unresolved'",
+      "generated": null,
+      "name": "target_kind",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_id",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imports_id",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'unresolved'",
+      "generated": null,
+      "name": "resolution_source",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "confidence",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "call_edges"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "caller_id",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "caller_file_path",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "language_name",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_text",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_expression",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_name",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_base",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "callee_property",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'unknown'",
+      "generated": null,
+      "name": "call_kind",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_line",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_column",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "end_line",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "end_column",
+      "entityType": "columns",
+      "table": "call_sites"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "docstring",
+      "entityType": "columns",
+      "table": "call_sites"
     },
     {
       "type": "text",
@@ -686,6 +934,96 @@
     },
     {
       "columns": [
+        "call_site_id"
+      ],
+      "tableTo": "call_sites",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_call_edges_call_site_id_call_sites_id_fk",
+      "entityType": "fks",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        "caller_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_call_edges_caller_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        "callee_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_call_edges_callee_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        "imports_id"
+      ],
+      "tableTo": "imports",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_call_edges_imports_id_imports_id_fk",
+      "entityType": "fks",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        "caller_id"
+      ],
+      "tableTo": "symbols",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_call_sites_caller_id_symbols_id_fk",
+      "entityType": "fks",
+      "table": "call_sites"
+    },
+    {
+      "columns": [
+        "caller_file_path"
+      ],
+      "tableTo": "files",
+      "columnsTo": [
+        "path"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_call_sites_caller_file_path_files_path_fk",
+      "entityType": "fks",
+      "table": "call_sites"
+    },
+    {
+      "columns": [
         "symbol_id"
       ],
       "tableTo": "symbols",
@@ -839,6 +1177,24 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "call_edges_pk",
+      "table": "call_edges",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "call_sites_pk",
+      "table": "call_sites",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "env_vars_pk",
       "table": "env_vars",
       "entityType": "pks"
@@ -896,6 +1252,168 @@
       "name": "tool_usage_pk",
       "table": "tool_usage",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "call_site_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_edges_site",
+      "entityType": "indexes",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        {
+          "value": "caller_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_edges_caller",
+      "entityType": "indexes",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_kind",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_edges_target_kind",
+      "entityType": "indexes",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        {
+          "value": "callee_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_edges_callee",
+      "entityType": "indexes",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        {
+          "value": "imports_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_edges_import",
+      "entityType": "indexes",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        {
+          "value": "resolution_source",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_edges_resolution_source",
+      "entityType": "indexes",
+      "table": "call_edges"
+    },
+    {
+      "columns": [
+        {
+          "value": "caller_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_sites_caller",
+      "entityType": "indexes",
+      "table": "call_sites"
+    },
+    {
+      "columns": [
+        {
+          "value": "caller_file_path",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_sites_file",
+      "entityType": "indexes",
+      "table": "call_sites"
+    },
+    {
+      "columns": [
+        {
+          "value": "callee_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_sites_name",
+      "entityType": "indexes",
+      "table": "call_sites"
+    },
+    {
+      "columns": [
+        {
+          "value": "call_kind",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_sites_kind",
+      "entityType": "indexes",
+      "table": "call_sites"
+    },
+    {
+      "columns": [
+        {
+          "value": "caller_file_path",
+          "isExpression": false
+        },
+        {
+          "value": "call_line",
+          "isExpression": false
+        },
+        {
+          "value": "call_column",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_call_sites_location",
+      "entityType": "indexes",
+      "table": "call_sites"
     },
     {
       "columns": [

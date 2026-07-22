@@ -2,15 +2,16 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { TreeSitterIndexer } from 'src/indexer/TreeSitterIndexer'
 import { loadConfig } from 'src/config/loader'
+import type { Node } from 'web-tree-sitter'
 
 /** Generates a formatted string representation of a node and its children, useful for debugging or visualizing tree structures. The output includes indentation based on depth and parentheses to denote nested nodes. */
 function printNode(
-  node: any,
+  node: Node | null | undefined,
   source: string,
   depth: number,
   fieldName?: string,
 ): string {
-  if (!node.isNamed) return ''
+  if (!node || !node.isNamed) return ''
 
   const indent = '  '.repeat(depth)
   const label = fieldName ? `${fieldName}: ` : ''
@@ -58,7 +59,7 @@ export async function printTree(filePath: string): Promise<void> {
   const indexer = new TreeSitterIndexer()
   await indexer.init()
   const tree = await indexer.parseFile(sourceCode, langName)
-  console.log(printNode(tree.rootNode, sourceCode, 0))
+  console.log(printNode(tree?.rootNode, sourceCode, 0))
 }
 
 const filePath = process.argv[2]

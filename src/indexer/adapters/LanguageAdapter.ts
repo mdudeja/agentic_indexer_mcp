@@ -9,6 +9,7 @@ import type {
 import { SymbolKind } from '../../config/types'
 import { getCommentText } from '../docstrings/formatComment'
 import { hashSymbol } from 'src/utils/hashers'
+import type { IndexedCallSite } from 'src/database/schemas/call_sites.schema'
 
 export interface ExtractionResult {
   symbols: IndexedSymbol['Select'][]
@@ -17,6 +18,7 @@ export interface ExtractionResult {
   exceptions: IndexedException['Select'][]
   envVars: IndexedEnvVar['Select'][]
   explicitExports: IndexedSymbol['Select'][]
+  call_sites?: IndexedCallSite['Insert'][]
 }
 
 export interface LanguageAdapter {
@@ -24,7 +26,11 @@ export interface LanguageAdapter {
    * Given the tree-sitter root node and query matches, this method extracts
    * all semantic information to index the file.
    */
-  extract(matches: QueryMatch[], file_path: string, rootNode: Node): ExtractionResult
+  extract(
+    matches: QueryMatch[],
+    file_path: string,
+    rootNode: Node,
+  ): ExtractionResult
 }
 
 /**

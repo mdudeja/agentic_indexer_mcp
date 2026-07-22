@@ -30,3 +30,40 @@ class Authenticator:
         if username == "admin" and password == "secret":
             return True
         raise ValueError("Invalid credentials")
+
+
+def require_role(role):
+    '''Decorator factory - exercises a decorator applied with call syntax.'''
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+class WrapValue:
+    def __init__(self, v):
+        self.v = v
+
+    def double(self):
+        return self.v * 2
+
+
+def wrap_value(v):
+    return WrapValue(v)
+
+
+# Exercises callee_base default-value (`or`) stripping in PythonCallSiteResolver.
+def use_fallback(a=None):
+    return wrap_value(a or 5).double()
+
+
+# Exercises super().method() calls.
+class AdminAuthenticator(Authenticator):
+    def __init__(self):
+        super().__init__()
+        self.role = 'admin'
+
+    @require_role('admin')
+    def admin_only(self):
+        return True

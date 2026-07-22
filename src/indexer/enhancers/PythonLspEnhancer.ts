@@ -3,9 +3,31 @@ import * as schema from '../../database/schemas/index.ts'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import { SymbolKind } from '../../database/schemas/index.ts'
 import { logInfo } from 'src/utils/logger.ts'
+import { PythonCallEdgeResolver } from '../resolvers/callEdgeResolvers/PythonCallEdgeResolver.ts'
 
 /** Specialized LSP enhancer for Python, extending generic LSP capabilities with language-specific optimizations and features. */
 export class PythonLspEnhancer extends GenericLspEnhancer {
+  /** Initializes resources and prepares for operation. Returns true if successful, false otherwise. */
+  override async init(): Promise<boolean> {
+    const superReturn = await super.init()
+    if (!superReturn) {
+      return false
+    }
+
+    try {
+      this.callEdgeResolver = new PythonCallEdgeResolver(
+        this.client!,
+        this.languageId,
+      )
+      return superReturn
+    } catch (err) {
+      logInfo(
+        `Failed to initialize PythonCallEdgeResolver: ${err}`,
+        'PythonLspEnhancer',
+      )
+      return false
+    }
+  }
   /** Enhances interface inheritance by resolving missing inheritance information for classes in specified files. */
   override async enhanceInterfaceInheritence(
     relPaths: string[],

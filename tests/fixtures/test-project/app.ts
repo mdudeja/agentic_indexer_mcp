@@ -34,3 +34,31 @@ export class Service {
     log(process.env['SERVICE_KEY'] ?? '')
   }
 }
+
+function decoratorFactory() {
+  return (_target: any, _key?: PropertyKey, descriptor?: PropertyDescriptor) =>
+    descriptor
+}
+
+// Exercises: super(...) constructor calls, super.method() calls, and a
+// decorator applied with call syntax (as opposed to the bare `@decorator`
+// references above).
+export class ServiceWithArgs extends Service {
+  constructor() {
+    super()
+  }
+
+  @decoratorFactory()
+  override run(): void {
+    super.run()
+  }
+}
+
+const actions: Record<string, () => void> = {
+  run: () => log('dynamic run'),
+}
+
+// Exercises a dynamic bracket call with a literal string key.
+export function invokeDynamicAction(): void {
+  actions['run']?.()
+}

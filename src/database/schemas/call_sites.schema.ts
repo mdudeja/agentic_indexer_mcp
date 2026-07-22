@@ -37,9 +37,6 @@ export const call_sites = sqliteTable(
     end_line: integer(),
     end_column: integer(),
     docstring: text(),
-
-    // True for handlers[name](), obj[method](), getattr(obj, name)(), etc.
-    is_dynamic: integer({ mode: 'boolean' }).notNull().default(false),
   },
   (table) => [
     index('idx_call_sites_caller').on(table.caller_id),

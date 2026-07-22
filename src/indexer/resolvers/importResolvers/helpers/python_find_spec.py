@@ -9,6 +9,7 @@ purelib_path = pathlib.Path(sysconfig.get_paths()["purelib"]).resolve()
 platlib_path = pathlib.Path(sysconfig.get_paths()["platlib"]).resolve()
 
 def classify_path(origin: str) -> str:
+    """ This function categorizes a given file path into different types. """
     if origin == "built-in" or origin == "frozen":
         return "builtin"
     

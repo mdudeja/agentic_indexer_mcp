@@ -69,8 +69,6 @@
             "runtimeArgs": [
                 "run",
                 "enhance-file",
-                "--cwd",
-                "/home/md/Projects/ECN/ashiyana_mis/repo"
             ],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false,

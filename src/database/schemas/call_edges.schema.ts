@@ -19,7 +19,7 @@ export enum CallResolutionSource {
   ExternalImport = 'external_import',
   BuiltinList = 'builtin_list',
   LspDefinition = 'lsp_definition',
-  LspReferences = 'lsp_references',
+  LspHover = 'lsp_hover',
   DynamicPattern = 'dynamic_pattern',
   Unresolved = 'unresolved',
 }
@@ -43,7 +43,6 @@ export const call_edges = sqliteTable(
     imports_id: text().references(() => imports.id, {
       onDelete: 'set null',
     }),
-    is_lang_feature: integer({ mode: 'boolean' }).notNull().default(false),
     resolution_source: customEnum<CallResolutionSource>('resolution_source')
       .notNull()
       .default(CallResolutionSource.Unresolved),

@@ -8,15 +8,21 @@ import {
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
 import { hashSymbol } from 'src/utils/hashers'
-import { PythonImportResolver } from '../resolvers/importResolvers/PythonImportResolver'
+import {
+  PythonImportResolver,
+  ChainedImportResolver,
+} from '../resolvers/importResolvers'
 import { EdgeKind, ImportKind } from 'src/database/schemas/imports.schema'
-import { ChainedImportResolver } from '../resolvers/importResolvers/ChainedImportResolver'
 import { AppStateManager } from 'src/state'
 import type { ImportResolver } from '../resolvers/importResolvers/ImportResolver'
+import { PythonCallSiteResolver } from '../resolvers/callSiteResolvers'
+import { CallKind } from 'src/database/schemas/call_sites.schema'
+import { logError } from 'src/utils/logger'
 
 /** An adapter class for extracting and categorizing symbols, imports, calls, exceptions, environment variables, and docstrings from Python code. It processes source files to gather metadata about code elements and organizes them into structured results. */
 export class PythonAdapter implements LanguageAdapter {
   private importResolver?: ChainedImportResolver
+  private callSiteResolver?: PythonCallSiteResolver
 
   /** Initializes a new instance of the PythonAdapter class with the specified language name. */
   constructor(private readonly langName: string) {}
@@ -32,15 +38,18 @@ export class PythonAdapter implements LanguageAdapter {
       calls: [],
       exceptions: [],
       envVars: [],
+      call_sites: [],
       explicitExports: [],
     }
 
     if (!this.importResolver) {
       this.createImportResolver()
     }
+    if (!this.callSiteResolver) {
+      this.callSiteResolver = new PythonCallSiteResolver()
+    }
 
     const nodeToSymbolId = new Map<number, string>()
-    const anonScopeSymbols = new Set<string>()
 
     seedModuleSymbol(rootNode, file_path, 'python', nodeToSymbolId, result)
 
@@ -93,7 +102,6 @@ export class PythonAdapter implements LanguageAdapter {
             file_path,
             result,
             nodeToSymbolId,
-            anonScopeSymbols,
           )
         }
       }
@@ -159,6 +167,7 @@ export class PythonAdapter implements LanguageAdapter {
             file_path,
             result,
             nodeToSymbolId,
+            capture.name,
           )
         } else if (capture.name.startsWith('import.')) {
           this.handleImportCapture(capture.node, file_path, result)
@@ -175,7 +184,7 @@ export class PythonAdapter implements LanguageAdapter {
       }
     }
 
-    return this.cleanUpLexicals(result, anonScopeSymbols)
+    return result
   }
 
   /** Processes and records symbol information captured during code analysis. It identifies symbols such as classes, functions, and variables, calculates unique identifiers based on their metadata, and establishes parent-child relationships between them. This method ensures that each symbol's details are stored for further use in the analysis process. */
@@ -185,7 +194,6 @@ export class PythonAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
-    anonScopeSymbols: Set<string>,
   ) {
     let kind: SymbolKind | undefined
     let nameNode: Node | null = null
@@ -234,9 +242,7 @@ export class PythonAdapter implements LanguageAdapter {
       signature: targetNode.text,
     })
 
-    const ANON_SCOPE_TYPES = new Set(['lambda'])
     let parent_id: string | null = null
-    let insideAnonScope = false
     let p = targetNode.parent
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
@@ -258,14 +264,10 @@ export class PythonAdapter implements LanguageAdapter {
         }
         break
       }
-      insideAnonScope = ANON_SCOPE_TYPES.has(p.type) || insideAnonScope
       p = p.parent
     }
 
     nodeToSymbolId.set(targetNode.id, id)
-    if (insideAnonScope) {
-      anonScopeSymbols.add(id)
-    }
 
     const exported =
       (targetNode.parent?.type === 'module' &&
@@ -277,10 +279,10 @@ export class PythonAdapter implements LanguageAdapter {
       name: nameNode.text,
       kind,
       file_path,
-      line: nameNode.startPosition.row,
-      column: nameNode.startPosition.column,
-      end_line: nameNode.endPosition.row,
-      end_column: nameNode.endPosition.column,
+      line: node.startPosition.row,
+      column: node.startPosition.column,
+      end_line: node.endPosition.row,
+      end_column: node.endPosition.column,
       signature: signature,
       parameters_json: null,
       return_type: null,
@@ -299,6 +301,7 @@ export class PythonAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
+    capturedName: string,
   ) {
     const lexicalKinds = [SymbolKind.const, SymbolKind.let, SymbolKind.var]
 
@@ -318,6 +321,36 @@ export class PythonAdapter implements LanguageAdapter {
     }
     if (!caller_id) return
 
+    const id = randomUUIDv7()
+    const resolvedCallSite = this.callSiteResolver!.resolve(node, capturedName)
+
+    if (resolvedCallSite) {
+      // mark the function call as constructor if the callee_name is a class symbol
+      if (resolvedCallSite.call_kind === CallKind.FunctionCall) {
+        const potentialClassSymbol = result.symbols.find(
+          (s) =>
+            s.name === resolvedCallSite.callee_name &&
+            s.kind === SymbolKind.class,
+        )
+
+        if (potentialClassSymbol) {
+          resolvedCallSite.call_kind = CallKind.ConstructorCall
+        }
+      }
+
+      result.call_sites!.push({
+        id,
+        caller_id,
+        language_name: 'python',
+        caller_file_path: file_path,
+        ...resolvedCallSite,
+      })
+    } else {
+      logError(
+        `Failed to resolve call site for node: ${node.text} in file: ${file_path}:${node.startPosition.row}:${node.startPosition.column}`,
+      )
+    }
+
     let callExpr: Node | null = node.parent
     while (callExpr && callExpr.type !== 'call') {
       callExpr = callExpr.parent
@@ -325,7 +358,7 @@ export class PythonAdapter implements LanguageAdapter {
     const callText = callExpr ? callExpr.text : (node.parent?.text ?? node.text)
 
     result.calls.push({
-      id: randomUUIDv7(),
+      id,
       caller_id,
       callee_name: node.text,
       language_name: 'python',
@@ -552,65 +585,6 @@ export class PythonAdapter implements LanguageAdapter {
       line: node.startPosition.row,
       column: node.startPosition.column,
     })
-  }
-
-  /** Cleans up the extraction results by removing unnecessary lexical symbols. Specifically targets variables declared in anonymous scope or under callable parents to prevent redundant references. */
-  private cleanUpLexicals(
-    result: ExtractionResult,
-    anonScopeSymbols: Set<string>,
-  ) {
-    const lexicalKinds = [SymbolKind.var]
-    const callableKinds = [
-      SymbolKind.function,
-      SymbolKind.method,
-      SymbolKind.class,
-    ]
-
-    const toRemoveIds = new Set<string>()
-
-    for (const symbol of result.symbols) {
-      const parentId = symbol.parent_id
-      const isParentExported = parentId
-        ? result.symbols.some((s) => s.id === parentId && s.exported)
-        : false
-
-      if (
-        !lexicalKinds.includes(symbol.kind) ||
-        symbol.exported ||
-        isParentExported
-      )
-        continue
-
-      const hasCallableParent =
-        anonScopeSymbols.has(symbol.id) ||
-        (symbol.parent_id
-          ? result.symbols.some(
-              (s) =>
-                s.id === symbol.parent_id &&
-                callableKinds.includes(s.kind) &&
-                !s.exported,
-            )
-          : false)
-
-      if (hasCallableParent) {
-        toRemoveIds.add(symbol.id)
-      }
-    }
-
-    result.symbols = result.symbols.filter(
-      (s) => !toRemoveIds.has(s.id) && !toRemoveIds.has(s.parent_id ?? ''),
-    )
-    result.calls = result.calls.filter((c) =>
-      result.symbols.some((s) => s.id === c.caller_id),
-    )
-    result.exceptions = result.exceptions.filter((e) =>
-      result.symbols.some((s) => s.id === e.symbol_id),
-    )
-    result.envVars = result.envVars.filter((v) =>
-      result.symbols.some((s) => s.id === v.symbol_id),
-    )
-
-    return result
   }
 
   /** Generates a signature string for a given AST node by analyzing its text content, removing function bodies. */

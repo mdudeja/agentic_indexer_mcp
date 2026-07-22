@@ -28,6 +28,7 @@ import { registerGetCouplingMetricsTool } from '../src/server/tools/get_coupling
 import { registerAuditAgentConfigTool } from '../src/server/tools/audit_agent_config'
 import { registerExploreCodebaseTool } from '../src/server/tools/explore_codebase'
 import { registerGetTokenSavingsTool } from '../src/server/tools/get_token_savings'
+import type { ZodTypeAny } from 'zod/v3'
 
 /** A mock server implementation for MCP (Message Communication Protocol), providing functionality to register tools with specified schemas and handler functions. */
 class MockMcpServer {
@@ -39,7 +40,7 @@ class MockMcpServer {
     const wrappedHandler = async (args: any) => {
       const parsedArgs =
         schema.inputSchema && typeof schema.inputSchema.parse === 'function'
-          ? schema.inputSchema.parse(args)
+          ? (schema.inputSchema as ZodTypeAny).parse(args)
           : args
       return handler(parsedArgs)
     }

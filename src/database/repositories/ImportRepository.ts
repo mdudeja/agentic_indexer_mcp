@@ -1,6 +1,6 @@
 import { Database, Statement } from 'bun:sqlite'
 import type { SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
-import { eq, like, and, getColumns } from 'drizzle-orm'
+import { eq, like, and, getColumns, inArray } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedImport } from '../schemas'
 
@@ -93,6 +93,44 @@ export class ImportRepository {
         ),
       )
       .orderBy(schema.imports.resolvedPath)
+  }
+
+  /** Retrieves imports that match the specified file path, ordered by resolved path. */
+  async getByFilePath(filePath: string): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(eq(schema.imports.file_path, filePath))
+      .orderBy(schema.imports.resolvedPath)
+  }
+
+  /** Retrieves a single import that matches both the specified file path and resolved path. Returns `null` if no matching import is found. */
+  async getByFilePathAndResolvedPath(
+    filePath: string,
+    resolvedPath: string,
+  ): Promise<IndexedImport['Select'] | null> {
+    const result = await this.db
+      .select()
+      .from(schema.imports)
+      .where(
+        and(
+          eq(schema.imports.file_path, filePath),
+          eq(schema.imports.resolvedPath, resolvedPath),
+        ),
+      )
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  /** Retrieves imports that match any of the specified file paths, ordered by file path and resolved path. */
+  async getByFilePaths(
+    filePaths: string[],
+  ): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(inArray(schema.imports.file_path, filePaths))
+      .orderBy(schema.imports.file_path, schema.imports.resolvedPath)
   }
 
   /** Fetches all import records from the database. */

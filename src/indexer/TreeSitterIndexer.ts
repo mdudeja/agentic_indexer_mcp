@@ -1,4 +1,4 @@
-import { Parser, Language, Query } from 'web-tree-sitter'
+import { Parser, Language, Query, Tree } from 'web-tree-sitter'
 import * as fs from 'fs'
 import { logError } from 'src/utils/logger'
 import { AppStateManager } from 'src/state'
@@ -139,7 +139,7 @@ export class TreeSitterIndexer {
   async parseFile(
     sourceCode: string,
     langName: SupportedLanguage,
-  ): Promise<any> {
+  ): Promise<Tree | null> {
     const lang = await this.loadLanguage(langName)
 
     if (!this.parser) {

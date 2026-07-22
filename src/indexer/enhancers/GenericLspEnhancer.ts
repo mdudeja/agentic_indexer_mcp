@@ -1,4 +1,3 @@
-import { readFileSync } from 'fs'
 import { type Enhancer } from '../steps/s2_Enhancer.ts'
 import { LspClient } from '../../utils/LspClient.ts'
 import { logError, logInfo } from 'src/utils/logger.ts'
@@ -16,16 +15,16 @@ import {
   parseTypeNames,
 } from 'src/utils/misc.ts'
 import { resolveWorkspacePath } from 'src/utils/paths.ts'
+import { type CallEdgeResolver } from '../resolvers/callEdgeResolvers/index.ts'
 
 /** Enhancer implementation that connects to standard Language Servers (like typescript language server, Pyright, or gopls) for runtime type queries. */
 export class GenericLspEnhancer implements Enhancer {
   protected store: IndexerDB
   protected db: ReturnType<IndexerDB['getDb']>
   protected client: LspClient | null = null
-  protected openDocuments = new Set<string>()
   protected initialized = false
   protected available = false
-  protected serverCapabilities: Record<string, any> = {}
+  protected callEdgeResolver?: CallEdgeResolver
 
   /** Initializes a new instance of the GenericLspEnhancer class with the specified current working directory (cwd), LSP command, and language identifier. Sets up the database connection using IndexerDB. */
   constructor(
@@ -45,7 +44,6 @@ export class GenericLspEnhancer implements Enhancer {
     try {
       this.client = new LspClient(this.lspCommand, this.cwd)
       await this.client.start()
-      this.serverCapabilities = this.client.getCapabilities()
       this.available = true
     } catch (err) {
       logError(
@@ -65,10 +63,14 @@ export class GenericLspEnhancer implements Enhancer {
     column: number,
     timeoutMs = 8000,
   ): Promise<string | null> {
-    if (!this.available || !this.client || !this.supports('hoverProvider'))
+    if (
+      !this.available ||
+      !this.client ||
+      !this.client.supports('hoverProvider')
+    )
       return null
 
-    this.ensureFileOpen(absPath)
+    this.client.ensureFileOpen(absPath, this.languageId)
 
     try {
       const response = await this.client.request(
@@ -110,20 +112,10 @@ export class GenericLspEnhancer implements Enhancer {
 
   /** Updates the file at the given absolute path and notifies external systems (like language servers) about the change. */
   refreshFile(absPath: string): void {
-    if (!this.client || !this.openDocuments.has(absPath)) return
+    if (!this.client) return
 
     try {
-      const text = readFileSync(absPath, 'utf8')
-      this.client.notify('textDocument/didChange', {
-        textDocument: {
-          uri: `file://${absPath}`,
-          version: Date.now(),
-        },
-        contentChanges: [{ text }],
-      })
-      // The file's content just changed, so any diagnostics the server
-      // published for it are stale.
-      this.client.invalidateDiagnostics(absPath)
+      this.client.refreshFile(absPath)
     } catch (err) {
       logError(
         `[LSP Enhancer - ${this.languageId}] Failed to notify file changes:`,
@@ -151,7 +143,7 @@ export class GenericLspEnhancer implements Enhancer {
         resolveWorkspacePath(join(this.cwd, relPath)),
       )
       for (const absPath of absPaths) {
-        this.ensureFileOpen(absPath)
+        this.client.ensureFileOpen(absPath, this.languageId)
       }
 
       logInfo(
@@ -170,16 +162,7 @@ export class GenericLspEnhancer implements Enhancer {
   async closeFiles(relPaths: string[]): Promise<void> {
     if (!this.client) return
     try {
-      for (const relPath of relPaths) {
-        const absPath = resolveWorkspacePath(join(this.cwd, relPath))
-        if (!this.openDocuments.has(absPath)) continue
-        this.client.notify('textDocument/didClose', {
-          textDocument: {
-            uri: `file://${absPath}`,
-          },
-        })
-        this.openDocuments.delete(absPath)
-      }
+      this.client.closeFiles(relPaths, this.cwd)
     } catch (err) {
       logError(
         `[LSP Enhancer - ${this.languageId}] Failed to close files:`,
@@ -257,7 +240,7 @@ export class GenericLspEnhancer implements Enhancer {
     if (
       !this.available ||
       !this.client ||
-      !this.supports('implementationProvider')
+      !this.client.supports('implementationProvider')
     ) {
       return
     }
@@ -292,12 +275,14 @@ export class GenericLspEnhancer implements Enhancer {
 
     for (const sym of interfaceSymbols) {
       try {
-        const absPath = resolveWorkspacePath(join(this.cwd, sym.file_path))
-        this.ensureFileOpen(absPath)
+        this.client.ensureFileOpen(
+          join(this.cwd, sym.file_path),
+          this.languageId,
+        )
         const response = await this.client.request(
           'textDocument/implementation',
           {
-            textDocument: { uri: `file://${absPath}` },
+            textDocument: { uri: `file://${join(this.cwd, sym.file_path)}` },
             position: { line: sym.line, character: sym.column },
           },
         )
@@ -306,7 +291,7 @@ export class GenericLspEnhancer implements Enhancer {
         const locations = Array.isArray(response) ? response : [response]
         for (const loc of locations) {
           if (!loc?.uri) continue
-          const targetUri = loc.uri.replace('file://', '')
+          const targetUri = (loc.uri as string).replace('file://', '')
           const filePath = relative(this.cwd, targetUri)
           const targetLine =
             loc.range?.start?.line ?? loc.targetSelectionRange?.start?.line
@@ -561,6 +546,49 @@ export class GenericLspEnhancer implements Enhancer {
       return
     }
 
+    try {
+      // get call sites for which there is no corresponding call edge yet by a join query
+      const callSitesFetched = await this.db
+        .select({
+          call_site: schema.call_sites,
+        })
+        .from(schema.call_sites)
+        .leftJoin(
+          schema.call_edges,
+          eq(schema.call_sites.id, schema.call_edges.call_site_id),
+        )
+        .where(
+          and(
+            eq(schema.call_sites.language_name, this.languageId),
+            or(
+              isNull(schema.call_edges.id),
+              eq(
+                schema.call_edges.resolution_source,
+                schema.CallResolutionSource.Unresolved,
+              ),
+            ),
+            relPaths.length > 0
+              ? inArray(schema.call_sites.caller_file_path, relPaths)
+              : undefined,
+          ),
+        )
+      const pendingCallSites = callSitesFetched.map((row) => row.call_site)
+
+      logInfo(
+        `[LSP Enhancer - ${this.languageId} - Symbol Calls] Resolving pending symbol calls for ${pendingCallSites.length} call sites...`,
+      )
+      const edges =
+        await this.callEdgeResolver?.resolveCallEdges(pendingCallSites)
+      if (!edges || edges.length === 0) {
+        return
+      }
+      this.store.callEdges.upsert(edges)
+    } catch (error) {
+      logInfo(
+        `[LSP Enhancer - ${this.languageId} - Symbol Calls] Error while resolving pending symbol calls: ${error}`,
+      )
+    }
+
     const symbolCallResolutionStats = {
       languageFeatures: 0,
       references: 0,
@@ -712,35 +740,6 @@ export class GenericLspEnhancer implements Enhancer {
     }
   }
 
-  /** Determines whether a specified capability is supported by the server. */
-  protected supports(capability: string): boolean {
-    const cap = this.serverCapabilities[capability]
-    return cap === true || (typeof cap === 'object' && cap !== null)
-  }
-
-  /** "Ensures the specified file is opened by notifying the language server if not already open." */
-  protected ensureFileOpen(absPath: string): void {
-    if (!this.client || this.openDocuments.has(absPath)) return
-
-    try {
-      const text = readFileSync(absPath, 'utf8')
-      this.client.notify('textDocument/didOpen', {
-        textDocument: {
-          uri: `file://${absPath}`,
-          languageId: this.languageId,
-          version: 1,
-          text,
-        },
-      })
-      this.openDocuments.add(absPath)
-    } catch (err) {
-      logError(
-        `[LSP Enhancer - ${this.languageId}] Failed to open document:`,
-        err,
-      )
-    }
-  }
-
   /** Converts a hover string containing function or method information into a structured format with the function's name and return type. */
   protected convertHoverStringToSignature(hoverStr: string):
     | {
@@ -789,11 +788,10 @@ export class GenericLspEnhancer implements Enhancer {
   }): Promise<{ name?: string; type?: string } | undefined> {
     try {
       const absPath = resolveWorkspacePath(join(this.cwd, sym.file_path))
-      const nameOffset = sym.signature?.indexOf(sym.name) ?? 0
       const hoverStr = await this.getTypeAtLocation(
         absPath,
         sym.line,
-        sym.column + nameOffset,
+        sym.column,
       )
       if (!hoverStr) return undefined
 
@@ -819,12 +817,12 @@ export class GenericLspEnhancer implements Enhancer {
     if (
       !this.client ||
       !this.available ||
-      !this.supports('referencesProvider')
+      !this.client.supports('referencesProvider')
     ) {
       return []
     }
 
-    this.ensureFileOpen(absPath)
+    this.client.ensureFileOpen(absPath, this.languageId)
 
     try {
       const response = await this.client.request('textDocument/references', {
@@ -837,7 +835,10 @@ export class GenericLspEnhancer implements Enhancer {
 
       return response.map((loc) => ({
         name,
-        file_path: relative(this.cwd, loc.uri.replace('file://', '')),
+        file_path: relative(
+          this.cwd,
+          (loc.uri as string).replace('file://', ''),
+        ),
         line: loc.range.start.line,
         column: loc.range.start.character,
       }))
@@ -857,7 +858,7 @@ export class GenericLspEnhancer implements Enhancer {
     if (
       !this.client ||
       !this.available ||
-      !this.supports('definitionProvider')
+      !this.client.supports('definitionProvider')
     ) {
       return []
     }
@@ -866,7 +867,7 @@ export class GenericLspEnhancer implements Enhancer {
       const absPath = resolveWorkspacePath(
         join(this.cwd, call.caller_file_path),
       )
-      this.ensureFileOpen(absPath)
+      this.client.ensureFileOpen(absPath, this.languageId)
       const response = await this.client.request('textDocument/definition', {
         textDocument: { uri: `file://${absPath}` },
         position: { line: call.call_line, character: call.call_column },
@@ -875,7 +876,10 @@ export class GenericLspEnhancer implements Enhancer {
       if (!response) return []
       const locations = Array.isArray(response) ? response : [response]
       return locations.map((loc) => ({
-        file_path: relative(this.cwd, loc.uri.replace('file://', '')),
+        file_path: relative(
+          this.cwd,
+          (loc.uri as string).replace('file://', ''),
+        ),
         line: loc.range.start.line,
         column: loc.range.start.character,
       }))

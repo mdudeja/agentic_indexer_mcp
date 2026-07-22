@@ -10,15 +10,20 @@ import { randomUUIDv7 } from 'bun'
 import { getCommentText } from '../docstrings/formatComment'
 import { hashSymbol } from 'src/utils/hashers'
 import { EdgeKind, ImportKind } from 'src/database/schemas'
-import { TypescriptImportResolver } from '../resolvers/importResolvers/TypescriptImportResolver'
-import type { ImportResolver } from '../resolvers/importResolvers/ImportResolver'
-import { BunImportResolver } from '../resolvers/importResolvers/BunImportResolver'
-import { ChainedImportResolver } from '../resolvers/importResolvers/ChainedImportResolver'
+import {
+  type ImportResolver,
+  BunImportResolver,
+  TypescriptImportResolver,
+  ChainedImportResolver,
+} from '../resolvers/importResolvers'
 import { AppStateManager } from 'src/state'
+import { TypescriptCallSiteResolver } from '../resolvers/callSiteResolvers'
+import { logError } from 'src/utils/logger'
 
 /** The `TypescriptAdapter` class processes TypeScript code to extract and analyze symbols, calls, imports, exceptions, and environment variables from the abstract syntax tree (AST). */
 export class TypescriptAdapter implements LanguageAdapter {
   private importResolver?: ChainedImportResolver
+  private callSiteResolver?: TypescriptCallSiteResolver
 
   /** The constructor method initializes an instance of the TypescriptAdapter class with a specified programming language name. */
   constructor(private readonly langName: string) {}
@@ -34,6 +39,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       calls: [],
       exceptions: [],
       envVars: [],
+      call_sites: [],
       explicitExports: [],
     }
 
@@ -41,14 +47,12 @@ export class TypescriptAdapter implements LanguageAdapter {
       this.createImportResolver()
     }
 
+    if (!this.callSiteResolver) {
+      this.callSiteResolver = new TypescriptCallSiteResolver()
+    }
+
     // Maps node ID to symbol ID to quickly find parent_id
     const nodeToSymbolId = new Map<number, string>()
-
-    // Symbols that live inside an anonymous function scope (arrow_function /
-    // function_expression not registered in nodeToSymbolId). Their parent_id
-    // ends up null even though they are local, so cleanUpLexicals needs this
-    // set to handle them correctly.
-    const anonScopeSymbols = new Set<string>()
 
     seedModuleSymbol(rootNode, file_path, 'typescript', nodeToSymbolId, result)
 
@@ -79,7 +83,6 @@ export class TypescriptAdapter implements LanguageAdapter {
             file_path,
             result,
             nodeToSymbolId,
-            anonScopeSymbols,
           )
         }
       }
@@ -191,9 +194,7 @@ export class TypescriptAdapter implements LanguageAdapter {
       }
     }
 
-    const cleanedResult = this.cleanUpLexicals(result, anonScopeSymbols)
-
-    return cleanedResult
+    return result
   }
 
   /** Processes and records symbol information for different code elements (e.g., classes, functions, variables) by capturing their metadata and managing parent-child relationships, particularly within anonymous scopes. */
@@ -203,7 +204,6 @@ export class TypescriptAdapter implements LanguageAdapter {
     file_path: string,
     result: ExtractionResult,
     nodeToSymbolId: Map<number, string>,
-    anonScopeSymbols: Set<string>,
   ) {
     let kind: SymbolKind | undefined
     let nameNode: Node | null = null
@@ -305,27 +305,17 @@ export class TypescriptAdapter implements LanguageAdapter {
       signature: targetNode.text,
     })
 
-    // Find parent — also detect if we cross an anonymous function boundary
-    // (arrow_function / function_expression not in nodeToSymbolId) so that
-    // cleanUpLexicals can remove locals that appear to have no registered parent.
-    const ANON_SCOPE_TYPES = new Set(['arrow_function', 'function_expression'])
     let parent_id: string | null = null
-    let insideAnonScope = false
     let p = targetNode.parent
     while (p) {
       if (nodeToSymbolId.has(p.id)) {
         parent_id = nodeToSymbolId.get(p.id)!
         break
       }
-      insideAnonScope = ANON_SCOPE_TYPES.has(p.type) || insideAnonScope
       p = p.parent
     }
 
     nodeToSymbolId.set(targetNode.id, id)
-
-    if (insideAnonScope) {
-      anonScopeSymbols.add(id)
-    }
 
     // Simplified extraction for brevity
     result.symbols.push({
@@ -333,10 +323,10 @@ export class TypescriptAdapter implements LanguageAdapter {
       name: nameNode.text,
       kind,
       file_path,
-      line: targetNode.startPosition.row,
-      column: targetNode.startPosition.column,
-      end_line: targetNode.endPosition.row,
-      end_column: targetNode.endPosition.column,
+      line: node.startPosition.row,
+      column: node.startPosition.column,
+      end_line: node.endPosition.row,
+      end_column: node.endPosition.column,
       signature: signature ?? null,
       parameters_json: null,
       return_type: null,
@@ -449,6 +439,23 @@ export class TypescriptAdapter implements LanguageAdapter {
 
     if (!caller_id) return
 
+    const id = randomUUIDv7()
+    const resolvedSite = this.callSiteResolver?.resolve(node, capturedName)
+
+    if (resolvedSite) {
+      result.call_sites?.push({
+        ...resolvedSite,
+        id,
+        caller_id,
+        caller_file_path: file_path,
+        language_name: 'typescript',
+      })
+    } else {
+      logError(
+        `Failed to resolve call site for node: ${node.text} in file: ${file_path}:${node.startPosition.row}:${node.startPosition.column}`,
+      )
+    }
+
     let callExpr: Node | null = node.parent
     while (
       callExpr &&
@@ -459,7 +466,7 @@ export class TypescriptAdapter implements LanguageAdapter {
     const callText = callExpr ? callExpr.text : node.text
 
     result.calls.push({
-      id: randomUUIDv7(),
+      id,
       caller_id,
       callee_name: node.text,
       language_name: 'typescript',
@@ -793,62 +800,6 @@ export class TypescriptAdapter implements LanguageAdapter {
       line: node.startPosition.row,
       column: node.startPosition.column,
     })
-  }
-
-  /** Cleans up the extraction results by removing unnecessary lexical symbols. Specifically targets variables (const, let, var) and constants declared in anonymous scope or under callable parents to prevent redundant references. */
-  private cleanUpLexicals(
-    result: ExtractionResult,
-    anonScopeSymbols: Set<string>,
-  ) {
-    const lexicalKinds = [SymbolKind.const, SymbolKind.let, SymbolKind.var]
-    const callableKinds = [
-      SymbolKind.function,
-      SymbolKind.method,
-      SymbolKind.arrowFunction,
-    ]
-
-    const toRemoveIds = new Set<string>()
-
-    for (const symbol of result.symbols) {
-      const parentId = symbol.parent_id
-      const isParentExported = parentId
-        ? result.symbols.some((s) => s.id === parentId && s.exported)
-        : false
-      if (
-        !lexicalKinds.includes(symbol.kind) ||
-        symbol.exported ||
-        isParentExported
-      )
-        continue
-
-      const hasCallableParent =
-        anonScopeSymbols.has(symbol.id) ||
-        (symbol.parent_id
-          ? result.symbols.some(
-              (s) =>
-                s.id === symbol.parent_id && callableKinds.includes(s.kind),
-            )
-          : false)
-
-      if (hasCallableParent) {
-        toRemoveIds.add(symbol.id)
-      }
-    }
-
-    result.symbols = result.symbols.filter(
-      (s) => !toRemoveIds.has(s.id) && !toRemoveIds.has(s.parent_id ?? ''),
-    )
-    result.calls = result.calls.filter((c) =>
-      result.symbols.some((s) => s.id === c.caller_id),
-    )
-    result.exceptions = result.exceptions.filter((e) =>
-      result.symbols.some((s) => s.id === e.symbol_id),
-    )
-    result.envVars = result.envVars.filter((v) =>
-      result.symbols.some((s) => s.id === v.symbol_id),
-    )
-
-    return result
   }
 
   /** Generates a signature string for a given AST node by analyzing its text content, accounting for nested generics and function bodies.*/

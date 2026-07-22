@@ -17,6 +17,12 @@
   function: (identifier) @call.identifier)
 (call
   function: (attribute attribute: (identifier) @call.member))
+(call
+  function: (subscript) @call.dynamic)
+(call
+  function: (call
+    function: (identifier) @_tlf) @call.dynamicgetattr
+  (#eq? @_tlf "getattr"))
 
 ; Imports
 (import_statement) @import.statement

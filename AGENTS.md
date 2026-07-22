@@ -26,7 +26,10 @@ graph LR
     Watcher --> Indexer[src/indexer/]
     Indexer --> Adapters[src/indexer/adapters/]
     Indexer --> Enhancers[src/indexer/enhancers/]
-    Indexer --> ImportResolver[src/indexer/importResolver/]
+    Adapters --> ImportResolver[src/indexer/importResolvers/]
+    Adapters --> CallSiteResolver[src/indexer/resolvers/callSiteResolvers/]
+    Enhancers --> CallEdgeResolver[src/indexer/resolvers/callEdgeResolvers/]
+    CallEdgeResolver --> CallEdgeBuiltins[src/constants/callEdgeBuiltins/]
     Indexer --> Embedders[src/indexer/embedders/]
     Indexer --> DB
     Indexer --> Config
@@ -44,7 +47,9 @@ graph LR
 - [src/indexer/]: Parser pipeline orchestration.
   - [adapters/]: Tree-sitter parsers for specific programming languages (e.g., `PythonAdapter`, `TypescriptAdapter`).
   - [enhancers/]: Type resolution, call site linkage, and structural analysis.
-  - [importResolver/]: Resolves imports for different languages.
+  - [resolvers/importResolver/]: Resolves imports for different languages.
+  - [resolvers/callSiteResolvers/]: Resolves call sites for different languages.
+  - [resolvers/callEdgeResolvers/]: Resolves call edges for different languages.
   - [embedders/]: Generates embeddings for symbols using AI providers.
   - [docstrings/]: Extracts and generates (using AI providers) docstrings and comments for symbols.
   - [FileManager.ts]: Exposes `isPathIgnored`, which checks if a file path is ignored based on `.gitignore` and `indexer.ignore` rules.
@@ -96,8 +101,11 @@ AST extraction is done using `web-tree-sitter`. To add support for a new languag
 2. Create an adapter in [src/indexer/adapters/] inheriting from `LanguageAdapter`.
 3. Map the AST node patterns matching classes, functions, calls, imports, and exports for that language in the adapter.
 4. Create an import resolver inheriting from `ImportResolver` for the language in [src/indexer/importResolver/] to resolve imports and re-exports (if the language supports them) using the language compiler itself.
-5. Create an enhancer inheriting from `GenericLSPEnhancer` for the language in [src/indexer/enhancers/] to resolve types, link call sites, and perform structural analysis. The GenericLSPEnhancer was created with TypeScript in mind, so any language specific quirks will need to be implemented in the language's enhancer.
-6. Update `loadEnhancerForFileType` in [src/indexer/IndexPipeline.ts] with the new enhancer, link adapater to the import resolver and register the new adapter in [src/indexer/steps/s1_symbol_extractor.ts].
+5. Create a call site resolver inheriting from `GenericCallSiteResolver` for the language in [src/indexer/resolvers/callSiteResolvers/] to resolve call sites and link them to their definitions.
+6. Create a list of built-in functions for the language in [src/constants/callEdgeBuiltins/] to resolve call edges for built-in functions and link them to their definitions.
+7. Create a call edge resolver inheriting from `GenericCallEdgeResolver` for the language in [src/indexer/resolvers/callEdgeResolvers/] to resolve call edges and link them to their definitions.
+8. Create an enhancer inheriting from `GenericLSPEnhancer` for the language in [src/indexer/enhancers/] to resolve types, link call sites, and perform structural analysis. The GenericLSPEnhancer was created with TypeScript in mind, so any language specific quirks will need to be implemented in the language's enhancer.
+9. Update `loadEnhancerForFileType` in [src/indexer/IndexPipeline.ts] with the new enhancer, link adapater to the import resolver and register the new adapter in [src/indexer/steps/s1_symbol_extractor.ts].
 
 ---
 

@@ -16,6 +16,8 @@ import {
   AnalysisRepository,
   ToolUsageRepository,
 } from './repositories'
+import { CallSitesRepository } from './repositories/CallSitesRepository'
+import { CallEdgesRepository } from './repositories/CallEdgesRepository'
 
 /** A singleton class managing SQLite database connections with vector indexing capabilities. It provides repository interfaces for handling embeddings, symbols, files, imports, calls, analysis, and tool usage. The IndexerDB initializes the database connection, runs migrations, and ensures proper resource management. */
 export class IndexerDB {
@@ -31,6 +33,8 @@ export class IndexerDB {
   readonly files: FileRepository
   readonly imports: ImportRepository
   readonly calls: CallRepository
+  readonly callSites: CallSitesRepository
+  readonly callEdges: CallEdgesRepository
   readonly analysis: AnalysisRepository
   readonly toolUsage: ToolUsageRepository
 
@@ -69,6 +73,8 @@ export class IndexerDB {
     this.files = new FileRepository(this.db, this.embeddings)
     this.imports = new ImportRepository(this.sqlite, this.db)
     this.calls = new CallRepository(this.sqlite, this.db)
+    this.callSites = new CallSitesRepository(this.sqlite)
+    this.callEdges = new CallEdgesRepository(this.sqlite)
     this.analysis = new AnalysisRepository(
       this.sqlite,
       this.symbols,
@@ -119,6 +125,8 @@ export class IndexerDB {
     this.symbols.initStatements()
     this.imports.initStatements()
     this.calls.initStatements()
+    this.callSites.initStatements()
+    this.callEdges.initStatements()
     this.analysis.initStatements()
     this.toolUsage.initStatements()
 
@@ -140,6 +148,8 @@ export class IndexerDB {
     await this.db.delete(schema.tool_usage)
     await this.db.delete(schema.exceptions)
     await this.db.delete(schema.env_vars)
+    await this.db.delete(schema.call_sites)
+    await this.db.delete(schema.call_edges)
   }
 
   /** Closes the SQLite database connection, cleans up associated resources, and resets internal state. */

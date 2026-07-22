@@ -8,3 +8,15 @@ if __name__ == "__main__":
             print("Authentication successful")
     except ValueError as e:
         print(f"Authentication failed: {e}")
+
+handlers = {'run': lambda: print('run')}
+
+
+# Exercises a dynamic subscript call with a literal string key.
+def invoke_dynamic():
+    handlers['run']()
+
+
+# Exercises a getattr(...)()-style dynamic call.
+def invoke_via_getattr(obj):
+    return getattr(obj, 'run')()

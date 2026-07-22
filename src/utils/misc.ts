@@ -19,11 +19,13 @@ export function parseTypeNames(raw: string): string[] {
     const name = current
       .replace(/<[\s\S]*>/g, '')
       .replace(/\[.*\]/g, '')
+      .replace(/\(.*\)/g, '')
       .replace(/\?$/, '')
+      .replace(/\!$/, '')
       .trim()
     current = ''
     // Accept valid identifiers with optional namespace dots (e.g. "pkg.Type")
-    if (name && /^[A-Za-z_][\w.]*$/.test(name)) results.push(name)
+    if (name && /^[A-Za-z_\n][\w.]*$/.test(name)) results.push(name)
   }
 
   for (const ch of raw) {

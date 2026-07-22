@@ -1,4 +1,7 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { logDebug, logError } from './logger.ts'
+import { resolveWorkspacePath } from './paths.ts'
 
 /** A lightweight, Bun-native LSP client implementation communicating over JSON-RPC stdio. */
 export class LspClient {
@@ -12,6 +15,8 @@ export class LspClient {
   private serverCapabilities: Record<string, any> = {}
   /** URIs the server has published at least one `textDocument/publishDiagnostics` notification for since they were last opened/changed — used as a settle signal that the server has actually finished analyzing the file, instead of guessing with a fixed sleep. */
   private diagnosticsReceivedUris = new Set<string>()
+  private initialized = false
+  private openDocuments = new Set<string>()
 
   /** Gets the server's capabilities. */
   getCapabilities(): Record<string, any> {
@@ -66,6 +71,73 @@ export class LspClient {
     logDebug(
       `[LSP] LSP server initialized successfully: ${this.lspCommand.join(' ')}`,
     )
+    this.initialized = true
+  }
+
+  /** Determines whether a specified capability is supported by the server. */
+  supports(capability: string): boolean {
+    const cap = this.serverCapabilities[capability]
+    return cap === true || (typeof cap === 'object' && cap !== null)
+  }
+
+  /** "Ensures the specified file is opened by notifying the language server if not already open." */
+  ensureFileOpen(absPath: string, languageId: string): void {
+    try {
+      const resolvedPath = resolveWorkspacePath(absPath)
+      if (!this.initialized || this.openDocuments.has(resolvedPath)) return
+      const text = readFileSync(resolvedPath, 'utf8')
+      this.notify('textDocument/didOpen', {
+        textDocument: {
+          uri: `file://${resolvedPath}`,
+          languageId: languageId,
+          version: 1,
+          text,
+        },
+      })
+      this.openDocuments.add(resolvedPath)
+    } catch (err) {
+      logError(`[LspClient - ${languageId}] Failed to open document:`, err)
+    }
+  }
+
+  /** Updates the file at the given absolute path and notifies external systems (like language servers) about the change. */
+  refreshFile(absPath: string): void {
+    try {
+      const resolvedPath = resolveWorkspacePath(absPath)
+      if (!this.initialized || !this.openDocuments.has(resolvedPath)) return
+      const text = readFileSync(resolvedPath, 'utf8')
+      this.notify('textDocument/didChange', {
+        textDocument: {
+          uri: `file://${resolvedPath}`,
+          version: Date.now(),
+        },
+        contentChanges: [{ text }],
+      })
+      // The file's content just changed, so any diagnostics the server
+      // published for it are stale.
+      this.invalidateDiagnostics(resolvedPath)
+    } catch (err) {
+      logError(`[LspClient] Failed to notify file changes:`, err)
+    }
+  }
+
+  /** Closes the specified files by sending notifications to the language server and removing them from the list of open documents. */
+  async closeFiles(relPaths: string[], cwd: string): Promise<void> {
+    if (!this.initialized) return
+    try {
+      for (const relPath of relPaths) {
+        const absPath = resolveWorkspacePath(join(cwd, relPath))
+        if (!this.openDocuments.has(absPath)) continue
+        this.notify('textDocument/didClose', {
+          textDocument: {
+            uri: `file://${absPath}`,
+          },
+        })
+        this.openDocuments.delete(absPath)
+      }
+    } catch (err) {
+      logError(`[LspClient] Failed to close files:`, err)
+    }
   }
 
   /** Reads and processes the standard output from the LSP process. */

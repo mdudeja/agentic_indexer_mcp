@@ -576,16 +576,17 @@ describe('Database Repositories Unit Tests', () => {
     expect(all.map((s) => s.id)).toContain(parentId)
 
     // getAtLocation
-    const atLoc = await store.symbols.getAtLocation('src/sym-ext.ts', 1)
+    const atLoc = await store.symbols.getAtLocation('src/sym-ext.ts', 1, 0)
     expect(atLoc?.id).toBe(parentId)
 
-    const noLoc = await store.symbols.getAtLocation('src/sym-ext.ts', 99)
+    const noLoc = await store.symbols.getAtLocation('src/sym-ext.ts', 99, 0)
     expect(noLoc).toBeNull()
 
     // getCallableAtLocation
     const callable = await store.symbols.getCallableAtLocation(
       'src/sym-ext.ts',
       3,
+      2,
       [SymbolKind.method],
     )
     expect(callable?.id).toBe(childId)
