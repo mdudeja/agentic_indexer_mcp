@@ -15,6 +15,7 @@ export enum CallTargetKind {
 export enum CallResolutionSource {
   SameFile = 'same_file',
   SameClass = 'same_class',
+  SameClassProperty = 'same_class_property',
   SourceImport = 'source_import',
   ExternalImport = 'external_import',
   BuiltinList = 'builtin_list',

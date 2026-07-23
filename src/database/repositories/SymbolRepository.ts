@@ -312,6 +312,30 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves the parent class of a symbol based on its ID. If the symbol is not found or does not have a parent class, it returns null. */
+  async getParentClassOfSymbolId(
+    symbolId: string,
+  ): Promise<IndexedSymbol['Select'] | null> {
+    const symbol = await this.getDefinition(symbolId)
+    if (!symbol || !symbol.parent_id)
+      return symbol?.kind === SymbolKind.class ? symbol : null
+
+    let parentSymbol = await this.getDefinition(symbol.parent_id)
+    while (
+      parentSymbol &&
+      parentSymbol.kind !== SymbolKind.class &&
+      parentSymbol.parent_id
+    ) {
+      parentSymbol = await this.getDefinition(parentSymbol.parent_id)
+    }
+
+    return parentSymbol && parentSymbol.kind === SymbolKind.class
+      ? parentSymbol
+      : symbol.kind === SymbolKind.class
+        ? symbol
+        : null
+  }
+
   /** Updates the docstring for the symbol identified by id. */
   async updateDocstring(id: string, docstring: string): Promise<void> {
     await this.db

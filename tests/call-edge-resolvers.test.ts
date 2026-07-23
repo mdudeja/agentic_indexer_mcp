@@ -148,14 +148,19 @@ describe('callEdgeResolvers utils', () => {
     })
 
     test('strips a trailing `as alias` from each name', () => {
-      expect(processImportedNames(['foo as bar', 'baz'])).toEqual([
-        'foo',
+      expect(processImportedNames(['foo as bar', 'baz'], false, true)).toEqual([
+        'bar',
         'baz',
       ])
     })
 
     test('processes a type only name that also has an alias', () => {
-      expect(processImportedNames(['type Foo as Bar'], true)).toEqual(['Foo'])
+      expect(processImportedNames(['type Foo as Bar'], true, true)).toEqual([
+        'Bar',
+      ])
+      expect(processImportedNames(['type Foo as Bar'], true, false)).toEqual([
+        'Foo',
+      ])
     })
   })
 })
@@ -287,6 +292,8 @@ describe('GenericCallEdgeResolver', () => {
         callee_base: 'this',
         callee_property: 'render',
         callee_expression: 'this.render',
+        call_text: 'this.render()',
+        callee_name: 'render',
       })
 
       const edges = await resolver.resolveSameClassCallEdges([callSite])

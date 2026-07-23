@@ -566,6 +566,13 @@ export class GenericLspEnhancer implements Enhancer {
                 schema.call_edges.resolution_source,
                 schema.CallResolutionSource.Unresolved,
               ),
+              and(
+                eq(
+                  schema.call_edges.resolution_source,
+                  schema.CallResolutionSource.SourceImport,
+                ),
+                isNull(schema.call_edges.callee_id),
+              ),
             ),
             relPaths.length > 0
               ? inArray(schema.call_sites.caller_file_path, relPaths)

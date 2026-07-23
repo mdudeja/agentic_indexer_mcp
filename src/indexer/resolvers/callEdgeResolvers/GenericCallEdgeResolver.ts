@@ -8,6 +8,8 @@ import {
   ImportKind,
   EdgeKind,
   type IndexedImport,
+  ResolvedKind,
+  type IndexedSymbol,
 } from 'src/database/schemas'
 import type { CallEdgeResolver } from './CallEdgeResolver'
 import { logDebug, logError, logInfo } from 'src/utils/logger'
@@ -190,13 +192,28 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
       )
     ).filter((symbol) => symbol.kind === SymbolKind.property)
 
+    const parentClassIds = await Promise.all(
+      potentialCandidates.map(async (callSite) => {
+        const parentClass = await this.symbolsRepo.getParentClassOfSymbolId(
+          callSite.caller_id,
+        )
+        return {
+          callSiteId: callSite.id,
+          parentClassId: parentClass?.id ?? null,
+        }
+      }),
+    )
+
     const callEdges: Array<IndexedCallEdge['Insert']> = []
     potentialCandidates.forEach((callSite) => {
       const matchedSymbol = matchedSymbols.find(
         (symbol) =>
           symbol.kind === SymbolKind.method &&
+          classMethodIdentifiers.includes(callSite.callee_base ?? '') &&
           callSite.callee_property === symbol.name &&
-          callSite.caller_id === symbol.parent_id,
+          symbol.parent_id &&
+          parentClassIds.find((p) => p.callSiteId === callSite.id)
+            ?.parentClassId === symbol.parent_id,
       )
 
       if (matchedSymbol) {
@@ -236,9 +253,9 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
           caller_id: callSite.caller_id,
           target_kind: CallTargetKind.ProjectSymbol,
           callee_id: matchedProperty.id,
-          resolution_source: CallResolutionSource.SameClass,
+          resolution_source: CallResolutionSource.SameClassProperty,
           confidence: getConfidenceByCallResolutionSource(
-            CallResolutionSource.SameClass,
+            CallResolutionSource.SameClassProperty,
           ),
         })
       }
@@ -323,15 +340,19 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
     }
 
     const callEdges: Array<IndexedCallEdge['Insert']> = []
-    byFileMap.forEach((fileCallSites, filePath) => {
+    for (const [filePath, fileCallSites] of byFileMap.entries()) {
       const imports = importsByFile.get(filePath)
       if (!imports) {
-        return
+        continue
       }
 
-      fileCallSites.forEach((callSite) => {
+      for (const callSite of fileCallSites) {
         const matchedImport = imports.find((imp) => {
-          const importedNames = processImportedNames(imp.importedNames ?? [])
+          const importedNames = processImportedNames(
+            imp.importedNames ?? [],
+            false,
+            true,
+          )
           const importKindMatch = ![
             ImportKind.SideEffect,
             ImportKind.TypeOnly,
@@ -347,13 +368,58 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
         })
 
         if (!matchedImport) {
-          return
+          continue
+        }
+
+        let matchedSymbol: IndexedSymbol['Select'] | null = null
+
+        if (
+          !matchedImport.isExternal &&
+          matchedImport.resolvedKind === ResolvedKind.Source &&
+          matchedImport.resolvedPath
+        ) {
+          const symbols = await this.symbolsRepo.getForFile(
+            matchedImport.resolvedPath,
+          )
+          matchedSymbol =
+            symbols.find(
+              (symbol) =>
+                symbol.name === callSite.callee_name ||
+                callSite.callee_base?.includes(symbol.name),
+            ) ?? null
+
+          // check for re-exported symbols in the resolved file
+          if (!matchedSymbol) {
+            const reExports = (
+              await this.importsRepo.getByFilePath(matchedImport.resolvedPath)
+            )?.filter(
+              (imp) =>
+                imp.edgeKind !== EdgeKind.Import &&
+                imp.resolvedKind === ResolvedKind.Source,
+            )
+
+            if (reExports?.length) {
+              for (const reExport of reExports) {
+                const reExportedSymbols = await this.symbolsRepo.getForFile(
+                  reExport.resolvedPath ?? '',
+                )
+                matchedSymbol =
+                  reExportedSymbols.find(
+                    (symbol) => symbol.name === callSite.callee_name,
+                  ) ?? null
+                if (matchedSymbol) {
+                  break
+                }
+              }
+            }
+          }
         }
 
         callEdges.push({
           id: randomUUIDv7(),
           call_site_id: callSite.id,
           caller_id: callSite.caller_id,
+          callee_id: matchedSymbol?.id ?? null,
           target_kind: CallTargetKind.Import,
           imports_id: matchedImport.id,
           resolution_source: matchedImport.isExternal
@@ -365,8 +431,8 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
               : CallResolutionSource.SourceImport,
           ),
         })
-      })
-    })
+      }
+    }
 
     return callEdges
   }
@@ -651,6 +717,7 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
               const importedNames = processImportedNames(
                 imp.importedNames ?? [],
                 true,
+                true,
               )
               return (
                 importedNames.includes(signature.name!) ||
@@ -738,7 +805,11 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
       const parents =
         this.getPartsOfCalleeExpression(callee_expression).reverse()
       const matchingImport = allImportsForFile.find((imp) => {
-        const importedNames = processImportedNames(imp.importedNames ?? [])
+        const importedNames = processImportedNames(
+          imp.importedNames ?? [],
+          false,
+          true,
+        )
         return parents.some((parent) => importedNames.includes(parent))
       })
       if (matchingImport) {

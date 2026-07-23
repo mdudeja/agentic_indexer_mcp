@@ -5,24 +5,26 @@ export function getConfidenceByCallResolutionSource(
   resolutionSource: CallResolutionSource,
 ): number {
   switch (resolutionSource) {
+    case CallResolutionSource.DynamicPattern:
+      return 100
     case CallResolutionSource.LspDefinition:
       return 100
     case CallResolutionSource.SourceImport:
       return 90
+    case CallResolutionSource.BuiltinList:
+      return 80
     case CallResolutionSource.SameFile:
       return 80
     case CallResolutionSource.SameClass:
       return 75
+    case CallResolutionSource.SameClassProperty:
+      return 72
     case CallResolutionSource.ExternalImport:
       return 70
     case CallResolutionSource.LspHover:
       return 60
-    case CallResolutionSource.BuiltinList:
-      return 50
-    case CallResolutionSource.DynamicPattern:
-      return 20
     case CallResolutionSource.Unresolved:
-      return 50
+      return 0
     default:
       return 0
   }
@@ -32,6 +34,7 @@ export function getConfidenceByCallResolutionSource(
 export function processImportedNames(
   importedNames: string[],
   includeTypeOnly?: boolean,
+  returnLocalNames?: boolean,
 ): string[] {
   if (!importedNames || importedNames.length === 0) {
     return []
@@ -58,11 +61,22 @@ export function processImportedNames(
       }
     }
 
-    // if name has `as `, split and take the first part
-    toPushName = (toPushName || trimmedName).replace(/\s+as\s+.*$/, '').trim()
+    const hasAlias = (toPushName || trimmedName).match(/\s+as\s+/)
+
+    if (hasAlias) {
+      if (returnLocalNames) {
+        // take the part after `as ` if it exists, otherwise take the whole name
+        toPushName = (toPushName || trimmedName).split(/\s+as\s+/)[1]?.trim()
+      } else {
+        // if name has `as `, split and take the first part
+        toPushName = (toPushName || trimmedName)
+          .replace(/\s+as\s+.*$/, '')
+          .trim()
+      }
+    }
 
     // Add the processed name to the result array
-    processedNames.push(toPushName)
+    processedNames.push(toPushName || trimmedName)
   }
 
   return processedNames
