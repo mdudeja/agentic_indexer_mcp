@@ -662,6 +662,7 @@ describe('Database Repositories Unit Tests', () => {
       null,
       undefined,
       undefined,
+      undefined,
       10,
     )
     expect(Array.isArray(hybridResults)).toBe(true)
@@ -671,7 +672,7 @@ describe('Database Repositories Unit Tests', () => {
     const hybridByKind = await store.symbols.searchSymbolsHybrid(
       'child*',
       null,
-      SymbolKind.method,
+      [SymbolKind.method],
     )
     expect(hybridByKind.every((r) => r.symbol.kind === SymbolKind.method)).toBe(
       true,

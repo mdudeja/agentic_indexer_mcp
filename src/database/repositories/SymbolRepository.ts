@@ -19,6 +19,7 @@ import type { IndexedSymbol } from '../schemas'
 import { SymbolKind } from '../schemas'
 import { type Inheritence } from '../schemas/common.schema'
 import type { EmbeddingRepository } from './EmbeddingRepository'
+import { collapseRepeatedDbWildcards } from '.'
 
 /** A class that provides database operations for managing symbol data, including insertion, deletion, retrieval, synchronization, and querying of symbols based on various criteria. */
 export class SymbolRepository {
@@ -113,21 +114,29 @@ export class SymbolRepository {
   /** Searches for symbols matching the given query string, optionally filtering by symbol kind, file path pattern, and limiting results. */
   async search(
     queryStr: string,
-    kind?: SymbolKind | 'all',
+    kind?: SymbolKind[] | 'all',
     filePattern?: string,
+    language?: string,
     limitVal: number = 20,
   ): Promise<IndexedSymbol['Select'][]> {
     const conditions: SQL[] = [
-      like(schema.symbols.name, queryStr.replace(/\*/g, '%')),
+      like(
+        schema.symbols.name,
+        collapseRepeatedDbWildcards(queryStr.replace(/\*/g, '%')),
+      ),
     ]
-    if (kind && kind !== 'all') conditions.push(eq(schema.symbols.kind, kind))
+    if (kind && kind !== 'all')
+      conditions.push(inArray(schema.symbols.kind, kind))
     if (filePattern) {
       conditions.push(
         like(
           schema.symbols.file_path,
-          `%${filePattern.replace(/\*/g, '%')}%`.replace(/%+/g, '%'),
+          collapseRepeatedDbWildcards(`%${filePattern.replace(/\*/g, '%')}%`),
         ),
       )
+    }
+    if (language) {
+      conditions.push(eq(schema.symbols.language, language))
     }
     return this.db
       .select()
@@ -433,14 +442,16 @@ export class SymbolRepository {
   async searchSymbolsHybrid(
     queryStr: string,
     queryEmbedding: number[] | null,
-    kind?: SymbolKind | 'all',
+    kind?: SymbolKind[] | 'all',
     filePattern?: string,
+    language?: string,
     limitVal: number = 20,
   ): Promise<Array<{ symbol: IndexedSymbol['Select']; score: number }>> {
     const textMatches = await this.search(
       queryStr,
       kind,
       filePattern,
+      language,
       limitVal * 2,
     )
     const semanticMatches = queryEmbedding
@@ -480,7 +491,7 @@ export class SymbolRepository {
       semanticMatches.forEach((match, index) => {
         const sym = symMap.get(match.symbol_id)
         if (!sym) return
-        if (kind && kind !== 'all' && sym.kind !== kind) return
+        if (kind && kind !== 'all' && !kind.includes(sym.kind)) return
         if (
           filePattern &&
           !sym.file_path.includes(filePattern.replace(/\*/g, ''))

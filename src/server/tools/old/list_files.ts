@@ -4,6 +4,7 @@ import { IndexerDB } from '../../database/IndexerDB'
 import { like, eq, and, SQL } from 'drizzle-orm'
 import * as schema from '../../database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
+import { collapseRepeatedDbWildcards } from 'src/database/repositories'
 
 /** Registers a tool that allows users to list all indexed files in the workspace, optionally filtered by file path pattern or language. */
 export function registerListFilesTool(server: McpServer) {
@@ -46,7 +47,9 @@ export function registerListFilesTool(server: McpServer) {
         const conditions: SQL[] = []
 
         if (pattern) {
-          const sqlPattern = (pattern as string).replace(/\*/g, '%')
+          const sqlPattern = collapseRepeatedDbWildcards(
+            (pattern as string).replace(/\*/g, '%'),
+          )
           conditions.push(like(schema.files.path, sqlPattern))
         }
 

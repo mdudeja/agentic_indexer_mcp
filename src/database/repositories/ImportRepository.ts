@@ -3,6 +3,7 @@ import type { SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 import { eq, like, and, getColumns, inArray } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedImport } from '../schemas'
+import { collapseRepeatedDbWildcards } from '.'
 
 /** A class managing import data storage and retrieval using a database. */
 export class ImportRepository {
@@ -55,7 +56,9 @@ export class ImportRepository {
       .where(
         like(
           schema.imports.sourceModule,
-          `%${moduleNamePattern.replace(/\*/g, '%')}%`,
+          collapseRepeatedDbWildcards(
+            `%${moduleNamePattern.replace(/\*/g, '%')}%`,
+          ),
         ),
       )
   }

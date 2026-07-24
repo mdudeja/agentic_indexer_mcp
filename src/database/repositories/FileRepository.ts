@@ -4,6 +4,7 @@ import * as schema from '../schemas'
 import type { IndexedFile } from '../schemas'
 import { getNowMillis } from 'src/utils/datetime'
 import type { EmbeddingRepository } from './EmbeddingRepository'
+import { collapseRepeatedDbWildcards } from '.'
 
 /** A class managing file storage and embedding associations in a database. */
 export class FileRepository {
@@ -53,6 +54,36 @@ export class FileRepository {
     return this.db.select().from(schema.files)
   }
 
+  async search(
+    query: string,
+    language?: string,
+    limit?: number,
+    file_pattern?: string,
+  ): Promise<IndexedFile['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.files)
+      .where(
+        and(
+          like(
+            schema.files.path,
+            collapseRepeatedDbWildcards(`%${query.replace(/\*/g, '%')}%`),
+          ),
+          language ? eq(schema.files.language, language) : undefined,
+          file_pattern
+            ? like(
+                schema.files.path,
+                collapseRepeatedDbWildcards(
+                  `%${file_pattern.replace(/\*/g, '%')}%`,
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(schema.files.path)
+      .limit(limit ?? 20)
+  }
+
   /** "Retrieves a single file entry by its path." */
   async getByPath(path: string): Promise<IndexedFile['Select'] | null> {
     const result = await this.db
@@ -71,7 +102,12 @@ export class FileRepository {
       .select()
       .from(schema.files)
       .where(
-        like(schema.files.path, `%${partialNameOrPath.replace(/\*/g, '%')}%`),
+        like(
+          schema.files.path,
+          collapseRepeatedDbWildcards(
+            `%${partialNameOrPath.replace(/\*/g, '%')}%`,
+          ),
+        ),
       )
       .orderBy(schema.files.path)
   }
