@@ -1,13 +1,17 @@
 import { Database, Statement } from 'bun:sqlite'
 import * as schema from '../schemas'
-import { getColumns } from 'drizzle-orm'
+import { getColumns, inArray } from 'drizzle-orm'
+import type { SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 
 /** A repository for managing and tracking call site information within an application. */
 export class CallSitesRepository {
   private callSitesInsert: Statement | null = null
 
   /** The constructor initializes a new instance of CallSitesRepository with a specified SQLite database to manage call sites data. */
-  constructor(private sqlite: Database) {}
+  constructor(
+    private sqlite: Database,
+    private db: SQLiteBunDatabase<typeof schema>,
+  ) {}
 
   /** Initializes the SQLite prepared statement for inserting call site data. */
   initStatements() {
@@ -31,5 +35,23 @@ export class CallSitesRepository {
         )
       }
     })()
+  }
+
+  /** Retrieves all call sites whose caller is one of the given symbol ids. */
+  async getForSymbols(
+    callerIds: string[],
+  ): Promise<schema.IndexedCallSite['Select'][]> {
+    if (!callerIds.length) return []
+    return this.db
+      .select()
+      .from(schema.call_sites)
+      .where(inArray(schema.call_sites.caller_id, callerIds))
+  }
+
+  /** Retrieves call sites for a single caller symbol id. */
+  async getForSymbol(
+    callerId: string,
+  ): Promise<schema.IndexedCallSite['Select'][]> {
+    return this.getForSymbols([callerId])
   }
 }

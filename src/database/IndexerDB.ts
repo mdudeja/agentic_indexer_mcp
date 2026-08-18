@@ -12,7 +12,6 @@ import {
   SymbolRepository,
   FileRepository,
   ImportRepository,
-  CallRepository,
   AnalysisRepository,
   ToolUsageRepository,
 } from './repositories'
@@ -32,7 +31,6 @@ export class IndexerDB {
   readonly symbols: SymbolRepository
   readonly files: FileRepository
   readonly imports: ImportRepository
-  readonly calls: CallRepository
   readonly callSites: CallSitesRepository
   readonly callEdges: CallEdgesRepository
   readonly analysis: AnalysisRepository
@@ -72,13 +70,12 @@ export class IndexerDB {
     this.symbols = new SymbolRepository(this.sqlite, this.db, this.embeddings)
     this.files = new FileRepository(this.db, this.embeddings)
     this.imports = new ImportRepository(this.sqlite, this.db)
-    this.calls = new CallRepository(this.sqlite, this.db)
-    this.callSites = new CallSitesRepository(this.sqlite)
-    this.callEdges = new CallEdgesRepository(this.sqlite)
+    this.callSites = new CallSitesRepository(this.sqlite, this.db)
+    this.callEdges = new CallEdgesRepository(this.sqlite, this.db)
     this.analysis = new AnalysisRepository(
       this.sqlite,
       this.symbols,
-      this.calls,
+      this.callEdges,
     )
     this.toolUsage = new ToolUsageRepository(this.sqlite)
   }
@@ -124,7 +121,6 @@ export class IndexerDB {
     this.embeddings.initStatements()
     this.symbols.initStatements()
     this.imports.initStatements()
-    this.calls.initStatements()
     this.callSites.initStatements()
     this.callEdges.initStatements()
     this.analysis.initStatements()
@@ -144,7 +140,6 @@ export class IndexerDB {
     await this.db.delete(schema.symbols)
     await this.db.delete(schema.imports)
     await this.db.delete(schema.files)
-    await this.db.delete(schema.symbol_calls)
     await this.db.delete(schema.tool_usage)
     await this.db.delete(schema.exceptions)
     await this.db.delete(schema.env_vars)

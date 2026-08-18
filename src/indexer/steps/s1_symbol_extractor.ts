@@ -23,7 +23,6 @@ export function extractSymbols(
   const defaultResult: ExtractionResult = {
     symbols: [],
     imports: [],
-    calls: [],
     exceptions: [],
     envVars: [],
     explicitExports: [],

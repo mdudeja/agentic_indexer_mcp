@@ -47,8 +47,8 @@ describe('IndexPipeline Integration Tests', () => {
       'Calculator',
     )
 
-    // Check calls table
-    const dbCalls = await db.select().from(schema.symbol_calls)
+    // Check call sites table
+    const dbCalls = await db.select().from(schema.call_sites)
     expect(dbCalls.length).toBeGreaterThanOrEqual(2)
     const multiplyCalls = dbCalls.filter((c) => c.callee_name === 'multiply')
     expect(multiplyCalls.length).toBeGreaterThanOrEqual(1)

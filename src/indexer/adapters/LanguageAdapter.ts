@@ -2,7 +2,6 @@ import type { QueryMatch, Node } from 'web-tree-sitter'
 import type {
   IndexedSymbol,
   IndexedImport,
-  IndexedSymbolCall,
   IndexedException,
   IndexedEnvVar,
 } from '../../config/types'
@@ -14,7 +13,6 @@ import type { IndexedCallSite } from 'src/database/schemas/call_sites.schema'
 export interface ExtractionResult {
   symbols: IndexedSymbol['Select'][]
   imports: IndexedImport['Select'][]
-  calls: IndexedSymbolCall['Insert'][]
   exceptions: IndexedException['Select'][]
   envVars: IndexedEnvVar['Select'][]
   explicitExports: IndexedSymbol['Select'][]

@@ -94,7 +94,6 @@ export class IndexPipeline {
         estimated_tokens: Math.ceil(content.length / 4),
       })
       await this.options.store.symbols.upsert(parsed.symbols)
-      await this.options.store.calls.upsert(parsed.calls)
       await this.options.store.callSites.upsert(parsed.call_sites || [])
       await this.options.store.imports.upsert(parsed.imports)
       await this.options.store.analysis.upsertExceptions(parsed.exceptions)
@@ -102,7 +101,7 @@ export class IndexPipeline {
 
       // await this.runEnhancementStep([relPath])
       logInfo(
-        `[Indexer] Indexed ${relPath} with ${parsed.symbols.length} symbols, ${parsed.imports.length} imports, ${parsed.calls.length} calls, ${parsed.exceptions.length} exceptions, and ${parsed.envVars.length} env vars.`,
+        `[Indexer] Indexed ${relPath} with ${parsed.symbols.length} symbols, ${parsed.imports.length} imports, ${(parsed.call_sites ?? []).length} call sites, ${parsed.exceptions.length} exceptions, and ${parsed.envVars.length} env vars.`,
       )
       return relPath
     } catch (e) {

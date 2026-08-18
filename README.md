@@ -136,50 +136,52 @@ The system operates across three distinct layers:
 
 ## MCP Server Tools
 
-The server registers 29 specialized tools over `stdio`. They are grouped logically below:
+The server registers **9 consolidated tools** over `stdio`. Each tool has multiple modes, so agents can pick the right capability without being overwhelmed by a large tool surface.
 
-### 1. Codebase Navigation & Search
+### 1. `search_codebase` — Find anything
+Entry point for locating symbols and files. Auto-detects the best mode from the query (path-like → file listing, >3 words → semantic, else → symbol name search). Supports `*` wildcards and kind/language/file filters.
+- **Modes:** `symbol`, `semantic`, `file_compact`, `file_detailed`, `auto`
+- **Absorbs:** `search_symbols`, `semantic_search_symbols`, `list_files`, `get_file_details`
 
-- `list_files`: Lists all indexed files in the workspace, with optional path pattern and language filtering.
-- `get_file_details`: Lists all symbols (functions, classes, variables, types, interfaces) defined in a specific file.
-- `search_symbols`: Searches for symbols globally by name or wildcard pattern.
-- `semantic_search_symbols`: Conceptually searches for symbols globally using natural language (via Ollama vector embeddings + RRF).
-- `get_definition`: Fetches the exact source code block implementing a given symbol.
-- `get_type_at_location`: Returns the fully-resolved compiler/LSP type of an identifier at a specific line and column.
-- `read_file_snippet`: Reads a specific range of lines from a file.
+### 2. `read_code` — Read source efficiently
+Read implementation bodies without loading whole files.
+- **Modes:** `definition` (full symbol source), `snippet` (arbitrary line range), `summary` (symbols + imports + importers overview)
+- **Absorbs:** `get_definition`, `read_file_snippet`, `get_file_summary`
 
-### 2. Dependency & Call Graph Traversal
+### 3. `inspect_symbol` — Deep-dive on a single symbol
+Understand a symbol deeply before modifying it.
+- **Modes:** `definition`, `type_at_location` (LSP), `references`, `importance` (PageRank), `history` (git), `resolve_type`, `class_hierarchy`
+- **Absorbs:** `get_definition`, `get_type_at_location`, `find_symbol_references`, `get_symbol_importance`, `get_symbol_history`, `resolve_type`, `get_class_hierarchy`
 
-- `trace_call_graph`: Generates an indented ASCII tree of inbound (who calls X) or outbound (what X calls) call chains up to a configured depth.
-- `get_blast_radius`: Finds all transitive callers (BFS) affected by modifying a symbol, helping assess refactoring risks.
-- `find_symbol_references`: Returns direct call sites, named imports, and module-level importers for a symbol.
-- `trace_data_flow`: Maps out the I/O boundary of a function/method (parameters, returns, caller inputs, and callee outputs).
-- `trace_error_flow`: Recursively traces and lists all exceptions that can bubble up from a symbol.
-- `get_required_env_vars`: Traces environment variables accessed downstream inside the call tree of a symbol.
-- `get_imports_for_file`: Lists all module imports defined in a specific file.
-- `get_import_by_id`: Retrieves details about a specific imported symbol or module import.
+### 4. `trace_code_graph` — Understand call relationships
+Assess impact and understand execution topology.
+- **Modes:** `call_graph` (inbound/outbound/both tree), `blast_radius` (flat BFS), `references` (1-hop), `dependency_cycles` (Tarjan SCC)
+- **Absorbs:** `trace_call_graph`, `get_blast_radius`, `find_symbol_references`, `get_dependency_cycles`
 
-### 3. Structure & Pattern Discovery
+### 5. `analyze_change_impact` — Risk assessment before a change
+Know what could break and what to test before refactoring.
+- **Modes:** `blast_radius`, `related_tests`, `required_env_vars`, `error_flow`, `data_flow`
+- **Absorbs:** `get_blast_radius`, `find_related_tests`, `get_required_env_vars`, `trace_error_flow`, `trace_data_flow`
 
-- `get_codebase_map`: Generates a topological overview of files grouped by directory, sorting them from entry-points down to foundation layers.
-- `get_entry_points`: Lists top-level exported symbols representing the public API surface.
-- `explore_codebase`: Renders a comprehensive Mermaid call-graph highlighting entry-point paths, subgraphs for files/containers, and reachability.
-- `find_similar_patterns`: Searches for symbols sharing a reference symbol's structural shape (matching on kind, return type, param count, or decorators).
+### 6. `explore_architecture` — Top-down codebase structure
+Orient yourself in an unfamiliar codebase.
+- **Modes:** `codebase_map` (directory-grouped topology), `entry_points` (public API surface), `explore` (Mermaid call-graph), `coupling_metrics` (Ce/Ca/I/A/D)
+- **Absorbs:** `get_codebase_map`, `get_entry_points`, `explore_codebase`, `get_coupling_metrics`
 
-### 4. Quality & Analytics Metrics
+### 7. `analyze_quality` — Code health assessment
+For audits, refactor planning, and test-coverage gaps.
+- **Modes:** `dead_code`, `untested_symbols`, `similar_patterns`, `coupling_metrics`, `importance`, `hotspots` (git churn weighted by complexity)
+- **Absorbs:** `find_dead_code`, `get_untested_symbols`, `find_similar_patterns`, `get_coupling_metrics`, `get_symbol_importance`, `get_hotspots`
 
-- `find_dead_code`: Detects unreachable code (exported unreferenced symbols and internal callables with no callers).
-- `get_untested_symbols`: Lists exported symbols inside files that are not imported by any test file.
-- `find_related_tests`: Locates test files exercising a specific symbol or module.
-- `get_symbol_importance`: Ranks symbols using PageRank on the call graph to find critical central components.
-- `get_dependency_cycles`: Detects circular import dependencies using Tarjan's SCC algorithm.
-- `get_coupling_metrics`: Computes efferent/afferent coupling, instability, abstractness, and distance from the main sequence for all files.
-- `get_symbol_history`: Fetches the git commit history and changes for a specific symbol using line-bound git log queries.
+### 8. `inspect_imports` — Import/dependency analysis
+Understand module dependencies and resolve import issues.
+- **Modes:** `imports_for_file`, `import_by_id`, `dependency_cycles`
+- **Absorbs:** `get_imports_for_file`, `get_import_by_id`, `get_dependency_cycles`
 
-### 5. Auditing & Diagnostics
-
-- `audit_agent_config`: Audits AI agent configuration rules (`.cursorrules`, `CLAUDE.md`, etc.) for stale paths and symbol references.
-- `get_token_savings`: Reports context tokens saved by using MCP tools instead of loading raw source files.
+### 9. `audit_index` — Index health & analytics
+Verify the index is current and healthy.
+- **Modes:** `agent_config` (stale paths/symbols in agent config files), `token_savings`, `index_health` (freshness + DB integrity)
+- **Absorbs:** `audit_agent_config`, `get_token_savings`, `get_index_health`
 
 ---
 

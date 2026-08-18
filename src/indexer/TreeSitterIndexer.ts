@@ -84,7 +84,6 @@ export class TreeSitterIndexer {
         return {
           symbols: [],
           imports: [],
-          calls: [],
           exceptions: [],
           envVars: [],
           explicitExports: [],
@@ -97,7 +96,6 @@ export class TreeSitterIndexer {
         return {
           symbols: [],
           imports: [],
-          calls: [],
           exceptions: [],
           envVars: [],
           explicitExports: [],
@@ -111,7 +109,6 @@ export class TreeSitterIndexer {
         return {
           symbols: [],
           imports: [],
-          calls: [],
           exceptions: [],
           envVars: [],
           explicitExports: [],
@@ -127,7 +124,6 @@ export class TreeSitterIndexer {
       return {
         symbols: [],
         imports: [],
-        calls: [],
         exceptions: [],
         envVars: [],
         explicitExports: [],

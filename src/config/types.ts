@@ -3,7 +3,6 @@ export type {
   IndexedFile,
   IndexedSymbol,
   IndexedImport,
-  IndexedSymbolCall,
   IndexedException,
   IndexedEnvVar,
 } from '../database/schemas'

@@ -2,12 +2,14 @@ import { Database, Statement } from 'bun:sqlite'
 import { getColumns } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { SymbolRepository } from './SymbolRepository'
-import type { CallRepository } from './CallRepository'
+import type { CallEdgesRepository } from './CallEdgesRepository'
 
 /** A class managing database interactions and operations related to exceptions and environment variables, providing functionality to upsert records and retrieve information linked to specific symbols. */
 export class AnalysisRepository {
+  private exceptionSelect: Statement | null = null
   private exceptionDelete: Statement | null = null
   private exceptionInsert: Statement | null = null
+  private envVarSelect: Statement | null = null
   private envVarDelete: Statement | null = null
   private envVarInsert: Statement | null = null
 
@@ -15,11 +17,14 @@ export class AnalysisRepository {
   constructor(
     private sqlite: Database,
     private symbols: SymbolRepository,
-    private calls: CallRepository,
+    private callEdges: CallEdgesRepository,
   ) {}
 
   /** Initializes prepared SQL statements for database operations related to exceptions and environment variables. */
   initStatements() {
+    this.exceptionSelect = this.sqlite.prepare(
+      `SELECT * from exceptions ORDER BY file_path, line`,
+    )
     const excCols = Object.keys(getColumns(schema.exceptions))
     this.exceptionDelete = this.sqlite.prepare(
       `DELETE FROM exceptions WHERE file_path = ?`,
@@ -28,6 +33,9 @@ export class AnalysisRepository {
       `INSERT INTO exceptions (${excCols.join(',')}) VALUES (${excCols.map(() => '?').join(',')})`,
     )
 
+    this.envVarSelect = this.sqlite.prepare(
+      `SELECT * from env_vars ORDER BY file_path, line`,
+    )
     const envCols = Object.keys(getColumns(schema.env_vars))
     this.envVarDelete = this.sqlite.prepare(
       `DELETE FROM env_vars WHERE file_path = ?`,
@@ -85,9 +93,9 @@ export class AnalysisRepository {
       exception_type: string
     }>
   > {
-    const exceptions = this.sqlite
-      .prepare(`SELECT * from exceptions ORDER BY file_path, line`)
-      .all() as Array<schema.IndexedException['Select']>
+    const exceptions = this.exceptionSelect!.all() as Array<
+      schema.IndexedException['Select']
+    >
 
     const symbolIds = [...new Set(exceptions.map((e) => e.symbol_id))]
     const symbols = await this.symbols.getSymbolsByIds(symbolIds)
@@ -110,9 +118,9 @@ export class AnalysisRepository {
       env_var_name: string
     }>
   > {
-    const envVars = this.sqlite
-      .prepare(`SELECT * from env_vars ORDER BY file_path, line`)
-      .all() as Array<schema.IndexedEnvVar['Select']>
+    const envVars = this.envVarSelect!.all() as Array<
+      schema.IndexedEnvVar['Select']
+    >
 
     const symbolIds = [...new Set(envVars.map((e) => e.symbol_id))]
     const symbols = await this.symbols.getSymbolsByIds(symbolIds)
@@ -205,7 +213,9 @@ export class AnalysisRepository {
       if (visited.has(currentId)) continue
       visited.add(currentId)
 
-      const outboundCalls = await this.calls.getForSymbols([currentId])
+      const outboundCalls = await this.callEdges.getOutboundForSymbols([
+        currentId,
+      ])
       for (const call of outboundCalls) {
         if (call.callee_id && !visited.has(call.callee_id)) {
           queue.push(call.callee_id)

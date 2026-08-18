@@ -238,12 +238,15 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
 
       const matchedProperty = classProperties.find(
         (property) =>
-          callSite.callee_expression.startsWith(property.name) ||
-          classMethodIdentifiers?.some((identifier) =>
-            callSite.callee_expression.startsWith(
-              `${identifier}.${property.name}`,
-            ),
-          ),
+          callSite.callee_expression === property.name ||
+          callSite.callee_expression.startsWith(`${property.name}.`) ||
+          classMethodIdentifiers?.some((identifier) => {
+            const prefix = `${identifier}.${property.name}`
+            return (
+              callSite.callee_expression === prefix ||
+              callSite.callee_expression.startsWith(`${prefix}.`)
+            )
+          }),
       )
 
       if (matchedProperty) {
@@ -291,6 +294,7 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
             callableKinds.includes(symbol.kind as SymbolKind)
 
           const lexicalSymbol =
+            !callSite.callee_property &&
             callSite.callee_expression.startsWith(symbol.name) &&
             [SymbolKind.let, SymbolKind.const, SymbolKind.var].includes(
               symbol.kind as SymbolKind,
@@ -385,7 +389,7 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
             symbols.find(
               (symbol) =>
                 symbol.name === callSite.callee_name ||
-                callSite.callee_base?.includes(symbol.name),
+                symbol.name === callSite.callee_base,
             ) ?? null
 
           // check for re-exported symbols in the resolved file

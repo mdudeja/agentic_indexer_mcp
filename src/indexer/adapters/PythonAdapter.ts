@@ -3,7 +3,6 @@ import { SymbolKind } from '../../config/types'
 import {
   type LanguageAdapter,
   type ExtractionResult,
-  extractCallDocstring,
   seedModuleSymbol,
 } from './LanguageAdapter'
 import { randomUUIDv7 } from 'bun'
@@ -35,7 +34,6 @@ export class PythonAdapter implements LanguageAdapter {
     const result: ExtractionResult = {
       symbols: [],
       imports: [],
-      calls: [],
       exceptions: [],
       envVars: [],
       call_sites: [],
@@ -350,25 +348,6 @@ export class PythonAdapter implements LanguageAdapter {
         `Failed to resolve call site for node: ${node.text} in file: ${file_path}:${node.startPosition.row}:${node.startPosition.column}`,
       )
     }
-
-    let callExpr: Node | null = node.parent
-    while (callExpr && callExpr.type !== 'call') {
-      callExpr = callExpr.parent
-    }
-    const callText = callExpr ? callExpr.text : (node.parent?.text ?? node.text)
-
-    result.calls.push({
-      id,
-      caller_id,
-      callee_name: node.text,
-      language_name: 'python',
-      call_line: node.startPosition.row,
-      call_column: node.startPosition.column,
-      caller_file_path: file_path,
-      call_text: callText,
-      docstring: extractCallDocstring(callExpr || node),
-      is_lang_feature: false,
-    })
   }
 
   /** Captures import information from a node and stores it in the result. Used to track imported modules during code analysis or processing. */

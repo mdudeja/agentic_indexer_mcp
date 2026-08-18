@@ -107,7 +107,7 @@ describe('Database Repositories Unit Tests', () => {
     expect(singleImport?.sourceModule).toBe('react')
   })
 
-  it('should test CallRepository methods', async () => {
+  it('should test CallSitesRepository and CallEdgesRepository methods', async () => {
     // Upsert caller and callee symbols first to prevent foreign key constraints failure
     await store.symbols.upsert([
       {
@@ -132,27 +132,47 @@ describe('Database Repositories Unit Tests', () => {
       },
     ])
 
-    const callId = randomUUID()
-    await store.calls.upsert([
+    const callSiteId = randomUUID()
+    await store.callSites.upsert([
       {
-        id: callId,
+        id: callSiteId,
         caller_id: 'sym-caller-1',
-        callee_name: 'helperFunction',
-        callee_id: 'sym-callee-1',
-        language_name: 'typescript',
         caller_file_path: 'src/lib.ts',
+        language_name: 'typescript',
         call_text: 'helperFunction()',
-        is_lang_feature: false,
+        callee_expression: 'helperFunction',
+        callee_name: 'helperFunction',
+        call_kind: schema.CallKind.FunctionCall,
         call_line: 12,
         call_column: 4,
       },
     ])
 
-    const outbound = await store.calls.getForSymbols(['sym-caller-1'])
+    const sites = await store.callSites.getForSymbols(['sym-caller-1'])
+    expect(sites.length).toBe(1)
+    expect(sites[0]?.callee_name).toBe('helperFunction')
+
+    // Insert a call edge for the resolved call
+    await store.callEdges.upsert([
+      {
+        id: randomUUID(),
+        call_site_id: callSiteId,
+        caller_id: 'sym-caller-1',
+        target_kind: schema.CallTargetKind.ProjectSymbol,
+        callee_id: 'sym-callee-1',
+        resolution_source: schema.CallResolutionSource.SameFile,
+        confidence: 100,
+      },
+    ])
+
+    const outbound = await store.callEdges.getOutboundForSymbols([
+      'sym-caller-1',
+    ])
     expect(outbound.length).toBe(1)
     expect(outbound[0]?.callee_name).toBe('helperFunction')
+    expect(outbound[0]?.callee_id).toBe('sym-callee-1')
 
-    const inbound = await store.calls.getCallers('helperFunction')
+    const inbound = await store.callEdges.getCallers('helperFunction')
     expect(inbound.length).toBe(1)
     expect(inbound[0]?.callerName).toBe('callerFunction')
   })
@@ -382,7 +402,7 @@ describe('Database Repositories Unit Tests', () => {
     expect(wrongFile.length).toBe(0)
   })
 
-  it('should test CallRepository getUnresolved, updateCalleeId, updateImportsId, getIdFromName, getCallersNested', async () => {
+  it('should test CallEdgesRepository getForCallers, getForCallees, getOutboundForSymbols, getCallersNested', async () => {
     await store.files.upsert({
       path: 'src/calls.ts',
       hash: 'hash-calls',
@@ -414,96 +434,63 @@ describe('Database Repositories Unit Tests', () => {
       },
     ])
 
-    // Insert an unresolved call (callee_id is null)
-    const unresolvedCallId = randomUUID()
-    await store.calls.upsert([
+    // Insert a call site for callerSym calling targetFn
+    const siteId = randomUUID()
+    await store.callSites.upsert([
       {
-        id: unresolvedCallId,
+        id: siteId,
         caller_id: callerSym,
-        callee_name: 'targetFn',
-        callee_id: null,
-        imports_id: null,
-        language_name: 'typescript',
         caller_file_path: 'src/calls.ts',
+        language_name: 'typescript',
         call_text: 'targetFn()',
-        is_lang_feature: false,
+        callee_expression: 'targetFn',
+        callee_name: 'targetFn',
+        call_kind: schema.CallKind.FunctionCall,
         call_line: 5,
         call_column: 2,
       },
     ])
 
-    // getUnresolved
-    const unresolved = await store.calls.getUnresolved()
-    expect(unresolved.some((c) => c.id === unresolvedCallId)).toBe(true)
-
-    // updateCalleeId
-    await store.calls.updateCalleeId(unresolvedCallId, calleeSym)
-    const stillUnresolved = await store.calls.getUnresolved()
-    expect(stillUnresolved.some((c) => c.id === unresolvedCallId)).toBe(false)
-
-    // updateImportsId
-    const impId = randomUUID()
-    await store.imports.upsert([
+    // Insert a resolved call edge
+    const edgeId = randomUUID()
+    await store.callEdges.upsert([
       {
-        id: impId,
-        file_path: 'src/calls.ts',
-        sourceModule: 'some-lib',
-        importedNames: ['targetFn'],
-        edgeKind: schema.EdgeKind.Import,
-        importKind: schema.ImportKind.Named,
-        resolutionSource: schema.ResolutionSource.Bun,
-        resolvedKind: schema.ResolvedKind.Source,
-      },
-    ])
-    const anotherCallId = randomUUID()
-    await store.calls.upsert([
-      {
-        id: anotherCallId,
+        id: edgeId,
+        call_site_id: siteId,
         caller_id: callerSym,
-        callee_name: 'targetFn',
-        callee_id: null,
-        imports_id: null,
-        language_name: 'typescript',
-        caller_file_path: 'src/calls.ts',
-        call_text: 'targetFn()',
-        is_lang_feature: false,
-        call_line: 7,
-        call_column: 2,
+        target_kind: schema.CallTargetKind.ProjectSymbol,
+        callee_id: calleeSym,
+        resolution_source: schema.CallResolutionSource.SameFile,
+        confidence: 100,
       },
     ])
-    await store.calls.updateImportsId(anotherCallId, impId)
-    const forSymbols = await store.calls.getForSymbols([callerSym])
-    const updated = forSymbols.find((c) => c.id === anotherCallId)
-    expect(updated?.imports_id).toBe(impId)
 
-    // getIdFromName
-    const nameIdMap = new Map([
-      ['src/calls.ts', [{ name: 'targetFn', id: calleeSym }]],
-    ])
-    const foundId = await store.calls.getIdFromName(nameIdMap, {
-      id: randomUUID(),
-      caller_id: callerSym,
-      callee_name: 'targetFn',
-      caller_file_path: 'src/calls.ts',
-      call_text: 'targetFn()',
-      language_name: 'typescript',
-    })
-    expect(foundId).toBe(calleeSym)
+    // getForCallers
+    const byCaller = await store.callEdges.getForCallers([callerSym])
+    expect(byCaller.some((e) => e.id === edgeId)).toBe(true)
 
-    // getIdFromName returns null when not found
-    const notFound = await store.calls.getIdFromName(new Map(), {
-      id: randomUUID(),
-      caller_id: callerSym,
-      callee_name: 'unknownFn',
-      caller_file_path: 'src/calls.ts',
-      call_text: 'unknownFn()',
-      language_name: 'typescript',
-    })
-    expect(notFound).toBeNull()
+    // getForCallees
+    const byCallee = await store.callEdges.getForCallees([calleeSym])
+    expect(byCallee.some((e) => e.id === edgeId)).toBe(true)
+
+    // getOutboundForSymbols joins the call site details
+    const outbound = await store.callEdges.getOutboundForSymbols([callerSym])
+    const edge = outbound.find((e) => e.callee_id === calleeSym)
+    expect(edge).toBeDefined()
+    expect(edge?.callee_name).toBe('targetFn')
+    expect(edge?.call_line).toBe(5)
+
+    // getCallers
+    const callers = await store.callEdges.getCallers('targetFn')
+    expect(callers.some((c) => c.callerName === 'mainCaller')).toBe(true)
 
     // getCallersNested
-    const nested = await store.calls.getCallersNested('targetFn')
+    const nested = await store.callEdges.getCallersNested('targetFn')
     expect(Array.isArray(nested)).toBe(true)
+
+    // getCallersNestedById
+    const nestedById = await store.callEdges.getCallersNestedById(calleeSym)
+    expect(Array.isArray(nestedById)).toBe(true)
   })
 
   it('should test SymbolRepository extended methods', async () => {

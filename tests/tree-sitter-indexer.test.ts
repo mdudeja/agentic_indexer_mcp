@@ -106,8 +106,10 @@ describe('TreeSitterIndexer Unit Tests', () => {
     expect(importAdd).toBeDefined()
 
     // calls
-    expect(result.calls.length).toBeGreaterThanOrEqual(2)
-    const multiplyCall = result.calls.find((c) => c.callee_name === 'multiply')
+    expect(result.call_sites?.length).toBeGreaterThanOrEqual(2)
+    const multiplyCall = result.call_sites?.find(
+      (c) => c.callee_name === 'multiply',
+    )
     expect(multiplyCall).toBeDefined()
 
     // env vars
