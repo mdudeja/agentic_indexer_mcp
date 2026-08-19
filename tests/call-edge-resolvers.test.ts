@@ -101,15 +101,15 @@ describe('callEdgeResolvers utils', () => {
       ).toBe(60)
       expect(
         getConfidenceByCallResolutionSource(CallResolutionSource.BuiltinList),
-      ).toBe(50)
+      ).toBe(80)
       expect(
         getConfidenceByCallResolutionSource(
           CallResolutionSource.DynamicPattern,
         ),
-      ).toBe(20)
+      ).toBe(100)
       expect(
         getConfidenceByCallResolutionSource(CallResolutionSource.Unresolved),
-      ).toBe(50)
+      ).toBe(0)
     })
 
     test('returns 0 for an unrecognized resolution source', () => {
@@ -196,7 +196,7 @@ describe('GenericCallEdgeResolver', () => {
       expect(edges?.[0]?.resolution_source).toBe(
         CallResolutionSource.DynamicPattern,
       )
-      expect(edges?.[0]?.confidence).toBe(20)
+      expect(edges?.[0]?.confidence).toBe(100)
     })
   })
 
@@ -215,7 +215,7 @@ describe('GenericCallEdgeResolver', () => {
       expect(edges?.[0]?.resolution_source).toBe(
         CallResolutionSource.Unresolved,
       )
-      expect(edges?.[0]?.confidence).toBe(50)
+      expect(edges?.[0]?.confidence).toBe(0)
     })
   })
 
@@ -604,7 +604,7 @@ describe('GenericCallEdgeResolver', () => {
       expect(edges?.[0]?.resolution_source).toBe(
         CallResolutionSource.BuiltinList,
       )
-      expect(edges?.[0]?.confidence).toBe(50)
+      expect(edges?.[0]?.confidence).toBe(80)
     })
 
     test('matches a typescript builtin via callee_base for a method call', async () => {

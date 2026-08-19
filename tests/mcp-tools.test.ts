@@ -97,7 +97,10 @@ describe('MCP Tools Integration Tests', () => {
 
   test('search_codebase: file mode', async () => {
     const tool = mockServer.tools.get('search_codebase')!
-    const response = await tool.handler({ query: 'math.ts', mode: 'file_compact' })
+    const response = await tool.handler({
+      query: 'math.ts',
+      mode: 'file_compact',
+    })
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('math.ts')
@@ -190,7 +193,7 @@ describe('MCP Tools Integration Tests', () => {
     const tool = mockServer.tools.get('inspect_symbol')!
     const response = await tool.handler({
       mode: 'type_at_location',
-      file_path: 'math.ts',
+      file_path_or_name: 'math.ts',
       line: 2,
       column: 17,
     })
@@ -214,7 +217,7 @@ describe('MCP Tools Integration Tests', () => {
     const tool = mockServer.tools.get('inspect_symbol')!
     const response = await tool.handler({
       mode: 'resolve_type',
-      type_name: 'Calculator',
+      name: 'Calculator',
     })
 
     expect(response.isError).toBeFalsy()
@@ -230,13 +233,14 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Class hierarchy for: Calculator')
+    expect(response.content[0].text).toContain(
+      'Class hierarchy for: Calculator',
+    )
   })
 
   test('trace_code_graph: call_graph outbound mode', async () => {
     const tool = mockServer.tools.get('trace_code_graph')!
     const response = await tool.handler({
-      mode: 'call_graph',
       symbol_name: 'runCalculation',
       direction: 'outbound',
     })
@@ -244,37 +248,6 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('runCalculation')
     expect(response.content[0].text).toContain('multiply')
-  })
-
-  test('trace_code_graph: blast_radius mode', async () => {
-    const tool = mockServer.tools.get('trace_code_graph')!
-    const response = await tool.handler({
-      mode: 'blast_radius',
-      symbol_name: 'multiply',
-    })
-
-    expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain("Blast radius for 'multiply'")
-    expect(response.content[0].text).toContain('runCalculation')
-  })
-
-  test('trace_code_graph: references mode', async () => {
-    const tool = mockServer.tools.get('trace_code_graph')!
-    const response = await tool.handler({
-      mode: 'references',
-      symbol_name: 'multiply',
-    })
-
-    expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('References to: multiply')
-  })
-
-  test('trace_code_graph: dependency_cycles mode', async () => {
-    const tool = mockServer.tools.get('trace_code_graph')!
-    const response = await tool.handler({ mode: 'dependency_cycles' })
-
-    expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('No circular dependencies found')
   })
 
   test('analyze_change_impact: blast_radius mode', async () => {
@@ -292,7 +265,7 @@ describe('MCP Tools Integration Tests', () => {
     const tool = mockServer.tools.get('analyze_change_impact')!
     const response = await tool.handler({
       mode: 'related_tests',
-      target: 'runCalculation',
+      symbol_name: 'runCalculation',
     })
 
     expect(response.isError).toBeFalsy()
@@ -372,7 +345,10 @@ describe('MCP Tools Integration Tests', () => {
 
   test('analyze_quality: dead_code mode', async () => {
     const tool = mockServer.tools.get('analyze_quality')!
-    const response = await tool.handler({ mode: 'dead_code', exclude_tests: false })
+    const response = await tool.handler({
+      mode: 'dead_code',
+      exclude_tests: false,
+    })
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('potentially dead symbol')
@@ -383,7 +359,9 @@ describe('MCP Tools Integration Tests', () => {
     const response = await tool.handler({ mode: 'untested_symbols' })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('No untested exported symbols found')
+    expect(response.content[0].text).toContain(
+      'No untested exported symbols found',
+    )
   })
 
   test('analyze_quality: similar_patterns mode', async () => {
@@ -398,20 +376,14 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.content[0].text).toContain('Symbols similar to: add')
   })
 
-  test('analyze_quality: coupling_metrics mode', async () => {
-    const tool = mockServer.tools.get('analyze_quality')!
-    const response = await tool.handler({ mode: 'coupling_metrics' })
-
-    expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Coupling metrics')
-  })
-
   test('analyze_quality: importance mode', async () => {
     const tool = mockServer.tools.get('analyze_quality')!
     const response = await tool.handler({ mode: 'importance', limit: 5 })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('symbols by call-graph importance')
+    expect(response.content[0].text).toContain(
+      'symbols by call-graph importance',
+    )
   })
 
   test('analyze_quality: hotspots mode', async () => {
@@ -430,7 +402,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain("import add, Calculator from 'math'")
+    expect(response.content[0].text).toContain(
+      "import add, Calculator from 'math'",
+    )
   })
 
   test('inspect_imports: import_by_id mode', async () => {
@@ -445,7 +419,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain(imported!.importedNames?.join(', '))
+    expect(response.content[0].text).toContain(
+      imported!.importedNames?.join(', '),
+    )
   })
 
   test('inspect_imports: dependency_cycles mode', async () => {

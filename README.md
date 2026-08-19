@@ -154,9 +154,7 @@ Understand a symbol deeply before modifying it.
 - **Absorbs:** `get_definition`, `get_type_at_location`, `find_symbol_references`, `get_symbol_importance`, `get_symbol_history`, `resolve_type`, `get_class_hierarchy`
 
 ### 4. `trace_code_graph` — Understand call relationships
-Assess impact and understand execution topology.
-- **Modes:** `call_graph` (inbound/outbound/both tree), `blast_radius` (flat BFS), `references` (1-hop), `dependency_cycles` (Tarjan SCC)
-- **Absorbs:** `trace_call_graph`, `get_blast_radius`, `find_symbol_references`, `get_dependency_cycles`
+Assess impact and understand execution topology. Generates inbound, outbound or both graphs (depth limited)
 
 ### 5. `analyze_change_impact` — Risk assessment before a change
 Know what could break and what to test before refactoring.
@@ -171,7 +169,7 @@ Orient yourself in an unfamiliar codebase.
 ### 7. `analyze_quality` — Code health assessment
 For audits, refactor planning, and test-coverage gaps.
 - **Modes:** `dead_code`, `untested_symbols`, `similar_patterns`, `coupling_metrics`, `importance`, `hotspots` (git churn weighted by complexity)
-- **Absorbs:** `find_dead_code`, `get_untested_symbols`, `find_similar_patterns`, `get_coupling_metrics`, `get_symbol_importance`, `get_hotspots`
+- **Absorbs:** `find_dead_code`, `get_untested_symbols`, `find_similar_patterns`, `get_symbol_importance`, `get_hotspots`
 
 ### 8. `inspect_imports` — Import/dependency analysis
 Understand module dependencies and resolve import issues.
