@@ -107,6 +107,17 @@ export class ImportRepository {
       .orderBy(schema.imports.resolvedPath)
   }
 
+  async getByPartialFilePath(
+    filePath: string,
+    limit?: number,
+  ): Promise<IndexedImport['Select'][]> {
+    return this.db
+      .select()
+      .from(schema.imports)
+      .where(like(schema.imports.file_path, `%${filePath}%`))
+      .limit(limit || 100)
+  }
+
   /** Retrieves a single import that matches both the specified file path and resolved path. Returns `null` if no matching import is found. */
   async getByFilePathAndResolvedPath(
     filePath: string,

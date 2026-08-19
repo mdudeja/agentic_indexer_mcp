@@ -30,3 +30,12 @@ export type OutboundCallEdge = {
   /** True when the edge resolved to a builtin/lang feature (equivalent to legacy is_lang_feature). */
   is_lang_feature: boolean
 }
+
+export type SymRow = {
+  name: string
+  kind: string
+  file_path: string
+  line: number
+  docstring: string | null
+  call_count: number
+}

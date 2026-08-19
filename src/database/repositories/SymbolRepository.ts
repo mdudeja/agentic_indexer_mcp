@@ -13,6 +13,7 @@ import {
   isNotNull,
   sql,
   ne,
+  notLike,
 } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedSymbol } from '../schemas'
@@ -20,6 +21,8 @@ import { SymbolKind } from '../schemas'
 import { type Inheritence } from '../schemas/common.schema'
 import type { EmbeddingRepository } from './EmbeddingRepository'
 import { collapseRepeatedDbWildcards } from '.'
+import type { SymRow } from '../types'
+import { allCallableKinds } from 'src/utils/allCallableKinds'
 
 /** A class that provides database operations for managing symbol data, including insertion, deletion, retrieval, synchronization, and querying of symbols based on various criteria. */
 export class SymbolRepository {
@@ -316,6 +319,93 @@ export class SymbolRepository {
             isNotNull(schema.symbols.docstring),
             not(eq(schema.symbols.docstring, '')),
           ),
+        ),
+      )
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
+  async getKeySymbolsInFilePaths(
+    filePaths: string[],
+    limit?: number,
+  ): Promise<SymRow[]> {
+    const keySymbols = await this.db
+      .select({
+        name: schema.symbols.name,
+        kind: schema.symbols.kind,
+        file_path: schema.symbols.file_path,
+        line: schema.symbols.line,
+        docstring: schema.symbols.docstring,
+        call_count: sql<number>`count(${schema.call_edges.id})`.as(
+          'call_count',
+        ),
+      })
+      .from(schema.symbols)
+      .leftJoin(
+        schema.call_edges,
+        eq(schema.call_edges.callee_id, schema.symbols.id),
+      )
+      .where(
+        and(
+          or(
+            eq(schema.symbols.exported, true),
+            and(
+              not(isNull(schema.symbols.parent_id)),
+              sql<boolean>`exists (
+                  select 1
+                  from symbols as parent
+                  where parent.id = ${schema.symbols.parent_id}
+                    and parent.exported = true
+                )`,
+              notLike(schema.symbols.signature, 'private%'),
+            ),
+          ),
+          inArray(schema.symbols.file_path, filePaths),
+        ),
+      )
+      .groupBy(schema.symbols.id)
+      .orderBy(sql`count(${schema.call_edges.id}) DESC`)
+      .limit(limit ?? 30)
+
+    return keySymbols
+  }
+
+  async getEntrypointSymbols(
+    kinds: SymbolKind[],
+  ): Promise<IndexedSymbol['Select'][]> {
+    const conditions: SQL[] = [
+      eq(schema.symbols.exported, true),
+      inArray(
+        schema.symbols.parent_id,
+        this.db
+          .select({ id: schema.symbols.id })
+          .from(schema.symbols)
+          .where(eq(schema.symbols.name, '<module>')),
+      ),
+      inArray(schema.symbols.kind, kinds),
+    ]
+
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(and(...conditions))
+      .orderBy(schema.symbols.file_path, schema.symbols.line)
+  }
+
+  async getInternalCallableSymbols() {
+    const callableKinds = await allCallableKinds()
+    return this.db
+      .select()
+      .from(schema.symbols)
+      .where(
+        and(
+          eq(schema.symbols.exported, false),
+          inArray(schema.symbols.kind, callableKinds),
+          sql`NOT EXISTS (
+                SELECT 1
+                FROM ${schema.symbols} AS parent_sym
+                WHERE parent_sym.id = ${schema.symbols.parent_id}
+                AND parent_sym.exported = 1
+              )`,
         ),
       )
       .orderBy(schema.symbols.file_path, schema.symbols.line)

@@ -1,6 +1,15 @@
 import type { Database, Statement } from 'bun:sqlite'
 import * as schema from '../schemas'
-import { getColumns, inArray } from 'drizzle-orm'
+import {
+  getColumns,
+  inArray,
+  eq,
+  and,
+  notInArray,
+  isNotNull,
+  SQL,
+  isNull,
+} from 'drizzle-orm'
 import type { SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 import type { DirectCaller, NestedCaller, OutboundCallEdge } from '../types'
 
@@ -148,5 +157,69 @@ export class CallEdgesRepository {
     ) as NestedCaller[]
 
     return callers.filter((caller) => caller.callerName !== '<module>')
+  }
+
+  async getDependencyFilesForFilePaths(
+    filePaths: string[],
+  ): Promise<{ file_path: string }[]> {
+    const calleeFiles = await this.db
+      .selectDistinct({ file_path: schema.symbols.file_path })
+      .from(schema.call_edges)
+      .innerJoin(
+        schema.call_sites,
+        eq(schema.call_sites.id, schema.call_edges.call_site_id),
+      )
+      .innerJoin(
+        schema.symbols,
+        eq(schema.symbols.id, schema.call_edges.callee_id),
+      )
+      .where(
+        and(
+          inArray(schema.call_sites.caller_file_path, filePaths),
+          notInArray(schema.symbols.file_path, filePaths),
+        ),
+      )
+
+    return calleeFiles
+  }
+
+  async getAllEdgesWithSiteInfo(forUnresolved?: boolean): Promise<
+    {
+      caller_id: string
+      callee_id: string | null
+      callee_name: string
+      caller_file_path: string
+    }[]
+  > {
+    const condition: SQL = forUnresolved
+      ? isNull(schema.call_edges.call_site_id)
+      : isNotNull(schema.call_edges.call_site_id)
+    return this.db
+      .select({
+        caller_id: schema.call_edges.caller_id,
+        callee_id: schema.call_edges.callee_id,
+        callee_name: schema.call_sites.callee_name,
+        caller_file_path: schema.call_sites.caller_file_path,
+      })
+      .from(schema.call_edges)
+      .innerJoin(
+        schema.call_sites,
+        eq(schema.call_sites.id, schema.call_edges.call_site_id),
+      )
+      .where(condition)
+  }
+
+  async getAllWithCalleeIds(): Promise<
+    { callee: string | null; caller: string }[]
+  > {
+    const rows = await this.db
+      .select({
+        callee: schema.call_edges.callee_id,
+        caller: schema.call_edges.caller_id,
+      })
+      .from(schema.call_edges)
+      .where(isNotNull(schema.call_edges.callee_id))
+
+    return rows
   }
 }

@@ -1,18 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ToolResult } from './index'
 import { IndexerDB } from 'src/database/IndexerDB'
-import {
-  SymbolKind,
-  type IndexedSymbol,
-} from 'src/database/schemas/symbols.schema'
+import { SymbolKind } from 'src/database/schemas/symbols.schema'
 import { isPathLike } from 'src/utils/paths'
 import { z } from 'zod'
 import { logError, logWarning } from 'src/utils/logger'
 import type { EmbeddingGenerator } from 'src/indexer/steps/s4_EmbeddingGenerator'
 import { AppStateManager } from 'src/state'
 import { embedderNameToClass } from 'src/indexer/IndexPipeline'
-import type { IndexedFile } from 'src/database/schemas'
 import { updateUsage } from 'src/utils/updateUsage'
+import { formatParameters, parseParameters } from './helpers'
 
 const ALL_KINDS = Object.keys(SymbolKind) as (keyof typeof SymbolKind)[]
 enum SEARCH_MODE {
@@ -21,6 +18,136 @@ enum SEARCH_MODE {
   file_compact = 'file_compact',
   file_detailed = 'file_detailed',
   auto = 'auto',
+}
+
+export function registerSearchCodebaseTool(server: McpServer) {
+  server.registerTool(
+    'search_codebase',
+    {
+      title: 'Search Codebase',
+      description:
+        'Searches the codebase for a given query and returns relevant results. Use as an entry point for locating symbols and files.' +
+        '\n\n' +
+        'Auto-detects the best mode from the query (path-like → file listing, >3 words → semantic, else → symbol name search).' +
+        '\n\n' +
+        'Supports `*` wildcards and kind/language/file filters',
+      inputSchema: z.object({
+        query: z
+          .string()
+          .describe(
+            'The search pattern (supports * wildcard for names and glob patterns for paths)',
+          ),
+        mode: z
+          .enum(SEARCH_MODE)
+          .optional()
+          .describe(
+            'Search mode: symbol, semantic, file, or auto (default: auto). Auto mode determines the best search mode based on the query. Semantic searches symbols',
+          ),
+        kind: z
+          .array(z.enum(ALL_KINDS))
+          .optional()
+          .describe(
+            'Optional filter for the kind of symbols to search for (e.g., function, class, variable)',
+          ),
+        language: z
+          .string()
+          .optional()
+          .describe(
+            'Optional filter for the programming language of the code elements',
+          ),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results to return (default: 20)'),
+        file_pattern: z
+          .string()
+          .optional()
+          .describe(
+            'Filter the results by file path pattern, e.g. a specific submodule (supports glob patterns)',
+          ),
+      }),
+    },
+    async ({ query, mode, kind, language, limit, file_pattern }) => {
+      if (!query || query.trim() === '') {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Query cannot be empty. Please provide a valid search query.',
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      if (!mode) {
+        mode = SEARCH_MODE.auto
+      }
+
+      if (mode === SEARCH_MODE.auto) {
+        mode = assignMode(query)
+      }
+
+      const store = IndexerDB.getInstance()
+      let result: ToolResult
+
+      switch (mode) {
+        case SEARCH_MODE.symbol:
+          result = await searchSymbols(
+            store,
+            query,
+            kind as (keyof typeof SymbolKind)[] | undefined,
+            language,
+            limit,
+            file_pattern,
+          )
+          break
+        case SEARCH_MODE.file_compact:
+          result = await searchFiles(
+            store,
+            query,
+            false,
+            language,
+            limit,
+            file_pattern,
+          )
+          break
+        case SEARCH_MODE.file_detailed:
+          result = await searchFiles(
+            store,
+            query,
+            true,
+            language,
+            limit,
+            file_pattern,
+          )
+          break
+        case SEARCH_MODE.semantic:
+          result = await semanticSearch(
+            store,
+            query,
+            kind as (keyof typeof SymbolKind)[] | undefined,
+            language,
+            limit,
+            file_pattern,
+          )
+          break
+        default:
+          result = {
+            content: [
+              {
+                type: 'text',
+                text: `Unsupported search mode: ${mode}`,
+              },
+            ],
+            isError: true,
+          }
+          break
+      }
+
+      return result
+    },
+  )
 }
 
 function assignMode(query: string): SEARCH_MODE {
@@ -74,14 +201,7 @@ async function searchSymbols(
           str += `\n  Doc: ${r.docstring.replace(/\n/g, '. ')}`
         }
         if (r.parameters_json) {
-          try {
-            const params = JSON.parse(r.parameters_json)
-            str += `\n  Parameters: ${params
-              .map((p: any) => `${p.name}: ${p.type}`)
-              .join(', ')}`
-          } catch (e) {
-            // Ignore JSON parsing errors
-          }
+          str += formatParameters(r)
         }
         if (r.return_type) {
           str += `\n  Returns: ${r.return_type}`
@@ -174,16 +294,8 @@ async function searchFiles(
           for (const [kind, syms] of byKind) {
             const lines = syms.map((s) => {
               let line = `  - ${s.name} (line ${s.line + 1})`
-              let params, return_type
-              try {
-                params = s.parameters_json
-                  ? JSON.parse(s.parameters_json)
-                  : null
-                return_type = s.return_type ? s.return_type : null
-              } catch (e) {
-                // Ignore JSON parsing errors
-              }
-
+              const params = parseParameters(s)
+              const return_type = s.return_type ? s.return_type : null
               if (s.exported) line += ' [exported]'
               if (s.signature && (!params || params.length === 0)) {
                 line += `\n    Signature: ${s.signature}`
@@ -334,14 +446,7 @@ async function semanticSearch(
           str += `\n  Doc: ${r.docstring.replace(/\n/g, '. ')}`
         }
         if (r.parameters_json) {
-          try {
-            const params = JSON.parse(r.parameters_json)
-            str += `\n  Parameters: ${params
-              .map((p: any) => `${p.name}: ${p.type}`)
-              .join(', ')}`
-          } catch (e) {
-            // Ignore JSON parsing errors
-          }
+          str += formatParameters(r)
         }
         if (r.return_type) {
           str += `\n  Returns: ${r.return_type}`
@@ -381,130 +486,4 @@ async function semanticSearch(
       isError: true,
     }
   }
-}
-
-export function registerSearchCodebaseTool(server: McpServer) {
-  server.registerTool(
-    'search_codebase',
-    {
-      title: 'Search Codebase',
-      description:
-        'Searches the codebase for a given query and returns relevant results.',
-      inputSchema: z.object({
-        query: z
-          .string()
-          .describe(
-            'The search pattern (supports * wildcard for names and glob patterns for paths)',
-          ),
-        mode: z
-          .enum(SEARCH_MODE)
-          .optional()
-          .describe(
-            'Search mode: symbol, semantic, file, or auto (default: auto). Auto mode determines the best search mode based on the query. Semantic searches symbols',
-          ),
-        kind: z
-          .array(z.enum(ALL_KINDS))
-          .optional()
-          .describe(
-            'Optional filter for the kind of symbols to search for (e.g., function, class, variable)',
-          ),
-        language: z
-          .string()
-          .optional()
-          .describe(
-            'Optional filter for the programming language of the code elements',
-          ),
-        limit: z
-          .number()
-          .optional()
-          .describe('Maximum number of results to return (default: 20)'),
-        file_pattern: z
-          .string()
-          .optional()
-          .describe(
-            'Filter the results by file path pattern, e.g. a specific submodule (supports glob patterns)',
-          ),
-      }),
-    },
-    async ({ query, mode, kind, language, limit, file_pattern }) => {
-      if (!query || query.trim() === '') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'Query cannot be empty. Please provide a valid search query.',
-            },
-          ],
-          isError: true,
-        }
-      }
-
-      if (!mode) {
-        mode = SEARCH_MODE.auto
-      }
-
-      if (mode === SEARCH_MODE.auto) {
-        mode = assignMode(query)
-      }
-
-      const store = IndexerDB.getInstance()
-      let result: ToolResult
-
-      switch (mode) {
-        case SEARCH_MODE.symbol:
-          result = await searchSymbols(
-            store,
-            query,
-            kind as (keyof typeof SymbolKind)[] | undefined,
-            language,
-            limit,
-            file_pattern,
-          )
-          break
-        case SEARCH_MODE.file_compact:
-          result = await searchFiles(
-            store,
-            query,
-            false,
-            language,
-            limit,
-            file_pattern,
-          )
-          break
-        case SEARCH_MODE.file_detailed:
-          result = await searchFiles(
-            store,
-            query,
-            true,
-            language,
-            limit,
-            file_pattern,
-          )
-          break
-        case SEARCH_MODE.semantic:
-          result = await semanticSearch(
-            store,
-            query,
-            kind as (keyof typeof SymbolKind)[] | undefined,
-            language,
-            limit,
-            file_pattern,
-          )
-          break
-        default:
-          result = {
-            content: [
-              {
-                type: 'text',
-                text: `Unsupported search mode: ${mode}`,
-              },
-            ],
-            isError: true,
-          }
-          break
-      }
-
-      return result
-    },
-  )
 }
