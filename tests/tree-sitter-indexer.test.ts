@@ -206,4 +206,49 @@ describe('TreeSitterIndexer Unit Tests', () => {
     )
     expect(aliasImport).toBeDefined()
   })
+
+  it('should extract decorators and docstrings for a decorated class nested inside an arrow-function argument (e.g. inside test()/describe())', async () => {
+    // When a class is declared inside an arrow function argument (the common
+    // pattern in test files), tree-sitter nests the leading `decorator` and
+    // the class docstring `comment` as *children* of the class_declaration,
+    // rather than as siblings. This must still be captured.
+    const source = `
+describe('ImplementsStatic', () => {
+  test('returns the same class reference unchanged (pure passthrough)', () => {
+    @ImplementsStatic<FactoryStatics>()
+    /** A class designed to create and manage greeting messages. */
+    class Greeter {
+      /** Returns a friendly greeting. */
+      greet() {
+        return 'hi'
+      }
+    }
+  })
+})`
+
+    const result = await indexer.parse(source, 'ts', 'nested-test.ts')
+
+    expect(result).toBeDefined()
+
+    const greeter = result.symbols.find((s) => s.name === 'Greeter')
+    expect(greeter).toBeDefined()
+    expect(greeter?.kind).toBe(SymbolKind.class)
+
+    // The class-level docstring (a child of class_declaration in this nesting)
+    expect(greeter?.docstring).toBeTruthy()
+    expect(greeter?.docstring).toContain(
+      'A class designed to create and manage greeting messages',
+    )
+
+    // The decorator must be attached to the class even when nested
+    expect(greeter?.decorator).toBeTruthy()
+    expect(greeter?.decorator).toContain('@ImplementsStatic<FactoryStatics>()')
+
+    // The method still gets its own docstring and is parented to the class
+    const greet = result.symbols.find((s) => s.name === 'greet')
+    expect(greet).toBeDefined()
+    expect(greet?.kind).toBe(SymbolKind.method)
+    expect(greet?.docstring).toBeTruthy()
+    expect(greet?.parent_id).toBe(greeter?.id)
+  })
 })

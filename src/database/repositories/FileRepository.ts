@@ -54,6 +54,7 @@ export class FileRepository {
     return this.db.select().from(schema.files)
   }
 
+  /** Searches for indexed files based on a query string, optionally filtered by language, result limit, and file pattern. */
   async search(
     query: string,
     language?: string,

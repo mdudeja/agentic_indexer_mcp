@@ -86,6 +86,7 @@ export const resolveWorkspacePath = (inputPath: string): string => {
   return absInputPath
 }
 
+/** Checks if the input appears to be a file system path. */
 export const isPathLike = (input: string): boolean => {
   const pathLikePattern = /[\\/]/ // Checks for either forward or backward slashes
   return pathLikePattern.test(input)

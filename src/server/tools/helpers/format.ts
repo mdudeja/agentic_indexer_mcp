@@ -39,6 +39,7 @@ export function formatInheritence(
   return `\n  Inheritence: ${lines.join('\n')}`
 }
 
+/** Extracts the top-level directory name from a given file path. Optionally allows specifying the maximum depth to extract if multiple directories are present. */
 export function filePathToTopDir(filepath: string, maxDepth?: number): string {
   const parts = filepath.split('/')
   const dirParts = parts.slice(0, -1)

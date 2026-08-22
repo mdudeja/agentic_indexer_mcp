@@ -102,10 +102,15 @@ export class TypescriptAdapter implements LanguageAdapter {
       if (parent.type === 'public_field_definition') {
         // Decorator is a child of the field node — field itself is the target
         targetId = nodeToSymbolId.get(parent.id)
+      } else if (parent.type === 'class_declaration') {
+        // Decorator is a child of the class_declaration (decorated class
+        // declared inside a nested scope, e.g. an arrow-function argument in a
+        // test file) — the class itself is the target.
+        targetId = nodeToSymbolId.get(parent.id)
       } else {
         // Decorator is a sibling — skip past other decorators to find the target
         let sibling = decoratorNode.nextNamedSibling
-        while (sibling?.type === 'decorator') {
+        while (sibling?.type === 'decorator' || sibling?.type === 'comment') {
           sibling = sibling.nextNamedSibling
         }
         if (sibling) {
@@ -781,7 +786,16 @@ export class TypescriptAdapter implements LanguageAdapter {
   /** Generates a signature string for a given AST node by analyzing its text content, accounting for nested generics and function bodies.*/
   private generateSignature(node: Node): string | undefined {
     let depth = 0
-    const initialText = node.text.split('=>')[0] ?? node.text
+    let initialText = node.text.split('=>')[0] ?? node.text
+    const decoratorAsChild = node.children.find((c) => c?.type === 'decorator')
+    const docstringAsChild = node.children.find((c) => c?.type === 'comment')
+    if (decoratorAsChild) {
+      initialText = initialText.replace(decoratorAsChild.text, '')
+    }
+    if (docstringAsChild) {
+      initialText = initialText.replace(docstringAsChild.text, '')
+    }
+
     for (let i = 0; i < initialText.length; i++) {
       const char = initialText[i]
       if (char === '<' || char === '(') depth++

@@ -3,7 +3,6 @@ import type { ToolResult } from './index'
 import { IndexerDB } from 'src/database/IndexerDB'
 import { z } from 'zod'
 import { updateUsage } from 'src/utils/updateUsage'
-import { eq, and, isNull, inArray, isNotNull, SQL } from 'drizzle-orm'
 import * as schema from 'src/database/schemas'
 import { SymbolKind } from 'src/database/schemas'
 import { allCallableKinds } from 'src/utils/allCallableKinds'
@@ -215,6 +214,7 @@ async function codebaseMap(
     const allGroupKeys = [...groups.keys()]
     const layerOf = new Map<string, number>()
 
+    /** Compute the layer or level of a given element, ensuring nodes are processed in the correct order while avoiding revisits to already processed elements. */
     const computeLayer = (g: string, visiting = new Set<string>()): number => {
       if (layerOf.has(g)) return layerOf.get(g)!
       if (visiting.has(g)) return 0
@@ -497,6 +497,7 @@ async function explore(
       degreeMap.set(e.callee_id, (degreeMap.get(e.callee_id) ?? 0) + 1)
     }
 
+    /** Calculates the scoring metric for a given query node, used to evaluate or prioritize nodes based on their characteristics in a database query context. */
     const nodeScore = (sym: schema.IndexedSymbol['Select']) =>
       (degreeMap.get(sym.id) ?? 0) +
       (entryPointFiles.has(sym.file_path) ? 1000 : 0) +
@@ -575,6 +576,7 @@ async function explore(
     const lines: string[] = ['graph LR']
     let sgIdx = 0
 
+    /** Renders a symbol (such as a class, function, or variable) in a structured format, applying the given indentation to improve readability. */
     const renderNode = (sym: (typeof keptSymbols)[0], indent: string): void => {
       const nodeId = toNodeId(sym.id)
       const label = truncate(`${sym.kind} ${sym.name}`)
@@ -840,10 +842,12 @@ async function couplingMetrics(
   }
 }
 
+/** Converts an identifier to a standardized node ID. */
 function toNodeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_]/g, '_')
 }
 
+/** Shortens strings longer than a specified maximum by truncating and appending an ellipsis. */
 function truncate(s: string, max = 80): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
 }

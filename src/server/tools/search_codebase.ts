@@ -20,6 +20,7 @@ enum SEARCH_MODE {
   auto = 'auto',
 }
 
+/** Registers a tool enabling search within codebases on the provided server. */
 export function registerSearchCodebaseTool(server: McpServer) {
   server.registerTool(
     'search_codebase',
@@ -150,6 +151,7 @@ export function registerSearchCodebaseTool(server: McpServer) {
   )
 }
 
+/** Determines the appropriate search mode based on the provided query. */
 function assignMode(query: string): SEARCH_MODE {
   if (isPathLike(query)) {
     return SEARCH_MODE.file_compact
@@ -163,6 +165,7 @@ function assignMode(query: string): SEARCH_MODE {
   return SEARCH_MODE.symbol
 }
 
+/** Searches for programming symbols (e.g., variables, functions) within a codebase based on a query. Supports filtering by symbol type, language, file pattern, and result limits. */
 async function searchSymbols(
   store: IndexerDB,
   query: string,
@@ -243,6 +246,7 @@ async function searchSymbols(
   }
 }
 
+/** Searches for files in the given store based on the provided query string, with optional filtering by language, file pattern, and result detail generation. */
 async function searchFiles(
   store: IndexerDB,
   query: string,
@@ -385,6 +389,7 @@ async function loadEmbedder(): Promise<EmbeddingGenerator | null> {
   return embeddor
 }
 
+/** Performs an asynchronous semantic search based on a query, optionally filtered by symbol kinds, language, file pattern, and result limit. Returns the search results as a ToolResult. */
 async function semanticSearch(
   store: IndexerDB,
   query: string,

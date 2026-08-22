@@ -107,6 +107,7 @@ export class ImportRepository {
       .orderBy(schema.imports.resolvedPath)
   }
 
+  /** Fetches an array of indexed imports based on a partial file path. This method searches for files or resources that include the specified partial file path in their path and returns up to the specified number of matching results. */
   async getByPartialFilePath(
     filePath: string,
     limit?: number,

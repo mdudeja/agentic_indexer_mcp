@@ -205,6 +205,7 @@ async function dependencyCycles(
       type Frame = { node: string; neighbours: string[]; ni: number }
       const callStack: Frame[] = []
 
+      /** Handles the visit process for the given identifier. */
       const visit = (v: string) => {
         index.set(v, counter)
         lowlink.set(v, counter)

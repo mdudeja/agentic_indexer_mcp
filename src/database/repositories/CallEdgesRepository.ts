@@ -159,6 +159,7 @@ export class CallEdgesRepository {
     return callers.filter((caller) => caller.callerName !== '<module>')
   }
 
+  /** Retrieves all dependency files for the specified file paths. */
   async getDependencyFilesForFilePaths(
     filePaths: string[],
   ): Promise<{ file_path: string }[]> {
@@ -183,6 +184,7 @@ export class CallEdgesRepository {
     return calleeFiles
   }
 
+  /** Retrieves all edges with site information, providing details about dependencies or relationships between components for analysis. */
   async getAllEdgesWithSiteInfo(forUnresolved?: boolean): Promise<
     {
       caller_id: string
@@ -209,6 +211,7 @@ export class CallEdgesRepository {
       .where(condition)
   }
 
+  /** Retrieves all records with their caller and callee IDs. */
   async getAllWithCalleeIds(): Promise<
     { callee: string | null; caller: string }[]
   > {

@@ -130,3 +130,17 @@
   .
   (comment)+ @symbol.docstring.trailing
 )
+
+; Docstrings on a Decorated Class
+; When a class is decorated, tree-sitter nests the decorator(s) and the leading
+; comment as *children* of the class_declaration (rather than as siblings). This
+; commonly happens for classes declared inside arrow-function arguments in test
+; files. Match the comment that appears after the decorator and before the
+; `class` keyword.
+(
+  (class_declaration
+    (decorator)
+    .
+    (comment)+ @symbol.docstring)
+  @symbol.docstring.target
+)

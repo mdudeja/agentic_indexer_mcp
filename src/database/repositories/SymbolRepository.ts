@@ -324,6 +324,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves key symbols from one or more file paths, optionally limiting the number of results. */
   async getKeySymbolsInFilePaths(
     filePaths: string[],
     limit?: number,
@@ -369,6 +370,7 @@ export class SymbolRepository {
     return keySymbols
   }
 
+  /** Retrieves the symbols that can be used as entrypoints for execution. */
   async getEntrypointSymbols(
     kinds: SymbolKind[],
   ): Promise<IndexedSymbol['Select'][]> {
@@ -391,6 +393,7 @@ export class SymbolRepository {
       .orderBy(schema.symbols.file_path, schema.symbols.line)
   }
 
+  /** Retrieves all internally available callable symbols, grouped by their source. */
   async getInternalCallableSymbols() {
     const callableKinds = await allCallableKinds()
     return this.db

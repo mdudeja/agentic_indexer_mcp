@@ -672,9 +672,7 @@ export class GenericCallEdgeResolver implements CallEdgeResolver {
           continue
         }
 
-        let relevantText =
-          callSite.callee_base ||
-          callSite.callee_expression.substring(0, calleeIndex)
+        let relevantText = callSite.callee_expression.substring(0, calleeIndex)
         for (const parent of parents) {
           const parentIndex = relevantText.lastIndexOf(parent)
           relevantText = relevantText.substring(0, parentIndex)

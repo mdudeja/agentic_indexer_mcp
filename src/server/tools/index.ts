@@ -14,6 +14,7 @@ import { registerInspectImportsTool } from './inspect_imports'
 import { registerAuditIndexTool } from './audit_index'
 
 export type ToolResult = ReturnType<ToolCallback<undefined | ZodRawShapeCompat>>
+/** Registers essential commands and tools for managing and interacting with the Minecraft Pocket Edition server. */
 export function registerTools(server: McpServer) {
   registerSearchCodebaseTool(server)
   registerReadCodeTool(server)
