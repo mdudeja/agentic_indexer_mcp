@@ -49,3 +49,36 @@ export function filePathToTopDir(filepath: string, maxDepth?: number): string {
       : dirParts.slice(0, maxDepth ?? 1).join('/')
   return prefix
 }
+
+/**
+ * Builds a compact human-readable annotation describing how a call edge or
+ * import was resolved, including its numeric confidence and resolution source.
+ * Helps agents gauge the reliability of returned graph data.
+ *
+ * Returns an empty string when there is no meaningful resolution info so callers
+ * can append it conditionally without changing their output shape when unused.
+ */
+export function formatResolutionAnnotation(opts: {
+  confidence?: number | null
+  resolutionSource?: string | null
+  unresolvedWhenNull?: boolean
+}): string {
+  const { confidence, resolutionSource, unresolvedWhenNull = true } = opts
+
+  // No resolution data captured at all — nothing to annotate.
+  if (confidence == null && !resolutionSource) return ''
+
+  const hasConfidence = confidence != null
+  const sourceLabel = resolutionSource || 'unresolved'
+
+  // A confidence of 0 with no source implies the resolution failed / was never
+  // attempted. Surface it as "unresolved" so agents don't misread it.
+  if (hasConfidence && confidence === 0 && unresolvedWhenNull) {
+    return ` [resolution: unresolved, confidence 0]`
+  }
+
+  const parts: string[] = []
+  if (resolutionSource) parts.push(sourceLabel)
+  if (hasConfidence) parts.push(`confidence ${confidence}`)
+  return ` [resolution: ${parts.join(', ')}]`
+}

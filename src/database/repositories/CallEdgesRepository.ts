@@ -119,7 +119,7 @@ export class CallEdgesRepository {
     const placeholders = callerIds.map(() => '?').join(',')
     return this.sqlite
       .prepare(
-        `SELECT ce.caller_id, ce.callee_id, ce.imports_id, ce.target_kind, ce.resolution_source,
+        `SELECT ce.caller_id, ce.callee_id, ce.imports_id, ce.target_kind, ce.resolution_source, ce.confidence,
                 cs.callee_name, cs.call_line, cs.call_column, cs.call_text, cs.docstring
          FROM call_edges ce
          JOIN call_sites cs ON cs.id = ce.call_site_id

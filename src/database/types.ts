@@ -27,6 +27,8 @@ export type OutboundCallEdge = {
   docstring: string | null
   target_kind: string
   resolution_source: string
+  /** Numeric confidence (0-100) indicating how reliably the edge was resolved. */
+  confidence: number
   /** True when the edge resolved to a builtin/lang feature (equivalent to legacy is_lang_feature). */
   is_lang_feature: boolean
 }

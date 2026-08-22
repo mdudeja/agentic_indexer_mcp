@@ -3,6 +3,7 @@ import type { ToolResult } from './index'
 import { IndexerDB } from 'src/database/IndexerDB'
 import { z } from 'zod'
 import { updateUsage } from 'src/utils/updateUsage'
+import { formatResolutionAnnotation } from './helpers/format'
 
 enum IMPORTS_MODE {
   imports_for_file = 'imports_for_file',
@@ -110,7 +111,11 @@ async function importsForFile(
 
     const output = results
       .map((i) => {
-        return `- [${i.id}] import ${i.importedNames?.join(', ') || '*'} from '${i.sourceModule}'`
+        const annotation = formatResolutionAnnotation({
+          confidence: i.confidence,
+          resolutionSource: i.resolutionSource,
+        })
+        return `- [${i.id}] import ${i.importedNames?.join(', ') || '*'} from '${i.sourceModule}'${annotation}${i.resolvedPath ? ` → ${i.resolvedPath}` : ''}`
       })
       .join('\n')
 
@@ -138,7 +143,11 @@ async function importById(store: IndexerDB, id: string): Promise<ToolResult> {
       }
     }
 
-    const outputText = `Import ID: ${result.id}\nFile: ${result.file_path}\nModule: ${result.sourceModule}\nImported Names: ${result.importedNames?.join(', ') || '*'}`
+    const annotation = formatResolutionAnnotation({
+      confidence: result.confidence,
+      resolutionSource: result.resolutionSource,
+    })
+    const outputText = `Import ID: ${result.id}\nFile: ${result.file_path}\nModule: ${result.sourceModule}\nImported Names: ${result.importedNames?.join(', ') || '*'}${annotation}\nResolved: ${result.resolvedPath ?? 'unresolved'} (kind: ${result.resolvedKind})`
     await updateUsage(
       'inspect_imports',
       [result.file_path],

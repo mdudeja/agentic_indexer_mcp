@@ -6,6 +6,7 @@ import { updateUsage } from 'src/utils/updateUsage'
 import type { IndexedFile } from 'src/database/schemas'
 import type { DirectCaller } from 'src/database/types'
 import { resolveFile } from './helpers/symbolLookup'
+import { formatResolutionAnnotation } from './helpers/format'
 
 /** Registers the trace_code_graph tool: understand call relationships. */
 export function registerTraceCodeGraphTool(server: McpServer) {
@@ -104,16 +105,20 @@ async function buildOutbound(
     const docstringNote = call.docstring ? ` [${call.docstring}]` : ''
 
     if (call.callee_id) {
+      const annotation = formatResolutionAnnotation({
+        confidence: call.confidence,
+        resolutionSource: call.resolution_source,
+      })
       if (visited.has(call.callee_id)) {
         lines.push(
-          `${prefix}${connector} ${call.callee_name} [cycle] ${docstringNote}`,
+          `${prefix}${connector} ${call.callee_name} [cycle]${annotation}`,
         )
         continue
       }
       const callee = await store.symbols.getDefinition(call.callee_id)
       if (callee) {
         lines.push(
-          `${prefix}${connector} ${callee.name} (${callee.file_path}:${callee.line + 1}) ${docstringNote}`,
+          `${prefix}${connector} ${callee.name} (${callee.file_path}:${callee.line + 1})${annotation}${docstringNote}`,
         )
         await buildOutbound(
           store,
@@ -130,7 +135,7 @@ async function buildOutbound(
         continue
       }
       lines.push(
-        `${prefix}${connector} ${call.callee_name} (broken link) ${docstringNote}`,
+        `${prefix}${connector} ${call.callee_name} (broken link)${annotation}`,
       )
       continue
     }
@@ -138,21 +143,29 @@ async function buildOutbound(
     if (call.imports_id) {
       const imp = await store.imports.getById(call.imports_id)
       if (imp) {
+        const annotation = formatResolutionAnnotation({
+          confidence: imp.confidence,
+          resolutionSource: imp.resolutionSource,
+        })
         lines.push(
-          `${prefix}${connector} ${call.callee_name} (${imp.importedNames?.join(', ') || '*'} from ${imp.sourceModule}) ${docstringNote}`,
+          `${prefix}${connector} ${call.callee_name} (${imp.importedNames?.join(', ') || '*'} from ${imp.sourceModule})${annotation}${docstringNote}`,
         )
         continue
       }
       lines.push(
-        `${prefix}${connector} ${call.callee_name} (unresolved import) ${docstringNote}`,
+        `${prefix}${connector} ${call.callee_name} (unresolved import)${docstringNote}`,
       )
       continue
     }
 
+    const annotation = formatResolutionAnnotation({
+      confidence: call.confidence,
+      resolutionSource: call.resolution_source,
+    })
     const callLine =
       call.call_line != null ? ` at line ${call.call_line + 1}` : ''
     lines.push(
-      `${prefix}${connector} ${call.callee_name} (${call.is_lang_feature ? 'language or runner framework feature' : 'possibly unresolved'})${callLine} ${docstringNote}`,
+      `${prefix}${connector} ${call.callee_name} (${call.is_lang_feature ? 'language or runner framework feature' : 'possibly unresolved'})${callLine}${annotation}${docstringNote}`,
     )
   }
 

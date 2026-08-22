@@ -4,4 +4,5 @@ export {
   parseParameters,
   formatParameters,
   formatInheritence,
+  formatResolutionAnnotation,
 } from './format'

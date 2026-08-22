@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { updateUsage } from 'src/utils/updateUsage'
 import { doesPathMatch, getTestFileGlobs } from 'src/utils/pathGlobs'
 import * as schema from 'src/database/schemas'
-import { formatParameters } from './helpers'
+import { formatParameters, formatResolutionAnnotation } from './helpers'
 
 enum IMPACT_MODE {
   blast_radius = 'blast_radius',
@@ -557,15 +557,19 @@ async function dataFlow(
 
     if (outboundCalls.length > 0) {
       const calleeLines = outboundCalls.slice(0, 15).map((c) => {
+        const annotation = formatResolutionAnnotation({
+          confidence: c.confidence,
+          resolutionSource: c.resolution_source,
+        })
         if (c.callee_id || c.imports_id) {
           const sym = calleeMap.get(c.callee_id ?? c.imports_id)
           const sig = sym?.signature ? `: ${sym.signature}` : ''
           const loc = sym ? `(${sym.file_path}:${sym.line + 1})` : '(resolved)'
-          return `  - ${c.callee_name} ${loc}${sig}`
+          return `  - ${c.callee_name} ${loc}${sig}${annotation}`
         }
         const callLine =
           c.call_line != null ? ` at line ${c.call_line + 1}` : ''
-        return `  - ${c.callee_name} (unresolved${callLine})`
+        return `  - ${c.callee_name} (unresolved${callLine})${annotation}`
       })
       sections.push(
         `Data flows OUT to — callees (${outboundCalls.length}${outboundCalls.length > 15 ? ', showing first 15' : ''}):\n${calleeLines.join('\n')}`,

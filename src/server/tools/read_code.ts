@@ -8,7 +8,7 @@ import { AppStateManager } from 'src/state'
 import { resolveWorkspacePath } from 'src/utils/paths'
 import { updateUsage } from 'src/utils/updateUsage'
 import { resolveSymbol, resolveFile } from './helpers/symbolLookup'
-import { formatParameters, formatInheritence } from './helpers/format'
+import { formatParameters, formatInheritence, formatResolutionAnnotation } from './helpers/format'
 
 enum READ_MODE {
   definition = 'definition',
@@ -300,10 +300,13 @@ async function readSummary(
 
     // Imports
     if (imports.length > 0) {
-      const importLines = imports.map(
-        (i) =>
-          `  - ${i.importedNames?.join(', ') || '*'} from '${i.sourceModule}'`,
-      )
+      const importLines = imports.map((i) => {
+        const annotation = formatResolutionAnnotation({
+          confidence: i.confidence,
+          resolutionSource: i.resolutionSource,
+        })
+        return `  - ${i.importedNames?.join(', ') || '*'} from '${i.sourceModule}'${annotation}${i.resolvedPath ? ` → ${i.resolvedPath}` : ''}`
+      })
       sections.push(`## Imports (${imports.length})\n${importLines.join('\n')}`)
     } else {
       sections.push('## Imports (none)')

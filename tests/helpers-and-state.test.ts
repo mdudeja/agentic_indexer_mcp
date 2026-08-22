@@ -12,6 +12,7 @@ import {
   parseParameters,
   formatParameters,
   formatInheritence,
+  formatResolutionAnnotation,
   filePathToTopDir,
 } from '../src/server/tools/helpers/format'
 import { AppStateManager } from '../src/state'
@@ -100,6 +101,47 @@ describe('helpers/format', () => {
     expect(filePathToTopDir('src/foo/bar.ts')).toBe('src')
     expect(filePathToTopDir('foo.ts')).toBe('(root)')
     expect(filePathToTopDir('a/b/c.ts', 2)).toBe('a/b')
+  })
+
+  it('formatResolutionAnnotation returns empty string when no resolution data', () => {
+    expect(formatResolutionAnnotation({})).toBe('')
+    expect(
+      formatResolutionAnnotation({ confidence: null, resolutionSource: null }),
+    ).toBe('')
+  })
+
+  it('formatResolutionAnnotation renders confidence and source together', () => {
+    expect(
+      formatResolutionAnnotation({
+        confidence: 90,
+        resolutionSource: 'typescript',
+      }),
+    ).toBe(' [resolution: typescript, confidence 90]')
+  })
+
+  it('formatResolutionAnnotation renders source only when confidence missing', () => {
+    expect(
+      formatResolutionAnnotation({
+        confidence: null,
+        resolutionSource: 'lsp_definition',
+      }),
+    ).toBe(' [resolution: lsp_definition]')
+  })
+
+  it('formatResolutionAnnotation flags zero confidence as unresolved by default', () => {
+    expect(
+      formatResolutionAnnotation({ confidence: 0, resolutionSource: null }),
+    ).toBe(' [resolution: unresolved, confidence 0]')
+  })
+
+  it('formatResolutionAnnotation can disable unresolved flagging', () => {
+    expect(
+      formatResolutionAnnotation({
+        confidence: 0,
+        resolutionSource: null,
+        unresolvedWhenNull: false,
+      }),
+    ).toBe(' [resolution: confidence 0]')
   })
 })
 
