@@ -5,7 +5,7 @@ import * as fs from 'fs'
 import { SymbolKind } from 'src/database/schemas'
 describe('TreeSitterIndexer Unit Tests', () => {
   let indexer: TreeSitterIndexer
-  const fixturePath = path.resolve(process.env.TEST_FIXTURES_DIR as string)
+  const fixturePath = path.resolve(process.env.IDXR_TEST_FIXTURES_DIR as string)
 
   beforeAll(async () => {
     indexer = new TreeSitterIndexer()

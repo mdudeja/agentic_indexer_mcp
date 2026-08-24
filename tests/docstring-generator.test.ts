@@ -69,7 +69,7 @@ describe('DocstringGenerationStep', () => {
       )
     }) as any
 
-    const fixtureDir = process.env.TEST_FIXTURES_DIR as string
+    const fixtureDir = process.env.IDXR_TEST_FIXTURES_DIR as string
     const step = new DocstringGenerationStep(`${process.cwd()}/${fixtureDir}`)
 
     await step.run(store)
@@ -96,7 +96,7 @@ describe('DocstringGenerationStep', () => {
     }
     appState.setItem('config', config as IndexerConfig)
     const step = new DocstringGenerationStep(
-      `${process.cwd()}/${process.env.TEST_FIXTURES_DIR}`,
+      `${process.cwd()}/${process.env.IDXR_TEST_FIXTURES_DIR}`,
     )
     await expect(
       step.runOnOneFile('node_modules/excluded.ts', store),
@@ -106,7 +106,7 @@ describe('DocstringGenerationStep', () => {
   it('runOnOneFile handles files with no symbols needing docstrings', async () => {
     enableDocstringConfig(false)
     const step = new DocstringGenerationStep(
-      `${process.cwd()}/${process.env.TEST_FIXTURES_DIR}`,
+      `${process.cwd()}/${process.env.IDXR_TEST_FIXTURES_DIR}`,
     )
     await expect(step.runOnOneFile('car.txt', store)).resolves.toBeUndefined()
   })
@@ -114,7 +114,7 @@ describe('DocstringGenerationStep', () => {
   it('runOnOneFile returns early when docstring generation disabled', async () => {
     appState.setItem('config', originalConfig!)
     const step = new DocstringGenerationStep(
-      `${process.cwd()}/${process.env.TEST_FIXTURES_DIR}`,
+      `${process.cwd()}/${process.env.IDXR_TEST_FIXTURES_DIR}`,
     )
     await expect(step.runOnOneFile('math.ts', store)).resolves.toBeUndefined()
   })
@@ -131,7 +131,7 @@ describe('DocstringGenerationStep', () => {
     await store.symbols.updateDocstring(target.id, 'Existing docstring')
 
     const step = new DocstringGenerationStep(
-      `${process.cwd()}/${process.env.TEST_FIXTURES_DIR}`,
+      `${process.cwd()}/${process.env.IDXR_TEST_FIXTURES_DIR}`,
     )
     await step.removeAllDocstrings(store)
 
@@ -144,7 +144,7 @@ describe('DocstringGenerationStep', () => {
     enableDocstringConfig(false)
     // Use a target kind with no symbols having docstrings by deleting all docstrings first.
     const step = new DocstringGenerationStep(
-      `${process.cwd()}/${process.env.TEST_FIXTURES_DIR}`,
+      `${process.cwd()}/${process.env.IDXR_TEST_FIXTURES_DIR}`,
     )
     await expect(step.removeAllDocstrings(store)).resolves.toBeUndefined()
   })

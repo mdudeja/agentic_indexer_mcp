@@ -9,7 +9,7 @@ enum LogLevel {
   NONE = 4,
 }
 
-const CURRENT_LOG_LEVEL = parseLogLevel(process.env.LOG_LEVEL)
+const CURRENT_LOG_LEVEL = parseLogLevel(process.env.IDXR_LOG_LEVEL)
 
 /** Parses a log level string into its corresponding standard value, defaulting to INFO if unspecified or unrecognized. */
 function parseLogLevel(level: string | undefined): LogLevel {

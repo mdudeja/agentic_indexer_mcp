@@ -5,7 +5,7 @@ import { join, resolve } from 'path'
 import { clearDB } from '../scripts/test_setup'
 
 describe('CLI Integration Tests', () => {
-  const fixturePath = resolve(process.env.TEST_FIXTURES_DIR as string)
+  const fixturePath = resolve(process.env.IDXR_TEST_FIXTURES_DIR as string)
 
   test('should run one-off index command on test project', async () => {
     clearDB()
@@ -23,7 +23,7 @@ describe('CLI Integration Tests', () => {
 
     expect(proc.exitCode).toBeOneOf([0, 1]) // Allow exit code 1 for cases where no docstrings were generated
     expect(
-      fs.existsSync(join(fixturePath, process.env.DB_FILE_URL as string)),
+      fs.existsSync(join(fixturePath, process.env.IDXR_DB_FILE_URL as string)),
     ).toBe(true)
     expect(text).toContain('Indexed 28 files.')
     expect(text).toContain('Running Step 1:')

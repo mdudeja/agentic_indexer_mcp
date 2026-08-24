@@ -41,7 +41,7 @@ export class IndexerDB {
     this.isMemory = dbPath === ':memory:'
     this.dbFilePath = this.isMemory
       ? dbPath
-      : resolvePath(dbPath || (process.env.DB_FILE_URL as string))
+      : resolvePath(dbPath || (process.env.IDXR_DB_FILE_URL as string))
 
     if (!this.isMemory) {
       const dbDir = dirname(this.dbFilePath!)
@@ -101,7 +101,7 @@ export class IndexerDB {
     if (this.dbInited) return
 
     const migrationsDir = resolvePath(
-      process.env.DB_MIGRATIONS_DIR || './drizzle_migrations',
+      process.env.IDXR_DB_MIGRATIONS_DIR || './drizzle_migrations',
       resolvePath('../../', import.meta.dir),
     )
     migrate(this.db, { migrationsFolder: migrationsDir })

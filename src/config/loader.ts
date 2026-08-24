@@ -7,8 +7,9 @@ import type { SupportedLanguage } from 'tree-sitter-wasm'
 
 /** Load the configuration for the indexer by checking the specified directory and files. If a valid configuration file is found, use its settings; otherwise, default values are applied, with special attention to docstring generation preferences. */
 export async function loadConfig(rootDir: string): Promise<IndexerConfig> {
-  const AGENTIC_DIR = process.env.AGENTIC_DIR || '.agentic'
-  const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.json'
+  const AGENTIC_DIR = process.env.IDXR_AGENTIC_DIR || '.agentic'
+  const CONFIG_FILENAME =
+    process.env.IDXR_CONFIG_FILENAME || 'agentic_indexer_config.json'
 
   const configPath = join(rootDir, AGENTIC_DIR, CONFIG_FILENAME)
 
@@ -81,8 +82,8 @@ export async function saveConfig(
   rootDir: string,
   config: IndexerConfig,
 ): Promise<void> {
-  const AGENTIC_DIR = process.env.AGENTIC_DIR || '.agentic'
-  const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.json'
+  const AGENTIC_DIR = process.env.IDXR_AGENTIC_DIR || '.agentic'
+  const CONFIG_FILENAME = process.env.IDXR_CONFIG_FILENAME || 'config.json'
 
   const configPath = join(rootDir, AGENTIC_DIR, CONFIG_FILENAME)
 

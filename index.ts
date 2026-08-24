@@ -13,17 +13,17 @@ import { version } from './package.json'
 /** The module 'bun' provides a set of environment variables for configuring application settings, including logging, database access, and API keys for services like Claude, Gemini, and OpenAI. */
 declare module 'bun' {
   interface Env {
-    AGENTIC_DIR?: string
-    CONFIG_FILENAME?: string
-    NODE_ENV?: string
-    LOG_LEVEL?: string
-    DB_FILE_URL?: string
-    BUILD_VERSION?: string
-    DB_MIGRATIONS_DIR?: string
-    CLAUDE_API_KEY?: string
-    GEMINI_API_KEY?: string
-    OPENAI_API_KEY?: string
-    TEST_FIXTURES_DIR?: string
+    IDXR_AGENTIC_DIR?: string
+    IDXR_CONFIG_FILENAME?: string
+    IDXR_NODE_ENV?: string
+    IDXR_LOG_LEVEL?: string
+    IDXR_DB_FILE_URL?: string
+    IDXR_BUILD_VERSION?: string
+    IDXR_DB_MIGRATIONS_DIR?: string
+    IDXR_CLAUDE_API_KEY?: string
+    IDXR_GEMINI_API_KEY?: string
+    IDXR_OPENAI_API_KEY?: string
+    IDXR_TEST_FIXTURES_DIR?: string
   }
 }
 

@@ -10,7 +10,7 @@ import {
 } from '../src/indexer/resolvers/callSiteResolvers'
 import { CallKind } from '../src/database/schemas'
 
-const fixturePath = path.resolve(process.env.TEST_FIXTURES_DIR as string)
+const fixturePath = path.resolve(process.env.IDXR_TEST_FIXTURES_DIR as string)
 
 let mathTs: ExtractionResult
 let appTs: ExtractionResult

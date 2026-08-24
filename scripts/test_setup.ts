@@ -14,8 +14,8 @@ let appStateManager: AppStateManager
 /** Clears all test database files and ensures a clean testing environment by removing associated data files and directories. */
 export function clearDB() {
   const testDbPath = join(
-    resolve(process.env.TEST_FIXTURES_DIR as string),
-    process.env.DB_FILE_URL as string,
+    resolve(process.env.IDXR_TEST_FIXTURES_DIR as string),
+    process.env.IDXR_DB_FILE_URL as string,
   )
   if (existsSync(testDbPath)) {
     unlinkSync(testDbPath)
@@ -38,7 +38,7 @@ export function clearDB() {
 /** Prepares the test environment by initializing required configurations, clearing the database, running indexes, and setting up the testing pipeline. */
 async function prepareTestEnvironment() {
   const fixturePath = resolvePath(
-    process.env.TEST_FIXTURES_DIR as string,
+    process.env.IDXR_TEST_FIXTURES_DIR as string,
     resolve(import.meta.dir, '../'),
   )
   clearDB()
