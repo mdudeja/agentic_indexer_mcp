@@ -9,6 +9,7 @@ import { AppStateManager } from 'src/state'
 import { resolveWorkspacePath } from 'src/utils/paths'
 import { updateUsage } from 'src/utils/updateUsage'
 import { resolveSymbol } from './helpers/symbolLookup'
+import { noResults } from './helpers/noResults'
 import { like, or } from 'drizzle-orm'
 import * as schema from 'src/database/schemas'
 import { SymbolKind } from 'src/database/schemas'
@@ -262,14 +263,7 @@ async function inspectTypeAtLocation(
   try {
     const files = await store.files.getByPartialNameOrPath(file_path_or_name)
     if (!files.length) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No file found with the provided path or name',
-          },
-        ],
-      }
+      return noResults('No file found with the provided path or name')
     }
     if (files.length > 1) {
       return {
@@ -356,11 +350,7 @@ async function inspectReferences(
       file_pattern as string | undefined,
     )
     if (symbols.length === 0) {
-      return {
-        content: [
-          { type: 'text', text: `Symbol '${name}' not found in codebase.` },
-        ],
-      }
+      return noResults(`Symbol '${name}' not found in codebase.`)
     }
     if (symbols.length > 1 && !file_pattern) {
       return {

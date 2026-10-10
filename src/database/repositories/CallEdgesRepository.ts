@@ -30,7 +30,7 @@ export class CallEdgesRepository {
   initStatements() {
     const cols = Object.keys(getColumns(schema.call_edges))
     this.callEdgesInsert = this.sqlite.prepare(
-      `INSERT INTO call_edges (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
+      `INSERT OR REPLACE INTO call_edges (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
     )
     this.callEdgesGetCallers = this.sqlite.prepare(
       `SELECT DISTINCT s.file_path AS callerFile, s.name AS callerName, s.line, s.id AS callerId

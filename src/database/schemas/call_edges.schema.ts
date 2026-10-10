@@ -1,4 +1,10 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  unique,
+} from 'drizzle-orm/sqlite-core'
 import { call_sites } from './call_sites.schema'
 import { imports } from './imports.schema'
 import { symbols } from './symbols.schema'
@@ -57,6 +63,10 @@ export const call_edges = sqliteTable(
     index('idx_call_edges_callee').on(table.callee_id),
     index('idx_call_edges_import').on(table.imports_id),
     index('idx_call_edges_resolution_source').on(table.resolution_source),
+    unique('unique_call_edges_site_caller').on(
+      table.call_site_id,
+      table.caller_id,
+    ),
   ],
 )
 

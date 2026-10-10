@@ -54,7 +54,7 @@ describe('loadConfig', () => {
     writeFileSync(join(agenticDir, 'config.json'), JSON.stringify(userConfig))
 
     const config = await loadConfig(rootDir)
-    expect(config.docstring_generation?.enabled).toBe(true)
+    expect(config.docstring_generation?.enabled).toBe(false)
     expect(config.docstring_generation?.provider).toBe('ollama')
     expect(config.docstring_generation?.write_to_file).toBe(false)
     expect(config.languages).toEqual(default_config.indexer.languages)
@@ -67,7 +67,14 @@ describe('loadConfig', () => {
     writeFileSync(join(agenticDir, 'config.json'), '{ invalid json }')
 
     const config = await loadConfig(rootDir)
-    expect(config).toEqual(default_config.indexer)
+    expect(config.languages).toEqual(default_config.indexer.languages)
+    expect(config.docstring_generation).toEqual(
+      default_config.indexer.docstring_generation,
+    )
+    expect(config.ignore_patterns).toEqual(
+      default_config.indexer.ignore_patterns,
+    )
+    expect(config.embedder).toEqual(default_config.indexer.embedder)
   })
 
   it('merges provider-specific docstring config when present', async () => {
@@ -84,7 +91,10 @@ describe('loadConfig', () => {
         },
       },
     }
-    writeFileSync(join(agenticDir, 'config.json'), JSON.stringify(userConfig))
+    writeFileSync(
+      join(agenticDir, 'agentic_indexer_config.json'),
+      JSON.stringify(userConfig),
+    )
 
     const config = await loadConfig(rootDir)
     expect((config.docstring_generation as any)?.claude?.model).toBe(

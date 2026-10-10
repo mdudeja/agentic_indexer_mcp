@@ -6,3 +6,4 @@ export {
   formatInheritence,
   formatResolutionAnnotation,
 } from './format'
+export { NO_RESULTS_MARKER, noResults } from './noResults'

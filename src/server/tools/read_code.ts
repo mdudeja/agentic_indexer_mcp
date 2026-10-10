@@ -8,7 +8,12 @@ import { AppStateManager } from 'src/state'
 import { resolveWorkspacePath } from 'src/utils/paths'
 import { updateUsage } from 'src/utils/updateUsage'
 import { resolveSymbol, resolveFile } from './helpers/symbolLookup'
-import { formatParameters, formatInheritence, formatResolutionAnnotation } from './helpers/format'
+import { noResults } from './helpers/noResults'
+import {
+  formatParameters,
+  formatInheritence,
+  formatResolutionAnnotation,
+} from './helpers/format'
 
 enum READ_MODE {
   definition = 'definition',
@@ -26,7 +31,7 @@ export function registerReadCodeTool(server: McpServer) {
         'Read source code efficiently without loading whole files. ' +
         '\n\n' +
         'THREE MODES: ' +
-        '`definition` — fetch the full source of a symbol (by symbol_id, or name + file_path_or_name). ' +
+        '`definition` — fetch the full source of a symbol (by name + file_path_or_name). ' +
         '`snippet` — read an arbitrary 1-based line range from a file (configs, imports, boilerplate not bound to a symbol). ' +
         '`summary` — overview of a file: its symbols grouped by kind, its imports, and which files import it. ' +
         '\n\n' +
@@ -42,23 +47,16 @@ export function registerReadCodeTool(server: McpServer) {
           .describe(
             'What to read: definition, snippet, or summary (default: definition)',
           ),
-        symbol_id: z
-          .string()
-          .optional()
-          .describe(
-            'The unique ID of the symbol (preferred for definition mode)',
-          ),
         name: z
           .string()
           .optional()
           .describe(
-            'Symbol name (used with file_path_or_name for definition mode)',
+            'Symbol name (e.g., function, class, variable). Required for definition mode.',
           ),
         file_path_or_name: z
           .string()
-          .optional()
           .describe(
-            'File name or path relative to workspace root. Supports partial matches. Required for snippet/summary modes, and for definition when using name.',
+            'File name or path relative to workspace root. Supports partial matches. Required.',
           ),
         start_line: z
           .number()
@@ -70,22 +68,19 @@ export function registerReadCodeTool(server: McpServer) {
           .describe('1-based end line (inclusive) for snippet mode'),
       }),
     },
-    async ({
-      mode,
-      symbol_id,
-      name,
-      file_path_or_name,
-      start_line,
-      end_line,
-    }) => {
+    async ({ mode, name, file_path_or_name, start_line, end_line }) => {
       const store = IndexerDB.getInstance()
       const m = mode ?? READ_MODE.definition
 
       switch (m) {
         case READ_MODE.definition:
-          return readDefinition(store, symbol_id, name, file_path_or_name)
+          return readDefinition(store, file_path_or_name, name)
         case READ_MODE.snippet:
-          if (!file_path_or_name || start_line == null || end_line == null) {
+          if (
+            !file_path_or_name.trim().length ||
+            start_line == null ||
+            end_line == null
+          ) {
             return {
               content: [
                 {
@@ -98,7 +93,7 @@ export function registerReadCodeTool(server: McpServer) {
           }
           return readSnippet(store, file_path_or_name, start_line, end_line)
         case READ_MODE.summary:
-          if (!file_path_or_name) {
+          if (!file_path_or_name.trim().length) {
             return {
               content: [
                 {
@@ -123,13 +118,11 @@ export function registerReadCodeTool(server: McpServer) {
 /** Reads the full source of a symbol from disk. */
 async function readDefinition(
   store: IndexerDB,
-  symbol_id?: string,
+  file_path_or_name: string,
   name?: string,
-  file_path_or_name?: string,
 ): Promise<ToolResult> {
   try {
     const resolved = await resolveSymbol(store, {
-      symbol_id,
       name,
       file_path_or_name,
     })
@@ -180,14 +173,7 @@ async function readSnippet(
   try {
     const files = await store.files.getByPartialNameOrPath(file_path_or_name)
     if (!files.length) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No file found with the provided path or name',
-          },
-        ],
-      }
+      return noResults('No file found with the provided path or name')
     }
     if (files.length > 1) {
       return {

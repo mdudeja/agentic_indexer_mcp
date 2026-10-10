@@ -4,6 +4,7 @@ import { IndexerDB } from 'src/database/IndexerDB'
 import { z } from 'zod'
 import { updateUsage } from 'src/utils/updateUsage'
 import { formatResolutionAnnotation } from './helpers/format'
+import { noResults } from './helpers/noResults'
 
 enum IMPORTS_MODE {
   imports_for_file = 'imports_for_file',
@@ -102,11 +103,7 @@ async function importsForFile(
     const results = await store.imports.getByPartialFilePath(filePath, limit)
 
     if (results.length === 0) {
-      return {
-        content: [
-          { type: 'text', text: 'No imports found for the specified file.' },
-        ],
-      }
+      return noResults('No imports found for the specified file.')
     }
 
     const output = results
@@ -136,11 +133,7 @@ async function importById(store: IndexerDB, id: string): Promise<ToolResult> {
     const result = await store.imports.getById(id)
 
     if (!result) {
-      return {
-        content: [
-          { type: 'text', text: 'No import found with the specified ID.' },
-        ],
-      }
+      return noResults('No import found with the specified ID.')
     }
 
     const annotation = formatResolutionAnnotation({

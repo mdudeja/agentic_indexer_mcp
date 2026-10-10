@@ -10,6 +10,7 @@ import { AppStateManager } from 'src/state'
 import { embedderNameToClass } from 'src/indexer/IndexPipeline'
 import { updateUsage } from 'src/utils/updateUsage'
 import { formatParameters, parseParameters } from './helpers'
+import { noResults } from './helpers/noResults'
 
 const ALL_KINDS = Object.keys(SymbolKind) as (keyof typeof SymbolKind)[]
 enum SEARCH_MODE {
@@ -184,14 +185,7 @@ async function searchSymbols(
     )
 
     if (results.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No symbols found matching the query.',
-          },
-        ],
-      }
+      return noResults('No symbols found matching the query.')
     }
 
     const formattedResults = results
@@ -264,14 +258,7 @@ async function searchFiles(
     )
 
     if (results.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No files found matching the query.',
-          },
-        ],
-      }
+      return noResults('No files found matching the query.')
     }
 
     const formattedResults = (
@@ -431,14 +418,7 @@ async function semanticSearch(
     )
 
     if (results.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No symbols found matching the query.',
-          },
-        ],
-      }
+      return noResults('No symbols found matching the query.')
     }
 
     const formattedResults = results

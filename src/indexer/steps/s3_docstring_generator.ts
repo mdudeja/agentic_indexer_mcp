@@ -300,9 +300,8 @@ export class DocstringGenerationStep {
 
         generated++
 
-        // Remove anything within <think> tags if present
         const cleanedDocstring = docstring
-          .replace(/<think>[\s\S]*?<\/think>/g, '')
+          .replace(/(?:^|<think>).*?<\/think>/gs, '')
           .replace(/[\"\']/g, '')
           .trim()
         if (cleanedDocstring.length === 0) {

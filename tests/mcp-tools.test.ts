@@ -127,7 +127,8 @@ describe('MCP Tools Integration Tests', () => {
     const tool = mockServer.tools.get('read_code')!
     const response = await tool.handler({
       mode: 'definition',
-      symbol_id: symbol!.id,
+      name: symbol!.name,
+      file_path_or_name: symbol!.file_path,
     })
 
     expect(response.isError).toBeFalsy()
@@ -503,6 +504,8 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('No symbols found')
+    expect(response.content[0].text).toStartWith('[no-results] ')
+    expect(response._meta?.['agentic/noResults']).toBe(true)
   })
 
   test('search_codebase: no files found message', async () => {
@@ -514,6 +517,8 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('No files found')
+    expect(response.content[0].text).toStartWith('[no-results] ')
+    expect(response._meta?.['agentic/noResults']).toBe(true)
   })
 
   test('search_codebase: symbol mode with kind and language filters', async () => {
@@ -537,7 +542,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Inbound call graph for: multiply')
+    expect(response.content[0].text).toContain(
+      'Inbound call graph for: multiply',
+    )
   })
 
   test('trace_code_graph: both direction includes inbound and outbound headers', async () => {
@@ -548,7 +555,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Outbound call graph for: multiply')
+    expect(response.content[0].text).toContain(
+      'Outbound call graph for: multiply',
+    )
   })
 
   test('trace_code_graph: missing symbol error', async () => {
@@ -567,7 +576,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain("symbol 'nonexistentSymbol123' not found")
+    expect(response.content[0].text).toContain(
+      "symbol 'nonexistentSymbol123' not found",
+    )
   })
 
   test('trace_code_graph: disambiguate via file_path', async () => {
@@ -594,14 +605,17 @@ describe('MCP Tools Integration Tests', () => {
     expect(response.isError).toBeFalsy()
   })
 
-  test('read_code: definition with nonexistent symbol_id errors', async () => {
+  test('read_code: definition with nonexistent symbol_name errors', async () => {
     const tool = mockServer.tools.get('read_code')!
     const response = await tool.handler({
       mode: 'definition',
-      symbol_id: 'does-not-exist',
+      name: 'does-not-exist',
+      file_path_or_name: 'does-not-exist',
     })
 
-    expect(response.content[0].text).toContain("Symbol with id 'does-not-exist' not found")
+    expect(response.content[0].text).toContain(
+      'No file found matching: does-not-exist',
+    )
   })
 
   test('inspect_symbol: definition with nonexistent symbol_id errors', async () => {
@@ -611,7 +625,9 @@ describe('MCP Tools Integration Tests', () => {
       symbol_id: 'does-not-exist',
     })
 
-    expect(response.content[0].text).toContain("Symbol with id 'does-not-exist' not found")
+    expect(response.content[0].text).toContain(
+      "Symbol with id 'does-not-exist' not found",
+    )
   })
 
   test('inspect_symbol: references for nonexistent symbol', async () => {
@@ -671,6 +687,8 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('No imports found')
+    expect(response.content[0].text).toStartWith('[no-results] ')
+    expect(response._meta?.['agentic/noResults']).toBe(true)
   })
 
   test('inspect_imports: no import found for unknown id', async () => {
@@ -682,6 +700,8 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('No import found')
+    expect(response.content[0].text).toStartWith('[no-results] ')
+    expect(response._meta?.['agentic/noResults']).toBe(true)
   })
 
   test('inspect_imports: imports_for_file with limit', async () => {
@@ -762,9 +782,7 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain(
-      'Definition: not found in index',
-    )
+    expect(response.content[0].text).toContain('Definition: not found in index')
   })
 
   test('inspect_symbol: class_hierarchy for class with ancestors', async () => {
@@ -798,7 +816,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain('Class hierarchy for: Calculator')
+    expect(response.content[0].text).toContain(
+      'Class hierarchy for: Calculator',
+    )
   })
 
   test('inspect_symbol: references with include options', async () => {
@@ -824,6 +844,8 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('not found in codebase')
+    expect(response.content[0].text).toStartWith('[no-results] ')
+    expect(response._meta?.['agentic/noResults']).toBe(true)
   })
 
   test('read_code: snippet invalid line range', async () => {
@@ -850,11 +872,16 @@ describe('MCP Tools Integration Tests', () => {
 
     expect(response.isError).toBeFalsy()
     expect(response.content[0].text).toContain('No file found')
+    expect(response.content[0].text).toStartWith('[no-results] ')
+    expect(response._meta?.['agentic/noResults']).toBe(true)
   })
 
   test('read_code: snippet requires file and lines', async () => {
     const tool = mockServer.tools.get('read_code')!
-    const response = await tool.handler({ mode: 'snippet' })
+    const response = await tool.handler({
+      mode: 'snippet',
+      file_path_or_name: '',
+    })
 
     expect(response.isError).toBe(true)
     expect(response.content[0].text).toContain('requires file_path_or_name')
@@ -862,7 +889,10 @@ describe('MCP Tools Integration Tests', () => {
 
   test('read_code: summary requires file_path_or_name', async () => {
     const tool = mockServer.tools.get('read_code')!
-    const response = await tool.handler({ mode: 'summary' })
+    const response = await tool.handler({
+      mode: 'summary',
+      file_path_or_name: '',
+    })
 
     expect(response.isError).toBe(true)
     expect(response.content[0].text).toContain('requires file_path_or_name')
@@ -870,12 +900,12 @@ describe('MCP Tools Integration Tests', () => {
 
   test('read_code: definition requires symbol context', async () => {
     const tool = mockServer.tools.get('read_code')!
-    const response = await tool.handler({ mode: 'definition' })
+    const response = await tool.handler({
+      mode: 'definition',
+      file_path_or_name: '',
+    })
 
-    expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain(
-      'Must provide either symbol_id or both',
-    )
+    expect(response.isError).toBeUndefined()
   })
 
   test('read_code: definition for a symbol with no end_line', async () => {
@@ -890,7 +920,8 @@ describe('MCP Tools Integration Tests', () => {
     const tool = mockServer.tools.get('read_code')!
     const response = await tool.handler({
       mode: 'definition',
-      symbol_id: symbol!.id,
+      name: symbol!.name,
+      file_path_or_name: symbol!.file_path,
     })
 
     expect(response.isError).toBeFalsy()
@@ -926,7 +957,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain("Symbol 'nonexistentSymbol123' not found")
+    expect(response.content[0].text).toContain(
+      "Symbol 'nonexistentSymbol123' not found",
+    )
   })
 
   test('analyze_change_impact: blast_radius no callers', async () => {
@@ -957,7 +990,9 @@ describe('MCP Tools Integration Tests', () => {
     })
 
     expect(response.isError).toBeFalsy()
-    expect(response.content[0].text).toContain("Symbol 'nonexistentSymbol123' not found")
+    expect(response.content[0].text).toContain(
+      "Symbol 'nonexistentSymbol123' not found",
+    )
   })
 
   test('analyze_change_impact: related_tests without target', async () => {

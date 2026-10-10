@@ -6,6 +6,7 @@ import { updateUsage } from 'src/utils/updateUsage'
 import type { IndexedFile } from 'src/database/schemas'
 import type { DirectCaller } from 'src/database/types'
 import { resolveFile } from './helpers/symbolLookup'
+import { NO_RESULTS_MARKER, noResults } from './helpers/noResults'
 import { formatResolutionAnnotation } from './helpers/format'
 
 /** Registers the trace_code_graph tool: understand call relationships. */
@@ -369,7 +370,7 @@ async function traceCallGraph(
       )
       if (startSymbols.length === 0) {
         lines.push(`Outbound: symbol '${name}' not found in index.`)
-        return { content: [{ type: 'text', text: lines.join('\n') }] }
+        return noResults(lines.join('\n'))
       }
       const target = startSymbols[0]!
       if (startSymbols.length > 1 && !file_path_or_file_name) {
@@ -405,7 +406,9 @@ async function traceCallGraph(
         5,
       )
       if (inboundSymbols.length === 0) {
-        lines.push(`Inbound: symbol '${name}' not found in index.`)
+        // Only the whole answer when inbound alone was asked for.
+        const marker = dir === 'inbound' ? `${NO_RESULTS_MARKER} ` : ''
+        lines.push(`${marker}Inbound: symbol '${name}' not found in index.`)
       } else {
         const inboundTarget = inboundSymbols[0]!
         if (inboundSymbols.length > 1 && !file_path_or_file_name) {

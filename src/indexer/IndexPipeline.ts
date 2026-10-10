@@ -275,13 +275,6 @@ export class IndexPipeline {
 
   /** Runs an enhancement step to improve symbol information in processed files by leveraging type-specific enhancers for better indexing and analysis. */
   async runEnhancementStep(processedFiles: string[]): Promise<void> {
-    if (!processedFiles || processedFiles.length === 0) {
-      const files = await this.findFiles(this.options.cwd)
-      processedFiles = files.map((absPath) =>
-        relative(this.options.cwd, absPath),
-      )
-    }
-
     logInfo(
       `[Indexer] Running Step 2: Symbol Enhancement on ${processedFiles.length} files...`,
     )

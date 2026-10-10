@@ -1,6 +1,6 @@
 import { Database, Statement } from 'bun:sqlite'
 import type { SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
-import { eq, like, and, getColumns, inArray } from 'drizzle-orm'
+import { eq, like, and, getColumns, inArray, or } from 'drizzle-orm'
 import * as schema from '../schemas'
 import type { IndexedImport } from '../schemas'
 import { collapseRepeatedDbWildcards } from '.'
@@ -50,14 +50,21 @@ export class ImportRepository {
   async getImporters(
     moduleNamePattern: string,
   ): Promise<IndexedImport['Select'][]> {
+    const allPatterns = [moduleNamePattern]
+    if (moduleNamePattern.match(/\.\S+$/)) {
+      const nameWithoutExtension = moduleNamePattern.replace(/\.\S+$/, '')
+      allPatterns.push(`${nameWithoutExtension}`)
+    }
+    const toSearchPatterns = allPatterns.map((pattern) =>
+      collapseRepeatedDbWildcards(`%${pattern.replace(/\*/g, '%')}%`),
+    )
     return this.db
       .select()
       .from(schema.imports)
       .where(
-        like(
-          schema.imports.sourceModule,
-          collapseRepeatedDbWildcards(
-            `%${moduleNamePattern.replace(/\*/g, '%')}%`,
+        or(
+          ...toSearchPatterns.map((pattern) =>
+            like(schema.imports.sourceModule, pattern),
           ),
         ),
       )

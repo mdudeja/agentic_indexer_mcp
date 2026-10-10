@@ -12,7 +12,7 @@ describe('CLI Integration Tests', () => {
     const proc = spawn(
       ['bun', 'run', 'index.ts', 'index', '--cwd', fixturePath],
       {
-        env: { ...process.env, LOG_LEVEL: 'debug' },
+        env: { ...process.env, IDXR_LOG_LEVEL: 'debug' },
         stdout: 'pipe',
         stderr: 'pipe',
       },
@@ -44,7 +44,7 @@ describe('CLI Integration Tests', () => {
         fixturePath,
       ],
       {
-        env: { ...process.env, LOG_LEVEL: 'debug' },
+        env: { ...process.env, IDXR_LOG_LEVEL: 'debug' },
         stdout: 'pipe',
         stderr: 'pipe',
       },
