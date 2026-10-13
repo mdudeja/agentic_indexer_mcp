@@ -5,12 +5,13 @@ import { logInfo } from '../utils/logger'
 import { AppStateManager } from 'src/state'
 import { Watcher } from '../watcher/Watcher'
 import { IndexerDB } from 'src/database/IndexerDB'
+import { version } from '../../package.json'
 
 /** Starts an MCP (Message Communication Protocol) server to handle indexing of workspaces. This server connects using standard input/output transport, logs its operation, and monitors file system changes within the specified root directory if available. */
 export async function startMcpServer() {
   const server = new McpServer({
     name: 'workspace-indexer',
-    version: '0.1.0',
+    version: version,
   })
 
   // Register all tools with the server
