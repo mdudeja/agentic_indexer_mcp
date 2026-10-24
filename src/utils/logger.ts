@@ -1,4 +1,5 @@
 import { getNow } from './datetime'
+import { FileLogger } from './FileLogger'
 
 // Log levels
 enum LogLevel {
@@ -67,10 +68,15 @@ function shouldLog(messageLevel: LogLevel): boolean {
   return messageLevel >= CURRENT_LOG_LEVEL
 }
 
+function logToFile(message: string): void {
+  FileLogger.getInstance().logMessage(message)
+}
+
 /** Log an error message with optional additional arguments. */
 export function logError(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.ERROR)) {
     const formatted = formatMessage('ERROR', message, ...args)
+    logToFile(formatted)
     console.error(formatted)
   }
 }
@@ -79,6 +85,7 @@ export function logError(message: string, ...args: unknown[]): void {
 export function logWarning(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.WARNING)) {
     const formatted = formatMessage('WARNING', message, ...args)
+    logToFile(formatted)
     console.error(formatted)
   }
 }
@@ -87,6 +94,7 @@ export function logWarning(message: string, ...args: unknown[]): void {
 export function logInfo(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.INFO)) {
     const formatted = formatMessage('INFO', message, ...args)
+    logToFile(formatted)
     console.error(formatted)
   }
 }
@@ -95,6 +103,7 @@ export function logInfo(message: string, ...args: unknown[]): void {
 export function logDebug(message: string, ...args: unknown[]): void {
   if (shouldLog(LogLevel.DEBUG)) {
     const formatted = formatMessage('DEBUG', message, ...args)
+    logToFile(formatted)
     console.error(formatted)
   }
 }

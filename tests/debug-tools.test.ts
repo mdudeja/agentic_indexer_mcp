@@ -1,5 +1,4 @@
 import { describe, beforeAll, test } from 'bun:test'
-import { IndexerDB } from '../src/database/IndexerDB'
 import { registerSearchCodebaseTool } from '../src/server/tools/search_codebase'
 import { registerReadCodeTool } from '../src/server/tools/read_code'
 import { registerInspectSymbolTool } from '../src/server/tools/inspect_symbol'
@@ -9,7 +8,6 @@ import { registerExploreArchitectureTool } from '../src/server/tools/explore_arc
 import { registerAnalyzeQualityTool } from '../src/server/tools/analyze_quality'
 import { registerInspectImportsTool } from '../src/server/tools/inspect_imports'
 import { registerAuditIndexTool } from '../src/server/tools/audit_index'
-import { getStoreForTests } from '../scripts/test_setup'
 
 /** A mock server implementation for MCP, providing functionality to register tools with specified schemas and handler functions. */
 class MockMcpServer {
@@ -30,12 +28,9 @@ class MockMcpServer {
 }
 
 describe.skip('Debug Tools', () => {
-  let store: IndexerDB
   let mockServer: MockMcpServer
 
   beforeAll(async () => {
-    store = getStoreForTests()
-
     mockServer = new MockMcpServer()
     registerSearchCodebaseTool(mockServer as any)
     registerReadCodeTool(mockServer as any)

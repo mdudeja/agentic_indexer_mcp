@@ -2,6 +2,7 @@ import { type IndexerConfig } from './types'
 
 export const default_config: Record<'indexer', IndexerConfig> = {
   indexer: {
+    debugLogs: false,
     enabled: true,
     ignore_patterns: [
       '.git/',

@@ -22,6 +22,7 @@ export class FileManager {
   /** Initializes the FileManager instance by setting up default configuration values if none are retrieved from state storage. */
   private constructor() {
     this.config = AppStateManager.getInstance().getItem('config') ?? {
+      debugLogs: false,
       enabled: false,
       languages: {},
       ignore_patterns: [],

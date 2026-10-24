@@ -18,6 +18,7 @@ export class TreeSitterIndexer {
   /** Initializes the configuration using values from AppStateManager or default settings. */
   constructor() {
     this.config = AppStateManager.getInstance().getItem('config') ?? {
+      debugLogs: false,
       enabled: false,
       languages: {},
       ignore_patterns: [],

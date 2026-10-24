@@ -38,6 +38,7 @@ export class IndexPipeline {
   constructor(private options: IndexPipelineOptions) {
     this.indexer = new TreeSitterIndexer()
     this.config = AppStateManager.getInstance().getItem('config') ?? {
+      debugLogs: false,
       enabled: false,
       languages: {},
       ignore_patterns: [],

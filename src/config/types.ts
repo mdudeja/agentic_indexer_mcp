@@ -58,6 +58,7 @@ export type EmbedderConfig = {
 }
 
 export type IndexerConfig = {
+  debugLogs: boolean
   enabled: boolean
   ignore_patterns: string[]
   extnToLangMap: Record<string, SupportedLanguage>
