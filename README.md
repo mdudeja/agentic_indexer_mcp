@@ -106,6 +106,7 @@ This will create a `.agentic/config.json` file with default settings. You can th
 ```json
 {
   "indexer": {
+    "debugLogs": false,
     "enabled": true,
     "ignore_patterns": [".git", "node_modules", "dist", "*.lock"],
     "docstring_generation": {
@@ -116,6 +117,7 @@ This will create a `.agentic/config.json` file with default settings. You can th
   }
 }
 ```
+If enabled, `debugLogs` will control whether detailed debug information is written to the log file. Log file is located at `.agentic/logs/indexer_log.txt` within your project directory.
 
 > ⚠️ [!IMPORTANT]
 > It is generally a good idea to add `.agentic` directory to your `.gitignore` file to avoid committing sensitive information, generated files, or the database.
